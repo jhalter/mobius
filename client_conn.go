@@ -482,6 +482,7 @@ func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
 		spew.Dump(transaction)
 	}
 
+	nextTransID := cc.Server.GetNextTransactionID()
 	cc.Server.mux.Lock()
 	defer cc.Server.mux.Unlock()
 
@@ -497,7 +498,7 @@ func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
 		cc.Server.NotifyAll(
 			NewTransaction(
 				tranNotifyChangeUser,
-				int(cc.Server.GetNextTransactionID()),
+				int(nextTransID),
 				[]Field{
 					NewField(fieldUserID, *cc.ID),
 					NewField(fieldUserFlags, *cc.Flags),
