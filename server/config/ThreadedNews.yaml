@@ -1,0 +1,276 @@
+Categories:
+  TestBundle:
+    Type:
+    - 0
+    - 2
+    Name: TestBundle
+    Articles: {}
+    SubCats:
+      NestedBundle:
+        Type:
+        - 0
+        - 2
+        Name: NestedBundle
+        Articles: {}
+        SubCats:
+          NestedCat:
+            Type:
+            - 0
+            - 3
+            Name: NestedCat
+            Articles:
+              1:
+                Title: NestedArt
+                Poster: Halcyon 1.9.2
+                Date:
+                - 7
+                - 228
+                - 0
+                - 0
+                - 0
+                - 255
+                - 66
+                - 132
+                PrevArt:
+                - 0
+                - 0
+                - 0
+                - 0
+                NextArt:
+                - 0
+                - 0
+                - 0
+                - 0
+                ParentArt:
+                - 0
+                - 0
+                - 0
+                - 0
+                FirstChildArtArt:
+                - 0
+                - 0
+                - 0
+                - 0
+                DataFlav:
+                - 116
+                - 101
+                - 120
+                - 116
+                - 47
+                - 112
+                - 108
+                - 97
+                - 105
+                - 110
+                Data: z
+            SubCats: {}
+            count: []
+            addsn: []
+            deletesn: []
+            guid: []
+        count: []
+        addsn: []
+        deletesn: []
+        guid: []
+      TestSubCat:
+        Type:
+        - 0
+        - 3
+        Name: TestSubCat
+        Articles:
+          1:
+            Title: SubCatArt
+            Poster: Halcyon 1.9.2
+            Date:
+            - 7
+            - 228
+            - 0
+            - 0
+            - 0
+            - 254
+            - 252
+            - 246
+            PrevArt:
+            - 0
+            - 0
+            - 0
+            - 0
+            NextArt:
+            - 0
+            - 0
+            - 0
+            - 0
+            ParentArt:
+            - 0
+            - 0
+            - 0
+            - 0
+            FirstChildArtArt:
+            - 0
+            - 0
+            - 0
+            - 0
+            DataFlav:
+            - 116
+            - 101
+            - 120
+            - 116
+            - 47
+            - 112
+            - 108
+            - 97
+            - 105
+            - 110
+            Data: I'm an article in a subcategory!
+        SubCats: {}
+        count: []
+        addsn: []
+        deletesn: []
+        guid: []
+    count: []
+    addsn: []
+    deletesn: []
+    guid: []
+  TestCat:
+    Type:
+    - 0
+    - 3
+    Name: TestCat
+    Articles:
+      1:
+        Title: TestArt
+        Poster: Halcyon 1.9.2
+        Date:
+        - 7
+        - 228
+        - 0
+        - 0
+        - 0
+        - 254
+        - 252
+        - 204
+        PrevArt:
+        - 0
+        - 0
+        - 0
+        - 0
+        NextArt:
+        - 0
+        - 0
+        - 0
+        - 2
+        ParentArt:
+        - 0
+        - 0
+        - 0
+        - 0
+        FirstChildArtArt:
+        - 0
+        - 0
+        - 0
+        - 2
+        DataFlav:
+        - 116
+        - 101
+        - 120
+        - 116
+        - 47
+        - 112
+        - 108
+        - 97
+        - 105
+        - 110
+        Data: TestArt Body
+      2:
+        Title: 'Re: TestArt'
+        Poster: Halcyon 1.9.2
+        Date:
+        - 7
+        - 228
+        - 0
+        - 0
+        - 0
+        - 254
+        - 252
+        - 216
+        PrevArt:
+        - 0
+        - 0
+        - 0
+        - 1
+        NextArt:
+        - 0
+        - 0
+        - 0
+        - 3
+        ParentArt:
+        - 0
+        - 0
+        - 0
+        - 1
+        FirstChildArtArt:
+        - 0
+        - 0
+        - 0
+        - 0
+        DataFlav:
+        - 116
+        - 101
+        - 120
+        - 116
+        - 47
+        - 112
+        - 108
+        - 97
+        - 105
+        - 110
+        Data: I'm a reply
+      3:
+        Title: TestArt 2
+        Poster: Halcyon 1.9.2
+        Date:
+        - 7
+        - 228
+        - 0
+        - 0
+        - 0
+        - 254
+        - 253
+        - 6
+        PrevArt:
+        - 0
+        - 0
+        - 0
+        - 2
+        NextArt:
+        - 0
+        - 0
+        - 0
+        - 0
+        ParentArt:
+        - 0
+        - 0
+        - 0
+        - 0
+        FirstChildArtArt:
+        - 0
+        - 0
+        - 0
+        - 0
+        DataFlav:
+        - 116
+        - 101
+        - 120
+        - 116
+        - 47
+        - 112
+        - 108
+        - 97
+        - 105
+        - 110
+        Data: Hello world
+    SubCats: {}
+    count: []
+    addsn: []
+    deletesn: []
+    guid: []

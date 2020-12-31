@@ -1,0 +1,7 @@
+Name: Halcyon's Test Server
+Description: Experimental Hotline server
+BannerID: 1
+FileRoot: config/Files/
+EnableTrackerRegistration: false
+Trackers: 
+  - hltracker.com:5499
