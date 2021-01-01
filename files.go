@@ -43,12 +43,13 @@ func fileCreatorFromFilename(fn string) string {
 	return code
 }
 
+// TODO: Return an error
 func GetFileNameList(filePath string) []Field {
 	var fields []Field
 
 	files, err := ioutil.ReadDir(filePath)
 	if err != nil {
-		panic(err)
+		return fields
 	}
 
 	for _, file := range files {

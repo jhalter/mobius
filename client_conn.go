@@ -29,6 +29,7 @@ type ClientConn struct {
 	Server     *Server
 	Version    *[]byte
 	Idle       bool
+	AutoReply  *[]byte
 }
 
 func (cc *ClientConn) Authenticate(login string, password []byte) bool {
@@ -58,16 +59,18 @@ func HandleChatSend(cc *ClientConn, t *Transaction) error {
 		_, err := cc.Connection.Write(t.ReplyError("You are not allowed to participate in chat."))
 		return err
 	}
+
+	// Truncate long usernames
 	trunc := fmt.Sprintf("%13s", *cc.UserName)
 	formattedMsg := fmt.Sprintf("%.13s:  %s\r", trunc, t.GetField(fieldData).Data)
 
 	chatID := t.GetField(fieldChatID).Data
+	// a non-nil chatID indicates the message belongs to a private chat
 	if chatID != nil {
 		chatInt := binary.BigEndian.Uint32(chatID)
-		fmt.Printf("ChatID: %v \n", chatInt)
-
 		privChat := cc.Server.PrivateChats[chatInt]
 
+		// send the message to all connected clients of the private chat
 		for _, occ := range privChat.ClientConn {
 			occ.SendTransaction(
 				tranChatMsg,
@@ -91,7 +94,6 @@ func HandleChatSend(cc *ClientConn, t *Transaction) error {
 func (cc ClientConn) notifyOtherClientConn(ID []byte, t Transaction) error {
 	clientConn := cc.Server.Clients[binary.BigEndian.Uint16(ID)]
 	_, err := clientConn.Connection.Write(t.Payload())
-
 	return err
 }
 
@@ -99,11 +101,6 @@ func HandleSendInstantMsg(cc *ClientConn, transaction *Transaction) error {
 	msg := transaction.GetField(fieldData)
 	ID := transaction.GetField(fieldUserID)
 	//options := transaction.GetField(hotline.fieldOptions)
-
-	cc.Server.Logger.Infow(
-		"Client HandleSendInstantMsg received",
-		"msg", string(msg.Data), "ID", ID.Data,
-	)
 
 	sendChat := NewTransaction(
 		tranServerMsg, 0,
@@ -116,7 +113,19 @@ func HandleSendInstantMsg(cc *ClientConn, transaction *Transaction) error {
 	)
 	// Send chat message to other cc
 	if err := cc.notifyOtherClientConn(ID.Data, sendChat); err != nil {
-		return nil
+		return err
+	}
+
+	// Respond with auto reply if other client has it enabled
+	otherClient := cc.Server.Clients[binary.BigEndian.Uint16(ID.Data)]
+	if len(*otherClient.AutoReply) > 0 {
+		cc.SendTransaction(
+			tranServerMsg,
+			NewField(fieldData, *otherClient.AutoReply),
+			NewField(fieldUserName, *otherClient.UserName),
+			NewField(fieldUserID, *otherClient.ID),
+			NewField(fieldOptions, []byte{0, 1}),
+		)
 	}
 
 	// Ack transaction to sending cc
@@ -151,6 +160,29 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) error {
 	return nil
 }
 
+func HandleSetFileInfo(cc *ClientConn, t *Transaction) error {
+	// TODO: figure out how to handle file comments
+	fileName := string(t.GetField(fieldFileName).Data)
+	filePath := cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFilePath).Data)
+	fileComment := t.GetField(fieldFileComment).Data
+	fileNewName := t.GetField(fieldFileNewName).Data
+
+	if fileNewName != nil {
+		err := os.Rename(filePath+"/"+fileName, filePath+"/"+ string(fileNewName))
+		if os.IsNotExist(err) {
+			_, err := cc.Connection.Write(t.ReplyError("Cannot delete file " + fileName + " because it does not exist or cannot be found."))
+			return err
+		}
+	}
+
+	spew.Dump(fileName)
+	spew.Dump(filePath)
+	spew.Dump(fileComment)
+	spew.Dump(fileNewName)
+
+	return cc.SendReplyTransaction(t)
+}
+
 func HandleDeleteFile(cc *ClientConn, t *Transaction) error {
 	if cc.Authorize(accessDeleteFile) == false {
 		_, err := cc.Connection.Write(t.ReplyError("You are not allowed to create new accounts."))
@@ -158,18 +190,43 @@ func HandleDeleteFile(cc *ClientConn, t *Transaction) error {
 	}
 
 	fileName := string(t.GetField(fieldFileName).Data)
-	filePath := cc.Server.Config.FileRoot + string(t.GetField(fieldFilePath).Data)
+	filePath := cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFilePath).Data)
 
-	err := os.Remove(filePath + fileName)
+	logger.Debugw("Delete file", "src", filePath+"/"+fileName)
+
+	err := os.Remove("./" + filePath + "/" + fileName)
 	if os.IsNotExist(err) {
 		_, err := cc.Connection.Write(t.ReplyError("Cannot delete file " + fileName + " because it does not exist or cannot be found."))
 		return err
 	}
 	// TODO: handle other possible errors; e.g. file delete fails due to file permission issue
 
-	_, err = cc.Connection.Write(t.ReplyTransaction([]Field{}).Payload())
+	return cc.SendReplyTransaction(t)
+}
 
-	return err
+func HandleMoveFile(cc *ClientConn, t *Transaction) error {
+	//if cc.Authorize(accessDeleteFile) == false {
+	//	_, err := cc.Connection.Write(t.ReplyError("You are not allowed to create new accounts."))
+	//	return err
+	//}
+
+	fileName := string(t.GetField(fieldFileName).Data)
+	filePath := "./" + cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFilePath).Data)
+	fileNewPath := "./" + cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFileNewPath).Data)
+
+	logger.Debugw("Move file", "src", filePath+"/"+fileName, "dst", fileNewPath+"/"+fileName)
+
+	err := os.Rename(filePath+"/"+fileName, fileNewPath+"/"+fileName)
+	if os.IsNotExist(err) {
+		_, err := cc.Connection.Write(t.ReplyError("Cannot delete file " + fileName + " because it does not exist or cannot be found."))
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	// TODO: handle other possible errors; e.g. file delete fails due to file permission issue
+
+	return cc.SendReplyTransaction(t)
 }
 
 func HandleNewFolder(cc *ClientConn, t *Transaction) error {
@@ -181,20 +238,16 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) error {
 		return err
 	}
 
-	_, err := cc.Connection.Write(t.ReplyTransaction([]Field{}).Payload())
-
-	return err
+	return cc.SendReplyTransaction(t)
 }
 
 func HandleSetUser(cc *ClientConn, t *Transaction) error {
 	userLogin := DecodeUserString(t.GetField(fieldUserLogin).Data)
 	userName := string(t.GetField(fieldUserName).Data)
-	//saltedPassword := hashAndSalt([]byte(t.GetField(fieldUserPassword).Data))
 
 	account := cc.Server.Accounts[userLogin]
 	account.Access = t.GetField(fieldUserAccess).Data
 	account.Name = userName
-	//account.Password = saltedPassword
 
 	file := cc.Server.ConfigDir + "Users/" + userLogin + ".yaml"
 	out, _ := yaml.Marshal(&account)
@@ -202,14 +255,41 @@ func HandleSetUser(cc *ClientConn, t *Transaction) error {
 		return err
 	}
 
+	for _, c := range cc.Server.Clients {
+		if c.Account.Login == userLogin {
+			flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*c.Flags)))
+
+			if c.Authorize(accessDisconUser) == true {
+				flagBitmap.SetBit(flagBitmap, userFlagAdmin, 1)
+			} else {
+				flagBitmap.SetBit(flagBitmap, userFlagAdmin, 0)
+			}
+			binary.BigEndian.PutUint16(*c.Flags, uint16(flagBitmap.Int64()))
+
+			err := cc.Server.NotifyAll(
+				NewTransaction(
+					tranNotifyChangeUser,
+					0,
+					[]Field{
+						NewField(fieldUserID, *c.ID),
+						NewField(fieldUserFlags, *c.Flags),
+						NewField(fieldUserName, *c.UserName),
+						NewField(fieldUserIconID, *c.Icon),
+					},
+				),
+			)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+
 	// TODO: Notify connected clients logged in as the user of the new access level
 
 	// TODO: If we have just promoted a connected user to admin, notify
 	// connected clients to turn the user red
 
-	_, err := cc.Connection.Write(t.ReplyTransaction([]Field{}).Payload())
-
-	return err
+	return cc.SendReplyTransaction(t)
 }
 
 func HandleGetUser(cc *ClientConn, t *Transaction) error {
@@ -217,36 +297,26 @@ func HandleGetUser(cc *ClientConn, t *Transaction) error {
 	decodedUserLogin := NegatedUserString(t.GetField(fieldUserLogin).Data)
 	account := cc.Server.Accounts[userLogin]
 
-	_, err := cc.Connection.Write(
-		t.ReplyTransaction(
-			[]Field{
-				NewField(fieldUserName, []byte(account.Name)),
-				NewField(fieldUserLogin, []byte(decodedUserLogin)),
-				NewField(fieldUserPassword, []byte(account.Password)),
-				NewField(fieldUserAccess, account.Access),
-			},
-		).Payload(),
+	return cc.SendReplyTransaction(t,
+		NewField(fieldUserName, []byte(account.Name)),
+		NewField(fieldUserLogin, []byte(decodedUserLogin)),
+		NewField(fieldUserPassword, []byte(account.Password)),
+		NewField(fieldUserAccess, account.Access),
 	)
-
-	return err
 }
 
 func HandleListUsers(cc *ClientConn, t *Transaction) error {
-
-	userFields := []Field{}
-
-	//dataField := NewField(fieldData, []byte{})
-
-	for login, acc := range cc.Server.Accounts {
-		fmt.Printf("login: %v\n", login)
+	if cc.Authorize(accessOpenUser) == false {
+		_, err := cc.Connection.Write(t.ReplyError("You are not allowed to view accounts."))
+		return err
+	}
+	var userFields []Field
+	for _, acc := range cc.Server.Accounts {
 		userField := acc.Payload()
-
 		userFields = append(userFields, NewField(fieldData, userField))
 	}
 
-	_, err := cc.Connection.Write(t.ReplyTransaction(userFields).Payload())
-
-	return err
+	return cc.SendReplyTransaction(t, userFields...)
 }
 
 // HandleNewUser creates a new user account
@@ -297,6 +367,7 @@ func HandleDeleteUser(cc *ClientConn, t *Transaction) error {
 	return err
 }
 
+// HandleUserBroadcast sends an Administrator Message to all connected clients of the server
 func HandleUserBroadcast(cc *ClientConn, t *Transaction) error {
 	cc.NotifyOthers(
 		NewTransaction(
@@ -308,8 +379,7 @@ func HandleUserBroadcast(cc *ClientConn, t *Transaction) error {
 		),
 	)
 
-	_, err := cc.Connection.Write(t.ReplyTransaction([]Field{}).Payload())
-	return err
+	return cc.SendReplyTransaction(t)
 }
 
 func HandleGetClientConnInfoText(cc *ClientConn, t *Transaction) error {
@@ -401,6 +471,31 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) error {
 	*cc.ID = bs
 	*cc.Icon = t.GetField(fieldUserIconID).Data
 
+	options := t.GetField(fieldOptions).Data
+	optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
+
+	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*cc.Flags)))
+
+	// Check refuse private PM option
+	if optBitmap.Bit(refusePM) == 1 {
+		flagBitmap.SetBit(flagBitmap, userFlagRefusePM, 1)
+		binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
+	}
+
+	// Check refuse private chat option
+	if optBitmap.Bit(refuseChat) == 1 {
+		flagBitmap.SetBit(flagBitmap, userFLagRefusePChat, 1)
+		binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
+	}
+
+	// Check auto response
+	if optBitmap.Bit(autoResponse) == 1 {
+		fmt.Println("AutoRes")
+		*cc.AutoReply = t.GetField(fieldAutomaticResponse).Data
+	} else {
+		*cc.AutoReply = []byte{}
+	}
+
 	_ = cc.notifyNewUserHasJoined()
 	if err := cc.SendReplyTransaction(t); err != nil {
 		return err
@@ -470,8 +565,7 @@ func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
 			"UserName", string(*cc.UserName), "RequestID", requestNum, "RequestType", handler.Name,
 		)
 
-		err := handler.Handler(cc, transaction)
-		if err != nil {
+		if err := handler.Handler(cc, transaction); err != nil {
 			return err
 		}
 	} else {
@@ -495,7 +589,7 @@ func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
 		cc.Idle = false
 		*cc.IdleTime = 0
 
-		cc.Server.NotifyAll(
+		err := cc.Server.NotifyAll(
 			NewTransaction(
 				tranNotifyChangeUser,
 				int(nextTransID),
@@ -507,6 +601,9 @@ func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
 				},
 			),
 		)
+		if err != nil {
+			panic(err)
+		}
 
 		return nil
 	}
@@ -970,14 +1067,7 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) error {
 	transferSize, _ := CalcTotalSize(fullFilePath)
 	fmt.Printf("fullFilePath: %v, totalSize: %#v\n", fullFilePath, transferSize)
 
-	_, err := cc.Connection.Write(
-		t.ReplyTransaction(
-			[]Field{
-				NewField(fieldRefNum, transactionRef),
-			},
-		).Payload(),
-	)
-	return err
+	return cc.SendReplyTransaction(t, NewField(fieldRefNum, transactionRef))
 }
 
 func HandleUploadFile(cc *ClientConn, t *Transaction) error {
@@ -996,31 +1086,41 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) error {
 
 	cc.Server.FileTransfers[data] = fileTransfer
 
-	_, err := cc.Connection.Write(
-		t.ReplyTransaction(
-			[]Field{
-				NewField(fieldRefNum, transactionRef),
-			},
-		).Payload(),
-	)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return cc.SendReplyTransaction(t, NewField(fieldRefNum, transactionRef))
 }
+
+const refusePM = 0
+const refuseChat = 1
+const autoResponse = 2
 
 func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) error {
 	*cc.Icon = t.GetField(fieldUserIconID).Data
 	*cc.UserName = t.GetField(fieldUserName).Data
 
-	//  TODO: add support for Options bitmap and automatic response fields
-	// 	113	Options	"Bitmap created by combining the following values:
-	// 	- Automatic response (4)
-	// 	- Refuse private chat (2)
-	// 	- Refuse private message (1)"
-	//  215	Automatic response	"Optional
-	//  Automatic response string used only if  the options field indicates this feature"
+	options := t.GetField(fieldOptions).Data
+	optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
+
+	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*cc.Flags)))
+
+	// Check refuse private PM option
+	if optBitmap.Bit(refusePM) == 1 {
+		flagBitmap.SetBit(flagBitmap, userFlagRefusePM, 1)
+		binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
+	}
+
+	// Check refuse private chat option
+	if optBitmap.Bit(refuseChat) == 1 {
+		flagBitmap.SetBit(flagBitmap, userFLagRefusePChat, 1)
+		binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
+	}
+
+	// Check auto response
+	if optBitmap.Bit(autoResponse) == 1 {
+		fmt.Println("AutoRes")
+		*cc.AutoReply = t.GetField(fieldAutomaticResponse).Data
+	} else {
+		*cc.AutoReply = []byte{}
+	}
 
 	// Notify all clients of updated user info
 	cc.Server.NotifyAll(
@@ -1041,16 +1141,9 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) error {
 func HandleKeepAlive(cc *ClientConn, t *Transaction) error {
 	// HL 1.9.2 Client sends keepalive msg every 3 minutes
 	// HL 1.2.3 Client doesn't send keepalives
-	_, err := cc.Connection.Write(
-		t.ReplyTransaction(
-			[]Field{}).Payload(),
-	)
+	err := cc.SendReplyTransaction(t)
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func HandleGetFileNameList(cc *ClientConn, t *Transaction) error {
@@ -1105,6 +1198,38 @@ func HandleInviteNewChat(cc *ClientConn, t *Transaction) error {
 		t.ReplyTransaction(
 			[]Field{
 				NewField(fieldChatID, newChatID),
+				NewField(fieldUserName, *cc.UserName),
+				NewField(fieldUserID, *cc.ID),
+				NewField(fieldUserIconID, *cc.Icon),
+				NewField(fieldUserFlags, *cc.Flags),
+			},
+		).Payload(),
+	)
+
+	return err
+}
+
+func HandleInviteToChat(cc *ClientConn, t *Transaction) error {
+	// Client to Invite
+	targetID := t.GetField(fieldUserID).Data
+	chatID := t.GetField(fieldChatID).Data
+
+	inviteOther := NewTransaction(
+		tranInviteToChat, 0,
+		[]Field{
+			NewField(fieldChatID, chatID),
+			NewField(fieldUserName, *cc.UserName),
+			NewField(fieldUserID, *cc.ID),
+		},
+	)
+	if err := cc.notifyOtherClientConn(targetID, inviteOther); err != nil {
+		return nil
+	}
+
+	_, err := cc.Connection.Write(
+		t.ReplyTransaction(
+			[]Field{
+				NewField(fieldChatID, chatID),
 				NewField(fieldUserName, *cc.UserName),
 				NewField(fieldUserID, *cc.ID),
 				NewField(fieldUserIconID, *cc.Icon),

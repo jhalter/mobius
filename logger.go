@@ -20,6 +20,6 @@ func newStdoutCore() zapcore.Core {
 	return zapcore.NewCore(
 		encoder,
 		writer,
-		zap.InfoLevel,
+		zap.DebugLevel,
 	)
 }

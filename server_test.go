@@ -22,7 +22,7 @@ type transactionTest struct {
 
 func (tt *transactionTest) Setup(srv *Server) error {
 	if err := srv.NewUser(tt.account.Login, tt.account.Name, NegatedUserString([]byte(tt.account.Password)), tt.account.Access); err != nil {
-		return (err)
+		return err
 	}
 
 	if tt.setup != nil {

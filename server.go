@@ -163,7 +163,7 @@ func NewServer(configDir string) (*Server, error) {
 					flagBitmap.SetBit(flagBitmap, userFlagAway, 1)
 					binary.BigEndian.PutUint16(*c.Flags, uint16(flagBitmap.Int64()))
 
-					c.Server.NotifyAll(
+					err := c.Server.NotifyAll(
 						NewTransaction(
 							tranNotifyChangeUser, 0,
 							[]Field{
@@ -174,6 +174,9 @@ func NewServer(configDir string) (*Server, error) {
 							},
 						),
 					)
+					if err != nil {
+						panic(err)
+					}
 
 				}
 			}
@@ -220,6 +223,7 @@ func (s *Server) NewClientConn(conn net.Conn) *ClientConn {
 		Server:     s,
 		Version:    &[]byte{},
 		IdleTime:   new(int),
+		AutoReply:  &[]byte{},
 	}
 	*s.NextGuestID++
 	ID := *s.NextGuestID
@@ -690,18 +694,15 @@ func (s *Server) TransferFile(conn net.Conn) error {
 		//decodedFilePath := ReadFilePath(fileTransfer.FilePath)
 		//fmt.Printf("folder download filePath: %v\n", decodedFilePath)
 
-
 		readBuffer := make([]byte, 1024)
 
 		fmt.Printf("walking fullFilePath: %v\n", fullFilePath)
-		_ = filepath.Walk(fullFilePath +"/", func(path string, info os.FileInfo, err error) error {
+		_ = filepath.Walk(fullFilePath+"/", func(path string, info os.FileInfo, err error) error {
 			if info.IsDir() {
 				return nil
 			}
-qq
 
 			fileHeader := NewFileHeader(s.Config.FileRoot+string(fileTransfer.FilePath)+string(fileTransfer.FileName)+"/", info.Name())
-
 
 			// Send the file header to client
 			if _, err := conn.Write(fileHeader.Payload()); err != nil {
@@ -726,7 +727,7 @@ qq
 				return err
 			}
 
-			fooz := s.Config.FileRoot+string(fileTransfer.FilePath)+string(fileTransfer.FileName) + "/" + info.Name()
+			fooz := s.Config.FileRoot + string(fileTransfer.FilePath) + string(fileTransfer.FileName) + "/" + info.Name()
 			fmt.Printf("Reading file content %v\n", fooz)
 			file, err := os.Open(fooz)
 			if err != nil {
@@ -754,7 +755,6 @@ qq
 			}
 			return nil
 		})
-
 
 	case FolderUpload:
 		fmt.Println("Folder Upload")
