@@ -91,15 +91,15 @@ func HandleChatSend(cc *ClientConn, t *Transaction) error {
 	)
 }
 
-func (cc ClientConn) notifyOtherClientConn(ID []byte, t Transaction) error {
+func (cc *ClientConn) notifyOtherClientConn(ID []byte, t Transaction) error {
 	clientConn := cc.Server.Clients[binary.BigEndian.Uint16(ID)]
 	_, err := clientConn.Connection.Write(t.Payload())
 	return err
 }
 
-func HandleSendInstantMsg(cc *ClientConn, transaction *Transaction) error {
-	msg := transaction.GetField(fieldData)
-	ID := transaction.GetField(fieldUserID)
+func HandleSendInstantMsg(cc *ClientConn, t *Transaction) error {
+	msg := t.GetField(fieldData)
+	ID := t.GetField(fieldUserID)
 	//options := transaction.GetField(hotline.fieldOptions)
 
 	sendChat := NewTransaction(
@@ -128,10 +128,7 @@ func HandleSendInstantMsg(cc *ClientConn, transaction *Transaction) error {
 		)
 	}
 
-	// Ack transaction to sending cc
-	_, err := cc.Connection.Write(transaction.ReplyTransaction([]Field{}).Payload())
-	return err
-
+	return cc.SendReplyTransaction(t)
 }
 
 func HandleGetFileInfo(cc *ClientConn, t *Transaction) error {
@@ -140,24 +137,16 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) error {
 
 	ffo, _ := NewFlattenedFileObject(filePath, fileName)
 
-	reply := t.ReplyTransaction(
-		[]Field{
-			NewField(fieldFileName, []byte(fileName)),
-			NewField(fieldFileTypeString, ffo.FlatFileInformationFork.TypeSignature),
-			NewField(fieldFileCreatorString, ffo.FlatFileInformationFork.CreatorSignature),
-			NewField(fieldFileComment, ffo.FlatFileInformationFork.Comment),
-			NewField(fieldFileType, ffo.FlatFileInformationFork.TypeSignature),
-			NewField(fieldFileCreateDate, ffo.FlatFileInformationFork.CreateDate),
-			NewField(fieldFileModifyDate, ffo.FlatFileInformationFork.ModifyDate),
-			NewField(fieldFileSize, ffo.FlatFileDataForkHeader.DataSize),
-		},
+	return cc.SendReplyTransaction(t,
+		NewField(fieldFileName, []byte(fileName)),
+		NewField(fieldFileTypeString, ffo.FlatFileInformationFork.TypeSignature),
+		NewField(fieldFileCreatorString, ffo.FlatFileInformationFork.CreatorSignature),
+		NewField(fieldFileComment, ffo.FlatFileInformationFork.Comment),
+		NewField(fieldFileType, ffo.FlatFileInformationFork.TypeSignature),
+		NewField(fieldFileCreateDate, ffo.FlatFileInformationFork.CreateDate),
+		NewField(fieldFileModifyDate, ffo.FlatFileInformationFork.ModifyDate),
+		NewField(fieldFileSize, ffo.FlatFileDataForkHeader.DataSize),
 	)
-
-	if _, err := cc.Connection.Write(reply.Payload()); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func HandleSetFileInfo(cc *ClientConn, t *Transaction) error {
@@ -168,7 +157,7 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) error {
 	fileNewName := t.GetField(fieldFileNewName).Data
 
 	if fileNewName != nil {
-		err := os.Rename(filePath+"/"+fileName, filePath+"/"+ string(fileNewName))
+		err := os.Rename(filePath+"/"+fileName, filePath+"/"+string(fileNewName))
 		if os.IsNotExist(err) {
 			_, err := cc.Connection.Write(t.ReplyError("Cannot delete file " + fileName + " because it does not exist or cannot be found."))
 			return err
