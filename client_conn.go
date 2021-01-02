@@ -32,6 +32,63 @@ type ClientConn struct {
 	AutoReply  *[]byte
 }
 
+func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
+	requestNum := binary.BigEndian.Uint16(transaction.Type)
+
+	if handler, ok := TransactionHandlers[requestNum]; ok {
+		cc.Server.Logger.Infow(
+			"Client transaction received",
+			"UserName", string(*cc.UserName), "RequestID", requestNum, "RequestType", handler.Name,
+		)
+
+		if err := handler.Handler(cc, transaction); err != nil {
+			return err
+		}
+	} else {
+		cc.Server.Logger.Infow(
+			"Unimplemented transaction type received",
+			"UserName", string(*cc.UserName), "RequestID", requestNum,
+		)
+		spew.Dump(transaction)
+	}
+
+	nextTransID := cc.Server.GetNextTransactionID()
+	cc.Server.mux.Lock()
+	defer cc.Server.mux.Unlock()
+
+	// Check if user was away before sending this transaction; if so, this transaction
+	// indicates they are no longer idle, so notify all clients to clear the away flag
+	if *cc.IdleTime > userIdleSeconds && requestNum != tranKeepAlive {
+		flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*cc.Flags)))
+		flagBitmap.SetBit(flagBitmap, userFlagAway, 0)
+		binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
+		cc.Idle = false
+		*cc.IdleTime = 0
+
+		err := cc.Server.NotifyAll(
+			NewTransaction(
+				tranNotifyChangeUser,
+				int(nextTransID),
+				[]Field{
+					NewField(fieldUserID, *cc.ID),
+					NewField(fieldUserFlags, *cc.Flags),
+					NewField(fieldUserName, *cc.UserName),
+					NewField(fieldUserIconID, *cc.Icon),
+				},
+			),
+		)
+		if err != nil {
+			panic(err)
+		}
+
+		return nil
+	}
+
+	*cc.IdleTime = 0
+
+	return nil
+}
+
 func (cc *ClientConn) Authenticate(login string, password []byte) bool {
 	logger.Infow("Authenticating user", "login", login, "passwd", password)
 
@@ -128,7 +185,7 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) error {
 		)
 	}
 
-	return cc.SendReplyTransaction(t)
+	return cc.Reply(t)
 }
 
 func HandleGetFileInfo(cc *ClientConn, t *Transaction) error {
@@ -137,7 +194,7 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) error {
 
 	ffo, _ := NewFlattenedFileObject(filePath, fileName)
 
-	return cc.SendReplyTransaction(t,
+	return cc.Reply(t,
 		NewField(fieldFileName, []byte(fileName)),
 		NewField(fieldFileTypeString, ffo.FlatFileInformationFork.TypeSignature),
 		NewField(fieldFileCreatorString, ffo.FlatFileInformationFork.CreatorSignature),
@@ -169,7 +226,7 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) error {
 	spew.Dump(fileComment)
 	spew.Dump(fileNewName)
 
-	return cc.SendReplyTransaction(t)
+	return cc.Reply(t)
 }
 
 func HandleDeleteFile(cc *ClientConn, t *Transaction) error {
@@ -190,7 +247,7 @@ func HandleDeleteFile(cc *ClientConn, t *Transaction) error {
 	}
 	// TODO: handle other possible errors; e.g. file delete fails due to file permission issue
 
-	return cc.SendReplyTransaction(t)
+	return cc.Reply(t)
 }
 
 func HandleMoveFile(cc *ClientConn, t *Transaction) error {
@@ -215,7 +272,7 @@ func HandleMoveFile(cc *ClientConn, t *Transaction) error {
 	}
 	// TODO: handle other possible errors; e.g. file delete fails due to file permission issue
 
-	return cc.SendReplyTransaction(t)
+	return cc.Reply(t)
 }
 
 func HandleNewFolder(cc *ClientConn, t *Transaction) error {
@@ -227,7 +284,7 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) error {
 		return err
 	}
 
-	return cc.SendReplyTransaction(t)
+	return cc.Reply(t)
 }
 
 func HandleSetUser(cc *ClientConn, t *Transaction) error {
@@ -278,7 +335,7 @@ func HandleSetUser(cc *ClientConn, t *Transaction) error {
 	// TODO: If we have just promoted a connected user to admin, notify
 	// connected clients to turn the user red
 
-	return cc.SendReplyTransaction(t)
+	return cc.Reply(t)
 }
 
 func HandleGetUser(cc *ClientConn, t *Transaction) error {
@@ -286,7 +343,7 @@ func HandleGetUser(cc *ClientConn, t *Transaction) error {
 	decodedUserLogin := NegatedUserString(t.GetField(fieldUserLogin).Data)
 	account := cc.Server.Accounts[userLogin]
 
-	return cc.SendReplyTransaction(t,
+	return cc.Reply(t,
 		NewField(fieldUserName, []byte(account.Name)),
 		NewField(fieldUserLogin, []byte(decodedUserLogin)),
 		NewField(fieldUserPassword, []byte(account.Password)),
@@ -305,7 +362,7 @@ func HandleListUsers(cc *ClientConn, t *Transaction) error {
 		userFields = append(userFields, NewField(fieldData, userField))
 	}
 
-	return cc.SendReplyTransaction(t, userFields...)
+	return cc.Reply(t, userFields...)
 }
 
 // HandleNewUser creates a new user account
@@ -351,9 +408,7 @@ func HandleDeleteUser(cc *ClientConn, t *Transaction) error {
 		return err
 	}
 
-	_, err := cc.Connection.Write(t.ReplyTransaction([]Field{}).Payload())
-
-	return err
+	return cc.Reply(t)
 }
 
 // HandleUserBroadcast sends an Administrator Message to all connected clients of the server
@@ -368,7 +423,7 @@ func HandleUserBroadcast(cc *ClientConn, t *Transaction) error {
 		),
 	)
 
-	return cc.SendReplyTransaction(t)
+	return cc.Reply(t)
 }
 
 func HandleGetClientConnInfoText(cc *ClientConn, t *Transaction) error {
@@ -404,19 +459,15 @@ None.
 	template = fmt.Sprintf(template, *clientConn.UserName, *clientConn.ID, clientConn.Connection.RemoteAddr().String())
 	template = strings.Replace(template, "\n", "\r", -1)
 
-	err := cc.SendReplyTransaction(
+	return cc.Reply(
 		t,
 		NewField(fieldData, []byte(template)),
 		NewField(fieldUserName, *clientConn.UserName),
 	)
-
-	return err
 }
 
 func HandleGetUserNameList(cc *ClientConn, t *Transaction) error {
-	err := cc.SendReplyTransaction(t, cc.Server.connectedUsers()...)
-
-	return err
+	return cc.Reply(t, cc.Server.connectedUsers()...)
 }
 
 func (cc *ClientConn) notifyNewUserHasJoined() error {
@@ -486,7 +537,7 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) error {
 	}
 
 	_ = cc.notifyNewUserHasJoined()
-	if err := cc.SendReplyTransaction(t); err != nil {
+	if err := cc.Reply(t); err != nil {
 		return err
 	}
 
@@ -545,63 +596,6 @@ func HandleDisconnectUser(cc *ClientConn, t *Transaction) error {
 	return err
 }
 
-func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
-	requestNum := binary.BigEndian.Uint16(transaction.Type)
-
-	if handler, ok := TransactionHandlers[requestNum]; ok {
-		cc.Server.Logger.Infow(
-			"Client transaction received",
-			"UserName", string(*cc.UserName), "RequestID", requestNum, "RequestType", handler.Name,
-		)
-
-		if err := handler.Handler(cc, transaction); err != nil {
-			return err
-		}
-	} else {
-		cc.Server.Logger.Infow(
-			"Unimplemented transaction type received",
-			"UserName", string(*cc.UserName), "RequestID", requestNum,
-		)
-		spew.Dump(transaction)
-	}
-
-	nextTransID := cc.Server.GetNextTransactionID()
-	cc.Server.mux.Lock()
-	defer cc.Server.mux.Unlock()
-
-	// Check if user was away before sending this transaction; if so, this transaction
-	// indicates they are no longer idle, so notify all clients to clear the away flag
-	if *cc.IdleTime > userIdleSeconds && requestNum != tranKeepAlive {
-		flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*cc.Flags)))
-		flagBitmap.SetBit(flagBitmap, userFlagAway, 0)
-		binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
-		cc.Idle = false
-		*cc.IdleTime = 0
-
-		err := cc.Server.NotifyAll(
-			NewTransaction(
-				tranNotifyChangeUser,
-				int(nextTransID),
-				[]Field{
-					NewField(fieldUserID, *cc.ID),
-					NewField(fieldUserFlags, *cc.Flags),
-					NewField(fieldUserName, *cc.UserName),
-					NewField(fieldUserIconID, *cc.Icon),
-				},
-			),
-		)
-		if err != nil {
-			panic(err)
-		}
-
-		return nil
-	}
-
-	*cc.IdleTime = 0
-
-	return nil
-}
-
 func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) error {
 	// Fields used in the request:
 	// 325	News path	(Optional)
@@ -630,10 +624,7 @@ func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) error {
 		))
 	}
 
-	return cc.SendReplyTransaction(
-		t,
-		fieldData...,
-	)
+	return cc.Reply(t, fieldData...)
 }
 
 func HandleNewNewsCat(cc *ClientConn, t *Transaction) error {
@@ -653,7 +644,7 @@ func HandleNewNewsCat(cc *ClientConn, t *Transaction) error {
 
 	_ = cc.Server.WriteThreadedNews()
 
-	return cc.SendReplyTransaction(t)
+	return cc.Reply(t)
 }
 
 func HandleNewNewsFldr(cc *ClientConn, t *Transaction) error {
@@ -674,7 +665,7 @@ func HandleNewNewsFldr(cc *ClientConn, t *Transaction) error {
 	}
 	_ = cc.Server.WriteThreadedNews()
 
-	return cc.SendReplyTransaction(t)
+	return cc.Reply(t)
 }
 
 // Fields used in the request:
@@ -695,7 +686,7 @@ func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) error {
 
 	nald := cat.GetNewsArtListData()
 
-	return cc.SendReplyTransaction(t, NewField(fieldNewsArtListData, nald.Payload()))
+	return cc.Reply(t, NewField(fieldNewsArtListData, nald.Payload()))
 }
 
 func HandleGetNewsArtData(cc *ClientConn, t *Transaction) error {
@@ -720,7 +711,7 @@ func HandleGetNewsArtData(cc *ClientConn, t *Transaction) error {
 	art := cat.Articles[uint32(convertedArtID)]
 
 	if art == nil {
-		cc.SendReplyTransaction(t)
+		cc.Reply(t)
 		return nil
 	}
 
@@ -748,7 +739,7 @@ func HandleGetNewsArtData(cc *ClientConn, t *Transaction) error {
 		NewField(fieldNewsArtData, []byte(art.Data)),
 	}
 
-	return cc.SendReplyTransaction(t, fields...)
+	return cc.Reply(t, fields...)
 }
 
 func HandleDelNewsItem(cc *ClientConn, t *Transaction) error {
@@ -772,7 +763,7 @@ func HandleDelNewsItem(cc *ClientConn, t *Transaction) error {
 	cc.Server.WriteThreadedNews()
 
 	// Reply params: none
-	return cc.SendReplyTransaction(t)
+	return cc.Reply(t)
 }
 
 func HandleDelNewsArt(cc *ClientConn, t *Transaction) error {
@@ -798,7 +789,7 @@ func HandleDelNewsArt(cc *ClientConn, t *Transaction) error {
 	}
 
 	// Reply fields: None
-	return cc.SendReplyTransaction(t)
+	return cc.Reply(t)
 }
 
 func HandlePostNewsArt(cc *ClientConn, t *Transaction) error {
@@ -862,7 +853,7 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) error {
 	cc.Server.WriteThreadedNews()
 
 	// Reply fields: None
-	return cc.SendReplyTransaction(t)
+	return cc.Reply(t)
 }
 
 func HandleGetMsgs(cc *ClientConn, transaction *Transaction) error {
@@ -932,7 +923,7 @@ func (cc *ClientConn) SendTransaction(id int, fields ...Field) error {
 	return nil
 }
 
-func (cc *ClientConn) SendReplyTransaction(t *Transaction, fields ...Field) error {
+func (cc *ClientConn) Reply(t *Transaction, fields ...Field) error {
 	if _, err := cc.Connection.Write(t.ReplyTransaction(fields).Payload()); err != nil {
 		return err
 	}
@@ -1056,7 +1047,7 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) error {
 	transferSize, _ := CalcTotalSize(fullFilePath)
 	fmt.Printf("fullFilePath: %v, totalSize: %#v\n", fullFilePath, transferSize)
 
-	return cc.SendReplyTransaction(t, NewField(fieldRefNum, transactionRef))
+	return cc.Reply(t, NewField(fieldRefNum, transactionRef))
 }
 
 func HandleUploadFile(cc *ClientConn, t *Transaction) error {
@@ -1075,7 +1066,7 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) error {
 
 	cc.Server.FileTransfers[data] = fileTransfer
 
-	return cc.SendReplyTransaction(t, NewField(fieldRefNum, transactionRef))
+	return cc.Reply(t, NewField(fieldRefNum, transactionRef))
 }
 
 const refusePM = 0
@@ -1130,7 +1121,7 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) error {
 func HandleKeepAlive(cc *ClientConn, t *Transaction) error {
 	// HL 1.9.2 Client sends keepalive msg every 3 minutes
 	// HL 1.2.3 Client doesn't send keepalives
-	err := cc.SendReplyTransaction(t)
+	err := cc.Reply(t)
 
 	return err
 }
@@ -1180,22 +1171,16 @@ func HandleInviteNewChat(cc *ClientConn, t *Transaction) error {
 		},
 	)
 	if err := cc.notifyOtherClientConn(targetID, inviteOther); err != nil {
-		return nil
+		return err
 	}
 
-	_, err := cc.Connection.Write(
-		t.ReplyTransaction(
-			[]Field{
-				NewField(fieldChatID, newChatID),
-				NewField(fieldUserName, *cc.UserName),
-				NewField(fieldUserID, *cc.ID),
-				NewField(fieldUserIconID, *cc.Icon),
-				NewField(fieldUserFlags, *cc.Flags),
-			},
-		).Payload(),
+	return cc.Reply(t,
+		NewField(fieldChatID, newChatID),
+		NewField(fieldUserName, *cc.UserName),
+		NewField(fieldUserID, *cc.ID),
+		NewField(fieldUserIconID, *cc.Icon),
+		NewField(fieldUserFlags, *cc.Flags),
 	)
-
-	return err
 }
 
 func HandleInviteToChat(cc *ClientConn, t *Transaction) error {
@@ -1256,7 +1241,6 @@ func HandleJoinChat(cc *ClientConn, t *Transaction) error {
 
 	privChat := cc.Server.PrivateChats[chatInt]
 
-	//spew.Dump(privChat)
 	// Send tranNotifyChatChangeUser to current members of the chat
 	for _, occ := range privChat.ClientConn {
 		occ.SendTransaction(
@@ -1283,14 +1267,7 @@ func HandleJoinChat(cc *ClientConn, t *Transaction) error {
 		connectedUsers = append(connectedUsers, NewField(fieldUsernameWithInfo, user.Payload()))
 	}
 
-	// Send
-	_, err := cc.Connection.Write(
-		t.ReplyTransaction(
-			connectedUsers,
-		).Payload(),
-	)
-
-	return err
+	return cc.Reply(t, connectedUsers...)
 }
 
 func HandleLeaveChat(cc *ClientConn, t *Transaction) error {
@@ -1309,10 +1286,7 @@ func HandleLeaveChat(cc *ClientConn, t *Transaction) error {
 		)
 	}
 
-	// empty reply
-	_, err := cc.Connection.Write(t.ReplyTransaction([]Field{}).Payload())
-
-	return err
+	return cc.Reply(t)
 }
 
 func HandleSetChatSubject(cc *ClientConn, t *Transaction) error {
@@ -1332,8 +1306,5 @@ func HandleSetChatSubject(cc *ClientConn, t *Transaction) error {
 		)
 	}
 
-	// empty reply
-	_, err := cc.Connection.Write(t.ReplyTransaction([]Field{}).Payload())
-
-	return err
+	return cc.Reply(t)
 }

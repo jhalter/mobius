@@ -257,7 +257,7 @@ func (s *Server) NewUser(login, name, password string, access []byte) error {
 	return ioutil.WriteFile(s.ConfigDir+"Users/"+login+".yaml", out, 0666)
 }
 
-// Delete user deletes the user account for login
+// DeleteUser deletes the user account for login
 func (s *Server) DeleteUser(login string) error {
 	s.mux.Lock()
 	defer s.mux.Unlock()
