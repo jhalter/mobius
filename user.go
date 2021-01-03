@@ -12,7 +12,6 @@ const GuestAccount = "guest"
 // 1	2	User is admin
 // 2	4	User refuses private messages
 // 3	8	User refuses private chat
-
 const userFlagAway = 0
 const userFlagAdmin = 1
 const userFlagRefusePM = 2

@@ -1007,31 +1007,23 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) error {
 
 	fullFilePath := fmt.Sprintf("./%v/%v", cc.Server.Config.FileRoot+string(fileTransfer.FilePath), string(fileTransfer.FileName))
 	transferSize, _ := CalcTotalSize(fullFilePath)
-	fmt.Printf("fullFilePath: %v, totalSize: %#v\n", fullFilePath, transferSize)
 
-	_, err := cc.Connection.Write(
-		t.ReplyTransaction(
-			[]Field{
-				NewField(fieldRefNum, transactionRef),
-				NewField(fieldTransferSize, transferSize),
-				NewField(fieldFolderItemCount, []byte{0x00, 0x02}), // TODO: Remove hardcode
-				NewField(fieldWaitingCount, []byte{0x00, 0x00}),    // TODO: Implement waiting count
-			},
-		).Payload(),
+	return cc.Reply(t,
+		NewField(fieldRefNum, transactionRef),
+		NewField(fieldTransferSize, transferSize),
+		NewField(fieldFolderItemCount, []byte{0x00, 0x02}), // TODO: Remove hardcode
+		NewField(fieldWaitingCount, []byte{0x00, 0x00}),    // TODO: Implement waiting count
 	)
-
-	return err
 }
 
+// Upload all files from the local folder and its subfolders to the specified path on the server
+// Fields used in the request
+// 201	File name
+// 202	File path
+// 108	Transfer size	Total size of all items in the folder
+// 220	Folder item count
+// 204	File transfer options	"Optional Currently set to 1" (TODO: ??)
 func HandleUploadFolder(cc *ClientConn, t *Transaction) error {
-	// Fields used in the request
-	//201	File name
-	//202	File path
-	//108	Transfer size	Total size of all items in the folder
-	//220	Folder item count
-	//204	File transfer options	"Optional
-	//Currently set to 1"
-
 	transactionRef := cc.Server.NewTransactionRef()
 	data := binary.BigEndian.Uint32(transactionRef)
 
@@ -1040,12 +1032,10 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) error {
 		FilePath:        t.GetField(fieldFilePath).Data,
 		ReferenceNumber: transactionRef,
 		Type:            FolderUpload,
+		FolderItemCount: t.GetField(fieldFolderItemCount).Data,
+		TransferSize: t.GetField(fieldTransferSize).Data,
 	}
 	cc.Server.FileTransfers[data] = fileTransfer
-
-	fullFilePath := fmt.Sprintf("./%v/%v", cc.Server.Config.FileRoot+string(fileTransfer.FilePath), string(fileTransfer.FileName))
-	transferSize, _ := CalcTotalSize(fullFilePath)
-	fmt.Printf("fullFilePath: %v, totalSize: %#v\n", fullFilePath, transferSize)
 
 	return cc.Reply(t, NewField(fieldRefNum, transactionRef))
 }

@@ -1,6 +1,7 @@
 package hotline
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,7 +24,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const userIdleSeconds = 20
+const userIdleSeconds = 300
 const idleCheckInterval = 10
 
 type Server struct {
@@ -528,6 +530,10 @@ func (s *Server) NewPrivateChat(cc *ClientConn) []byte {
 	return randID
 }
 
+const dlFldrAction_SendFile = 1
+const dlFldrAction_ResumeFile = 2
+const dlFldrAction_NextFile = 3
+
 func (s *Server) TransferFile(conn net.Conn) error {
 	defer conn.Close()
 
@@ -582,9 +588,8 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			}
 		}
 	case FileUpload:
-		_, err := conn.Read(buf)
-		if err != nil {
-			fmt.Println("Error reading:", err.Error())
+		if _, err := conn.Read(buf); err != nil {
+			return err
 		}
 
 		ffo := ReadFlattenedFileObject(buf)
@@ -600,11 +605,6 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			"dstFile", destinationFile,
 		)
 
-		s.Logger.Debugw(
-			"File info",
-			"CommentSize", ffo.FlatFileInformationFork.CommentSize,
-			"Comment", string(ffo.FlatFileInformationFork.Comment),
-		)
 		newFile, err := os.Create(destinationFile)
 		if err != nil {
 			return err
@@ -689,7 +689,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 
 		folderTransfer, _ := ReadFolderTransfer(buf)
 		spew.Dump(folderTransfer)
-		spew.Dump(fileTransfer)
+		//spew.Dump(fileTransfer)
 
 		//decodedFilePath := ReadFilePath(fileTransfer.FilePath)
 		//fmt.Printf("folder download filePath: %v\n", decodedFilePath)
@@ -757,9 +757,211 @@ func (s *Server) TransferFile(conn net.Conn) error {
 		})
 
 	case FolderUpload:
-		fmt.Println("Folder Upload")
+		dstPath := s.Config.FileRoot + ReadFilePath(fileTransfer.FilePath) + "/" + string(fileTransfer.FileName)
+		logger.Infow(
+			"Folder upload started",
+			"transactionRef", fileTransfer.ReferenceNumber,
+			"RemoteAddr", conn.RemoteAddr().String(),
+			"dstPath", dstPath,
+			"TransferSize", fileTransfer.TransferSize,
+			"FolderItemCount", fileTransfer.FolderItemCount,
+		)
 
+		// Check if the target folder exists.  If not, create it.
+		if _, err := os.Stat(dstPath); os.IsNotExist(err) {
+			logger.Infow("Target path does not exist; Creating...", "dstPath", dstPath)
+			if err := os.Mkdir(dstPath, 0777); err != nil {
+				logger.Error(err)
+			}
+		}
+
+		readBuffer := make([]byte, 1024)
+
+		// Begin the folder upload flow by sending the "next file action" to client
+		if _, err := conn.Write([]byte{0, dlFldrAction_NextFile}); err != nil {
+			return err
+		}
+
+		fileSize := make([]byte, 4)
+		itemCount := binary.BigEndian.Uint16(fileTransfer.FolderItemCount)
+
+		for i := uint16(0); i < itemCount; i++ {
+			if _, err := conn.Read(readBuffer); err != nil {
+				return err
+			}
+			fu := readFolderUpload(readBuffer)
+			//fmt.Println("readBuffer >>>")
+			//spew.Dump(readBuffer)
+			//fmt.Println("fu >>>")
+			//spew.Dump(fu)
+
+			logger.Infow(
+				"Folder upload continued",
+				"transactionRef", fmt.Sprintf("%x", fileTransfer.ReferenceNumber),
+				"RemoteAddr", conn.RemoteAddr().String(),
+				"FormattedPath", string(fu.FormattedPath()),
+				"IsFolder", fmt.Sprintf("%x", fu.IsFolder),
+				"PathItemCount", binary.BigEndian.Uint16(fu.PathItemCount),
+			)
+
+			if bytes.Compare(fu.IsFolder, []byte{0, 1}) == 0 {
+				if _, err := os.Stat(dstPath + "/" + fu.FormattedPath()); os.IsNotExist(err) {
+					logger.Infow("Target path does not exist; Creating...", "dstPath", dstPath)
+					if err := os.Mkdir(dstPath+"/"+fu.FormattedPath(), 0777); err != nil {
+						logger.Error(err)
+					}
+				}
+				logger.Infof("Send NextFile to client")
+				// Tell client to send next file
+				if _, err := conn.Write([]byte{0, dlFldrAction_NextFile}); err != nil {
+					logger.Error(err)
+					return err
+				}
+			} else {
+				// TODO: Check if we have the full file already.  If so, send dlFldrAction_NextFile to client to skip.
+				// TODO: Check if we have a partial file already.  If so, send dlFldrAction_ResumeFile to client to resume upload.
+				// Send dlFldrAction_SendFile to client to begin transfer
+				if _, err := conn.Write([]byte{0, dlFldrAction_SendFile}); err != nil {
+					return err
+				}
+
+				if _, err := conn.Read(fileSize); err != nil {
+					fmt.Println("Error reading:", err.Error()) // TODO: handle
+				}
+				logger.Infow("Size of next file", "fileSize", fmt.Sprintf("%x", fileSize))
+				logger.Infof("Starting transfer of file %v/%v", i+1, itemCount)
+				if err := transferFile(conn, dstPath+"/"+fu.FormattedPath()); err != nil {
+					logger.Error(err)
+				}
+
+				logger.Infof("Send NextFile to client")
+				// Tell client to send next file
+				if _, err := conn.Write([]byte{0, dlFldrAction_NextFile}); err != nil {
+					logger.Error(err)
+					return err
+				}
+
+				// Client sends "MACR" after the file.  Read and discard.
+				// TODO: This doesn't seem to be documented.  What is this?
+				if _, err := conn.Read(readBuffer); err != nil {
+					return err
+				}
+			}
+		}
+		logger.Infof("Folder upload complete")
 	}
 
 	return nil
+}
+
+func transferFile(conn net.Conn, dst string) error {
+	logger.Infof("Starting file transfer: %v\n", dst)
+	const buffSize = 1024
+	buf := make([]byte, buffSize)
+
+	// Read first chunk of bytes from conn; this will be the Flat File Object and initial chunk of file bytes
+	if _, err := conn.Read(buf); err != nil {
+		return err
+	}
+	ffo := ReadFlattenedFileObject(buf)
+	payloadLen := len(ffo.Payload())
+	fileSize := int(binary.BigEndian.Uint32(ffo.FlatFileDataForkHeader.DataSize))
+
+	newFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = newFile.Close() }()
+	if _, err := newFile.Write(buf[payloadLen:]); err != nil {
+		return err
+	}
+	receivedBytes := buffSize - payloadLen
+
+	for {
+		if (fileSize - receivedBytes) < buffSize {
+			logger.Infow(
+				"File transfer complete",
+				"RemoteAddr", conn.RemoteAddr().String(),
+				"size", fileSize,
+				"dstFile", dst,
+			)
+
+			_, err := io.CopyN(newFile, conn, int64(fileSize-receivedBytes))
+			return err
+		}
+
+		// Copy N bytes from conn to upload file
+		n, err := io.CopyN(newFile, conn, buffSize)
+		if err != nil {
+			return err
+		}
+		receivedBytes += int(n)
+	}
+}
+
+// 00 28 // DataSize
+// 00 00 // IsFolder
+// 00 02 // PathItemCount
+//
+// 00 00
+// 09
+// 73 75 62 66 6f 6c 64 65 72 // "subfolder"
+//
+// 00 00
+// 15
+// 73 75 62 66 6f 6c 64 65 72 2d 74 65 73 74 66 69 6c 65 2d 35 6b // "subfolder-testfile-5k"
+func readFolderUpload(buf []byte) folderUpload {
+	dataLen := binary.BigEndian.Uint16(buf[0:2])
+
+	fu := folderUpload{
+		DataSize:      buf[0:2], // Size of this structure (not including data size element itself)
+		IsFolder:      buf[2:4],
+		PathItemCount: buf[4:6],
+		FileNamePath:  buf[6 : dataLen+2],
+	}
+
+	return fu
+}
+
+type folderUpload struct {
+	DataSize      []byte
+	IsFolder      []byte
+	PathItemCount []byte
+	FileNamePath  []byte
+}
+
+func (fu *folderUpload) FormattedPath() string {
+	pathItemLen := binary.BigEndian.Uint16(fu.PathItemCount)
+
+	fmt.Printf("pathItemLen: %v\n", pathItemLen)
+
+	var pathSegments []string
+	pathData := fu.FileNamePath
+	spew.Dump(pathData)
+
+	for i := uint16(0); i < pathItemLen; i++ {
+		segLen := pathData[2]
+		fmt.Printf("segLen: %v\n", segLen)
+
+		pathSegments = append(pathSegments, string(pathData[3:3+segLen]))
+		spew.Dump(pathData)
+
+		pathData = pathData[3+segLen:]
+	}
+
+	fmt.Printf("pathStrSeg: %v \n", strings.Join(pathSegments, "/"))
+
+	return strings.Join(pathSegments, "/")
+}
+
+func NewFileNamePath(b []byte) fileNamePath {
+	return fileNamePath{
+		NameSize: b[2],
+		Name:     b[3:],
+	}
+}
+
+type fileNamePath struct {
+	NameSize byte
+	Name     []byte
 }
