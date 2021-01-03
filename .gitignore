@@ -17,3 +17,5 @@ coverage.html
 #
 server/files/*
 .idea/*
+
+**/.DS_Store
