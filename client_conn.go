@@ -276,10 +276,16 @@ func HandleMoveFile(cc *ClientConn, t *Transaction) error {
 }
 
 func HandleNewFolder(cc *ClientConn, t *Transaction) error {
-	fileName := string(t.GetField(fieldFileName).Data)
-	filePath := cc.Server.Config.FileRoot + string(t.GetField(fieldFilePath).Data)
+	newFolderPath := cc.Server.Config.FileRoot
 
-	if err := os.Mkdir(filePath+fileName, 0777); err != nil {
+	// fieldFilePath is only present for nested paths
+	if t.GetField(fieldFilePath).Data != nil {
+		newFp := NewFilePath(t.GetField(fieldFilePath).Data)
+		newFolderPath += newFp.String()
+	}
+	newFolderPath += "/" + string(t.GetField(fieldFileName).Data)
+
+	if err := os.Mkdir(newFolderPath, 0777); err != nil {
 		// TODO: Send error response to client
 		return err
 	}
@@ -1005,7 +1011,9 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) error {
 	}
 	cc.Server.FileTransfers[data] = fileTransfer
 
-	fullFilePath := fmt.Sprintf("./%v/%v", cc.Server.Config.FileRoot+string(fileTransfer.FilePath), string(fileTransfer.FileName))
+	fp := NewFilePath(t.GetField(fieldFilePath).Data)
+
+	fullFilePath := fmt.Sprintf("./%v/%v", cc.Server.Config.FileRoot+fp.String(), string(fileTransfer.FileName))
 	transferSize, _ := CalcTotalSize(fullFilePath)
 
 	return cc.Reply(t,
@@ -1033,7 +1041,7 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) error {
 		ReferenceNumber: transactionRef,
 		Type:            FolderUpload,
 		FolderItemCount: t.GetField(fieldFolderItemCount).Data,
-		TransferSize: t.GetField(fieldTransferSize).Data,
+		TransferSize:    t.GetField(fieldTransferSize).Data,
 	}
 	cc.Server.FileTransfers[data] = fileTransfer
 

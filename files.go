@@ -89,34 +89,15 @@ func GetFileNameList(filePath string) []Field {
 	return fields
 }
 
-func ReadFilePath(filePathFieldData []byte) string {
-	if len(filePathFieldData) < 5 {
-		return ""
-	}
-	filePathFieldData = filePathFieldData[5:]
-	out := ""
-	flag := false
-
-	// TODO: oh god this is tortured.  Fix me.
-	for _, byte := range filePathFieldData {
-		if byte == 0x00 {
-			flag = true
-		} else {
-			if flag == true {
-				out = out + "/"
-				flag = false
-			} else {
-				out = out + string(byte)
-			}
-		}
-	}
-
-	return out
-}
-
 func CalcTotalSize(filePath string) ([]byte, error) {
 	var totalSize uint32
 	err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
+		fmt.Printf("filePath walk filePath: %v\n", path)
+
+		if err != nil {
+			logger.Error(err)
+		}
+
 		if info.IsDir() {
 			return nil
 		}
@@ -135,9 +116,11 @@ func CalcTotalSize(filePath string) ([]byte, error) {
 	return bs, nil
 }
 
+
+
 func EncodeFilePath(filePath string) []byte {
 	pathSections := strings.Split(filePath, "/")
-	bytes := []byte{0x00, 0x01, 0x00}
+	bytes := []byte{0x00, 0x01, 0x00} // TODO: Unhardcode second byte
 
 	for _, section := range pathSections {
 		pathStr := []byte(section)
@@ -167,7 +150,6 @@ func (fh *FileHeader) Payload() []byte {
 }
 
 func NewFileHeader(filePath, fileName string) FileHeader {
-	fmt.Printf("Creating FH for %v\n", fileName)
 	fh := FileHeader{
 		Size: make([]byte, 2),
 	}
@@ -179,4 +161,9 @@ func NewFileHeader(filePath, fileName string) FileHeader {
 	binary.BigEndian.PutUint16(fh.Size, encodedPathLen)
 
 	return fh
+}
+
+func ReadFilePath(filePathFieldData []byte) string {
+	fp := NewFilePath(filePathFieldData)
+	return fp.String()
 }

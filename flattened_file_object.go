@@ -58,9 +58,9 @@ type FlatFileInformationFork struct {
 
 func NewFlatFileInformationFork(fileName string) FlatFileInformationFork {
 	return FlatFileInformationFork{
-		Platform:         []byte("AMAC"), // TODO: Remove hardcode to support "AWIN" Platform (maybe?)
-		TypeSignature:    []byte(fileTypeFromFilename(fileName)),
-		CreatorSignature: []byte(fileCreatorFromFilename(fileName)),
+		Platform:         []byte("AMAC"),                                         // TODO: Remove hardcode to support "AWIN" Platform (maybe?)
+		TypeSignature:    []byte(fileTypeFromFilename(fileName)),                 // TODO: Don't infer types from filename
+		CreatorSignature: []byte(fileCreatorFromFilename(fileName)),              // TODO: Don't infer types from filename
 		Flags:            []byte{0, 0, 0, 0},                                     // TODO: What is this?
 		PlatformFlags:    []byte{0, 0, 1, 0},                                     // TODO: What is this?
 		RSVD:             make([]byte, 32),                                       // Unimplemented in Hotline Protocol

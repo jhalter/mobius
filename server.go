@@ -644,13 +644,6 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			receivedBytes += int(n)
 		}
 	case FolderDownload:
-		fmt.Println("Folder Download")
-
-		// The FileName field is a misnomer here; in the case of a folder download, the FileName is really the folder name.
-		fullFilePath := fmt.Sprintf("./%v/%v", s.Config.FileRoot+string(fileTransfer.FilePath), string(fileTransfer.FileName))
-		totalSize, _ := CalcTotalSize(fullFilePath)
-		fmt.Printf("fullFilePath: %v, totalSize: %#v\n", fullFilePath, totalSize)
-
 		// Folder Download flow:
 		// 1. Get filePath from the Transfer
 		// 2. Iterate over files
@@ -677,65 +670,75 @@ func (s *Server) TransferFile(conn net.Conn) error {
 		//
 		// This notifies the server to send the next item header
 
-		// re-read buf
-
-		// 00 12 // Header Size (18 )
-		// 00 00
-		//
-		// 00 01 // len
-		// 00 		// path section
-		// 00 0b // len
-		// 6b 69 74 74  65 6e 31 2e  6a 70 67 // kitten1.jpg
-
-		folderTransfer, _ := ReadFolderTransfer(buf)
-		spew.Dump(folderTransfer)
-		//spew.Dump(fileTransfer)
-
-		//decodedFilePath := ReadFilePath(fileTransfer.FilePath)
-		//fmt.Printf("folder download filePath: %v\n", decodedFilePath)
+		fh := NewFilePath(fileTransfer.FilePath)
+		fullFilePath := fmt.Sprintf("./%v/%v", s.Config.FileRoot+fh.String(), string(fileTransfer.FileName))
 
 		readBuffer := make([]byte, 1024)
 
-		fmt.Printf("walking fullFilePath: %v\n", fullFilePath)
+		logger.Infow("Start folder download", "path", fullFilePath, "ReferenceNumber", fileTransfer.ReferenceNumber, "RemoteAddr", conn.RemoteAddr())
+
 		_ = filepath.Walk(fullFilePath+"/", func(path string, info os.FileInfo, err error) error {
+			logger.Infow("Sending", "path", path)
+
 			if info.IsDir() {
+				// TODO: How to handle subdirs?
+				fmt.Printf("isDir: %v\n", path)
 				return nil
 			}
 
 			fileHeader := NewFileHeader(s.Config.FileRoot+string(fileTransfer.FilePath)+string(fileTransfer.FileName)+"/", info.Name())
 
+			fmt.Printf("FileHeader\n:")
+			spew.Dump(fileHeader)
 			// Send the file header to client
 			if _, err := conn.Write(fileHeader.Payload()); err != nil {
+				logger.Errorf("error sending file header: %v", err)
 				return err
 			}
 
 			// Read the client's Next Action request
+			//TODO: Remove hardcoded behavior and switch behaviors based on the next action send
 			if _, err := conn.Read(readBuffer); err != nil {
+				logger.Errorf("error reading next action: %v", err)
 				return err
 			}
 
-			ffo, _ := NewFlattenedFileObject(s.Config.FileRoot+string(fileTransfer.FilePath)+string(fileTransfer.FileName), info.Name())
-			s.Logger.Infow("File download started", "fileName", info.Name(), "transactionRef", fileTransfer.ReferenceNumber, "RemoteAddr", conn.RemoteAddr().String())
+			fmt.Println("=============== Client next action ===============")
+			spew.Dump(readBuffer)
+
+			ffo, err := NewFlattenedFileObject(s.Config.FileRoot+fh.String()+"/"+string(fileTransfer.FileName), info.Name())
+			if err != nil {
+				panic(err)
+			}
+			s.Logger.Infow("File download started",
+				"fileName", info.Name(),
+				"transactionRef", fileTransfer.ReferenceNumber,
+				"RemoteAddr", conn.RemoteAddr().String(),
+				"TransferSize", fmt.Sprintf("%x", ffo.TransferSize()),
+			)
+
+			spew.Dump(len(ffo.Payload()))
 
 			// Send fileSize to client
-			if _, err := conn.Write(ffo.FlatFileDataForkHeader.DataSize); err != nil {
+			if _, err := conn.Write(ffo.TransferSize()); err != nil {
+				logger.Error(err)
 				return err
 			}
 
 			// Send FFO to client
 			if _, err := conn.Write(ffo.Payload()); err != nil {
+				logger.Error(err)
 				return err
 			}
 
-			fooz := s.Config.FileRoot + string(fileTransfer.FilePath) + string(fileTransfer.FileName) + "/" + info.Name()
+			fooz := s.Config.FileRoot + fh.String() + "/"+string(fileTransfer.FileName) + "/" + info.Name()
 			fmt.Printf("Reading file content %v\n", fooz)
 			file, err := os.Open(fooz)
 			if err != nil {
 				return err
 			}
 
-			sendBuffer := make([]byte, 512)
-
+			sendBuffer := make([]byte, 1024)
 			totalBytesSent := len(ffo.Payload())
 
 			for {
@@ -743,6 +746,13 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				bytesRead := 0
 				bytesRead, err = file.Read(sendBuffer)
 				if err == io.EOF {
+					fmt.Printf("Finished sending file data\n")
+					// Read the client's Next Action request
+					//TODO: Remove hardcoded behavior and switch behaviors based on the next action send
+					if _, err := conn.Read(readBuffer); err != nil {
+						logger.Errorf("error reading next action: %v", err)
+						return err
+					}
 					break
 				}
 
@@ -790,10 +800,6 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				return err
 			}
 			fu := readFolderUpload(readBuffer)
-			//fmt.Println("readBuffer >>>")
-			//spew.Dump(readBuffer)
-			//fmt.Println("fu >>>")
-			//spew.Dump(fu)
 
 			logger.Infow(
 				"Folder upload continued",
@@ -834,7 +840,6 @@ func (s *Server) TransferFile(conn net.Conn) error {
 					logger.Error(err)
 				}
 
-				logger.Infof("Send NextFile to client")
 				// Tell client to send next file
 				if _, err := conn.Write([]byte{0, dlFldrAction_NextFile}); err != nil {
 					logger.Error(err)
@@ -842,7 +847,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				}
 
 				// Client sends "MACR" after the file.  Read and discard.
-				// TODO: This doesn't seem to be documented.  What is this?
+				// TODO: This doesn't seem to be documented.  What is this?  Maybe resource fork?
 				if _, err := conn.Read(readBuffer); err != nil {
 					return err
 				}
@@ -933,35 +938,61 @@ type folderUpload struct {
 func (fu *folderUpload) FormattedPath() string {
 	pathItemLen := binary.BigEndian.Uint16(fu.PathItemCount)
 
-	fmt.Printf("pathItemLen: %v\n", pathItemLen)
-
 	var pathSegments []string
 	pathData := fu.FileNamePath
-	spew.Dump(pathData)
 
 	for i := uint16(0); i < pathItemLen; i++ {
 		segLen := pathData[2]
-		fmt.Printf("segLen: %v\n", segLen)
-
 		pathSegments = append(pathSegments, string(pathData[3:3+segLen]))
-		spew.Dump(pathData)
-
 		pathData = pathData[3+segLen:]
 	}
-
-	fmt.Printf("pathStrSeg: %v \n", strings.Join(pathSegments, "/"))
 
 	return strings.Join(pathSegments, "/")
 }
 
-func NewFileNamePath(b []byte) fileNamePath {
-	return fileNamePath{
-		NameSize: b[2],
-		Name:     b[3:],
+// 00 00
+// 09
+// 73 75 62 66 6f 6c 64 65 72 // "subfolder"
+type FilePathItem struct {
+	Len  byte
+	Name []byte
+}
+
+func NewFilePathItem(b []byte) FilePathItem {
+	return FilePathItem{
+		Len:  b[2],
+		Name: b[3:],
 	}
 }
 
-type fileNamePath struct {
-	NameSize byte
-	Name     []byte
+type FilePath struct {
+	PathItemCount []byte
+	PathItems     []FilePathItem
+}
+
+func NewFilePath(b []byte) FilePath {
+	if b == nil {
+		return FilePath{}
+	}
+
+	fp := FilePath{PathItemCount: b[0:2]}
+
+	// number of items in the path
+	pathItemLen := binary.BigEndian.Uint16(b[0:2])
+	pathData := b[2:]
+	for i := uint16(0); i < pathItemLen; i++ {
+		segLen := pathData[2]
+		fp.PathItems = append(fp.PathItems, NewFilePathItem(pathData[:segLen+3]))
+		pathData = pathData[3+segLen:]
+	}
+
+	return fp
+}
+
+func (fp *FilePath) String() string {
+	var out []string
+	for _, i := range fp.PathItems {
+		out = append(out, string(i.Name))
+	}
+	return strings.Join(out, "/")
 }
