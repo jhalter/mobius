@@ -673,23 +673,33 @@ func (s *Server) TransferFile(conn net.Conn) error {
 		fh := NewFilePath(fileTransfer.FilePath)
 		fullFilePath := fmt.Sprintf("./%v/%v", s.Config.FileRoot+fh.String(), string(fileTransfer.FileName))
 
+		basePathLen := len(fullFilePath)
+
+		fmt.Printf("FileTransferBasePath")
+
 		readBuffer := make([]byte, 1024)
 
 		logger.Infow("Start folder download", "path", fullFilePath, "ReferenceNumber", fileTransfer.ReferenceNumber, "RemoteAddr", conn.RemoteAddr())
 
-		_ = filepath.Walk(fullFilePath+"/", func(path string, info os.FileInfo, err error) error {
-			logger.Infow("Sending", "path", path)
+		i := 0
 
-			if info.IsDir() {
-				// TODO: How to handle subdirs?
-				fmt.Printf("isDir: %v\n", path)
+		filepath.Walk(fullFilePath+"/", func(path string, info os.FileInfo, err error) error {
+			i += 1
+			subPath := path[basePathLen-2:]
+			logger.Infow("Sending fileheader", "i", i, "path", path, "fullFilePath", fullFilePath, "subPath", subPath, "IsDir", info.IsDir())
+
+			fileHeader := NewFileHeader("", subPath, info.IsDir())
+			//
+			//if info.IsDir() {
+			//	// TODO: How to handle subdirs?
+			//	fmt.Printf("isDir: %v\n", path)
+			//	return nil
+			//}
+			
+			if i == 1 {
 				return nil
 			}
 
-			fileHeader := NewFileHeader(s.Config.FileRoot+string(fileTransfer.FilePath)+string(fileTransfer.FileName)+"/", info.Name())
-
-			fmt.Printf("FileHeader\n:")
-			spew.Dump(fileHeader)
 			// Send the file header to client
 			if _, err := conn.Write(fileHeader.Payload()); err != nil {
 				logger.Errorf("error sending file header: %v", err)
@@ -703,10 +713,16 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				return err
 			}
 
-			fmt.Println("=============== Client next action ===============")
-			spew.Dump(readBuffer)
+			logger.Infow("Client folder download action", "action", fmt.Sprintf("%X", readBuffer[0:2]))
 
-			ffo, err := NewFlattenedFileObject(s.Config.FileRoot+fh.String()+"/"+string(fileTransfer.FileName), info.Name())
+			if info.IsDir() {
+				return nil
+			}
+
+			splitPath := strings.Split(path, "/")
+			//strings.Join(splitPath[:len(splitPath)-1], "/")
+
+			ffo, err := NewFlattenedFileObject(strings.Join(splitPath[:len(splitPath)-1], "/"), info.Name())
 			if err != nil {
 				panic(err)
 			}
@@ -731,9 +747,10 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				return err
 			}
 
-			fooz := s.Config.FileRoot + fh.String() + "/"+string(fileTransfer.FileName) + "/" + info.Name()
-			fmt.Printf("Reading file content %v\n", fooz)
-			file, err := os.Open(fooz)
+
+			//fooz := s.Config.FileRoot + fh.String() + "/" + string(fileTransfer.FileName) + "/" + info.Name()
+			fmt.Printf("Reading file content %v\n", path)
+			file, err := os.Open(path)
 			if err != nil {
 				return err
 			}

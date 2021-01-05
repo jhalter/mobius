@@ -116,18 +116,42 @@ func CalcTotalSize(filePath string) ([]byte, error) {
 	return bs, nil
 }
 
+func CalcItemCount(filePath string) ([]byte, error) {
+	var itemcount uint16
+	err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
+		fmt.Printf("filePath walk filePath: %v\n", path)
+		itemcount += 1
+
+		if err != nil {
+			logger.Error(err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	bs := make([]byte, 2)
+	binary.BigEndian.PutUint16(bs, itemcount - 1)
+
+	return bs, nil
+}
+
 
 
 func EncodeFilePath(filePath string) []byte {
 	pathSections := strings.Split(filePath, "/")
-	bytes := []byte{0x00, 0x01, 0x00} // TODO: Unhardcode second byte
+	pathItemCount := make([]byte, 2)
+	binary.BigEndian.PutUint16(pathItemCount, uint16(len(pathSections)))
+
+	bytes := pathItemCount
 
 	for _, section := range pathSections {
-		pathStr := []byte(section)
-		bs := make([]byte, 2)
-		binary.BigEndian.PutUint16(bs, uint16(len(pathStr)))
+		bytes = append(bytes, []byte{0,0}...)
 
-		bytes = append(bytes, bs...)
+		pathStr := []byte(section)
+		bytes = append(bytes, byte(len(pathStr)))
 		bytes = append(bytes, pathStr...)
 	}
 
@@ -149,12 +173,15 @@ func (fh *FileHeader) Payload() []byte {
 	return out
 }
 
-func NewFileHeader(filePath, fileName string) FileHeader {
+func NewFileHeader(filePath, fileName string, isDir bool) FileHeader {
 	fh := FileHeader{
 		Size: make([]byte, 2),
 	}
 
 	fh.Type = []byte{0x00, 0x00}
+	if isDir {
+		fh.Type = []byte{0x00, 0x01}
+	}
 	fh.FilePath = EncodeFilePath(fileName)
 
 	encodedPathLen := uint16(len(fh.FilePath) + len(fh.Type))

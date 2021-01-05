@@ -15,9 +15,21 @@ func TestEncodeFilePath(t *testing.T) {
 		{
 			filePath: "kitten1.jpg",
 			want: []byte{
-				0x00, 0x01, // length of next path section (1)
-				0x00,       // leading path separator
-				0x00, 0x0b, // length of next path section (11)
+				0x00, 0x01, // number of items in path
+				0x00, 0x00, // leading path separator
+				0x0b,                                                             // length of next path section (11)
+				0x6b, 0x69, 0x74, 0x74, 0x65, 0x6e, 0x31, 0x2e, 0x6a, 0x70, 0x67, // kitten1.jpg
+			},
+		},
+		{
+			filePath: "foo/kitten1.jpg",
+			want: []byte{
+				0x00, 0x02, // number of items in path
+				0x00, 0x00,
+				0x03,
+				0x66, 0x6f, 0x6f,
+				0x00, 0x00, // leading path separator
+				0x0b,                                                             // length of next path section (11)
 				0x6b, 0x69, 0x74, 0x74, 0x65, 0x6e, 0x31, 0x2e, 0x6a, 0x70, 0x67, // kitten1.jpg
 			},
 		},
@@ -54,7 +66,7 @@ func TestCalcTotalSize(t *testing.T) {
 			args: args{
 				filePath: "test",
 			},
-			want: []byte{0x00, 0x00, 0x18, 0x00},
+			want:    []byte{0x00, 0x00, 0x18, 0x00},
 			wantErr: false,
 		},
 		// TODO: Add more test cases.
