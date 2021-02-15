@@ -747,9 +747,6 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				return err
 			}
 
-
-			//fooz := s.Config.FileRoot + fh.String() + "/" + string(fileTransfer.FileName) + "/" + info.Name()
-			fmt.Printf("Reading file content %v\n", path)
 			file, err := os.Open(path)
 			if err != nil {
 				return err
@@ -759,9 +756,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			totalBytesSent := len(ffo.Payload())
 
 			for {
-				fmt.Printf("Sending file data\n")
-				bytesRead := 0
-				bytesRead, err = file.Read(sendBuffer)
+				bytesRead, err := file.Read(sendBuffer)
 				if err == io.EOF {
 					fmt.Printf("Finished sending file data\n")
 					// Read the client's Next Action request
@@ -778,7 +773,6 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				if readErr != nil {
 					return err
 				}
-				fmt.Printf("sentBytes: %v, totalBytesSent: %v\n", sentBytes, totalBytesSent)
 			}
 			return nil
 		})

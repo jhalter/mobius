@@ -2,7 +2,6 @@ package hotline
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -92,8 +91,6 @@ func GetFileNameList(filePath string) []Field {
 func CalcTotalSize(filePath string) ([]byte, error) {
 	var totalSize uint32
 	err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
-		fmt.Printf("filePath walk filePath: %v\n", path)
-
 		if err != nil {
 			logger.Error(err)
 		}
@@ -119,7 +116,6 @@ func CalcTotalSize(filePath string) ([]byte, error) {
 func CalcItemCount(filePath string) ([]byte, error) {
 	var itemcount uint16
 	err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
-		fmt.Printf("filePath walk filePath: %v\n", path)
 		itemcount += 1
 
 		if err != nil {

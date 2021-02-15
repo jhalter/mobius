@@ -1015,10 +1015,7 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) error {
 
 	fullFilePath := fmt.Sprintf("./%v/%v", cc.Server.Config.FileRoot+fp.String(), string(fileTransfer.FileName))
 	transferSize, _ := CalcTotalSize(fullFilePath)
-
 	itemCount, _ := CalcItemCount(fullFilePath)
-	fmt.Println("ITEMCOUNT")
-	spew.Dump(itemCount)
 
 	return cc.Reply(t,
 		NewField(fieldRefNum, transactionRef),
