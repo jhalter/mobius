@@ -1,9 +1,10 @@
 package hotline
 
 const (
+	// File System Maintenance
 	accessDeleteFile       = 0
 	accessUploadFile       = 1
-	accessDownloadFile     = 2
+	accessDownloadFile     = 2 // Can Download Files
 	accessRenameFile       = 3
 	accessMoveFile         = 4
 	accessCreateFolder     = 5

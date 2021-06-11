@@ -19,3 +19,4 @@ server/files/*
 .idea/*
 
 **/.DS_Store
+build

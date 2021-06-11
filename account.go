@@ -8,7 +8,7 @@ type Account struct {
 	Login    string `yaml:"Login"`
 	Name     string `yaml:"Name"`
 	Password string `yaml:"Password"`
-	Access   []byte `yaml:"Access"`
+	Access   *[]byte `yaml:"Access"`
 }
 
 
@@ -47,7 +47,7 @@ func (a *Account) Payload() []byte {
 
 	out = append(out, []byte{0x00, 0x6e}...) // fieldUserAccess
 	out = append(out, []byte{0x00, 0x08}...)
-	out = append(out, a.Access...)
+	out = append(out, *a.Access...)
 
 	return out
 }

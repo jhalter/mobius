@@ -1,13 +1,12 @@
 Login: admin
 Name: admin
-Password: $2a$04$PyXHeH9hm3qNUg4v7KAhV.z5PwCUPtBEoxv4jQyo8m6W.fZrU3DLu
-Access: 
+Password: $2a$04$hqZ/Gd1NqIvyazoY259MBesYGsajUq5nRU0X266nViuTb.o3rRVGa
+Access:
+- 255
+- 243
+- 207
 - 255
 - 255
-- 255
-- 255
-- 255
-- 255
+- 128
 - 0
 - 0
-

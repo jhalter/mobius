@@ -24,8 +24,13 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const userIdleSeconds = 300
+const userIdleSeconds = 5
 const idleCheckInterval = 10
+
+type AddressedTransaction struct {
+	ClientID    *[]byte
+	Transaction *Transaction
+}
 
 type Server struct {
 	Addr          int
@@ -41,6 +46,7 @@ type Server struct {
 	PrivateChats  map[uint32]*PrivateChat
 	NextGuestID   *uint16
 	NextTranID    *uint32
+	Outbox        chan AddressedTransaction
 
 	mux sync.Mutex
 }
@@ -97,6 +103,30 @@ func (s *Server) ServeFileTransfers(ln net.Listener) error {
 	}
 }
 
+func (s *Server) SendTransactions() error {
+	for {
+		t := <-s.Outbox
+		requestNum := binary.BigEndian.Uint16(t.Transaction.Type)
+		clientID := binary.BigEndian.Uint16(*t.ClientID)
+		client := s.Clients[clientID]
+		handler := TransactionHandlers[requestNum]
+
+		var err error
+		var n int
+		if n, err = client.Connection.Write(t.Transaction.Payload()); err != nil {
+			logger.Error("ohno")
+		}
+		logger.Debugw("Sent Transaction",
+			"ID", t.Transaction.ID,
+			"IsReply", t.Transaction.IsReply,
+			"type", handler.Name,
+			"bytes", n,
+			"client", client.Connection.RemoteAddr(),
+			"account", client.Account.Name,
+		)
+	}
+}
+
 func (s *Server) Serve(ln net.Listener) error {
 	for {
 		conn, err := ln.Accept()
@@ -104,9 +134,14 @@ func (s *Server) Serve(ln net.Listener) error {
 			return err
 		}
 
+		go s.SendTransactions()
 		go func() {
 			if err := s.HandleConnection(conn); err != nil {
-				s.Logger.Errorw("error serving request", "err", err)
+				if err == io.EOF {
+					s.Logger.Infow("Client disconnected", "RemoteAddr", conn.RemoteAddr())
+				} else {
+					s.Logger.Errorw("error serving request", "err", err)
+				}
 			}
 		}()
 	}
@@ -129,6 +164,7 @@ func NewServer(configDir string) (*Server, error) {
 		Logger:        logger,
 		NextGuestID:   new(uint16),
 		NextTranID:    new(uint32),
+		Outbox:        make(chan AddressedTransaction),
 	}
 
 	server.loadAgreement(configDir + "Agreement.txt")
@@ -192,10 +228,7 @@ func NewServer(configDir string) (*Server, error) {
 // NotifyAll sends a transaction to all connected clients.  For example, to notify clients of a new chat message.
 func (s *Server) NotifyAll(t Transaction) error {
 	for _, c := range s.Clients {
-		_, err := c.Connection.Write(t.Payload())
-		if err != nil {
-			return fmt.Errorf("error sending notify transaction: %s", err)
-		}
+		s.Outbox <- AddressedTransaction{ClientID: c.ID, Transaction: &t}
 	}
 	return nil
 }
@@ -248,7 +281,7 @@ func (s *Server) NewUser(login, name, password string, access []byte) error {
 		Login:    login,
 		Name:     name,
 		Password: hashAndSalt([]byte(password)),
-		Access:   access,
+		Access:   &access,
 	}
 	out, err := yaml.Marshal(&account)
 	if err != nil {
@@ -281,10 +314,8 @@ func (s *Server) connectedUsers() []Field {
 			Flags: *c.Flags,
 			Name:  string(*c.UserName),
 		}
-
 		connectedUsers = append(connectedUsers, NewField(fieldUsernameWithInfo, user.Payload()))
 	}
-
 	return connectedUsers
 }
 
@@ -349,15 +380,6 @@ func (s *Server) loadFlatNews(flatNewsPath string) {
 	if err != nil {
 		panic(err)
 	}
-}
-
-func (s *Server) GetNextTransactionID() uint32 {
-	s.mux.Lock()
-	defer s.mux.Unlock()
-
-	*s.NextTranID++
-
-	return *s.NextTranID
 }
 
 func (s *Server) HandleConnection(conn net.Conn) error {
@@ -433,7 +455,7 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 	// Send user access privs so client UI knows how to behave
 	err = hotlineClientConn.SendTransaction(
 		tranUserAccess,
-		NewField(fieldUserAccess, hotlineClientConn.Account.Access),
+		NewField(fieldUserAccess, *hotlineClientConn.Account.Access),
 	)
 	if err != nil {
 		return err
@@ -450,7 +472,7 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 
 	// The Hotline ClientConn v1.2.3 has a different login sequence than 1.9.2
 	if string(*hotlineClientConn.Version) == "" {
-		if err := hotlineClientConn.notifyNewUserHasJoined(); err != nil {
+		if _, err := hotlineClientConn.notifyNewUserHasJoined(); err != nil {
 			return err
 		}
 
@@ -695,7 +717,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			//	fmt.Printf("isDir: %v\n", path)
 			//	return nil
 			//}
-			
+
 			if i == 1 {
 				return nil
 			}

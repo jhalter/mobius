@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math/rand"
 )
 
 const (
@@ -67,51 +68,72 @@ const (
 )
 
 type TransactionType struct {
-	Handler func(cc *ClientConn, transaction *Transaction) error
+	Access  int
+	DenyMsg string
+	Handler func(cc *ClientConn, transaction *Transaction) ([]AddressedTransaction, error)
 	Name    string
 }
 
 var TransactionHandlers = map[uint16]TransactionType{
-	tranAgreed:             {Name: "tranAgreed", Handler: HandleTranAgreed},
-	tranGetFileInfo:        {Name: "tranGetFileInfo", Handler: HandleGetFileInfo},
-	tranDownloadFile:       {Name: "tranDownloadFile", Handler: HandleDownloadFile},
-	tranUploadFile:         {Name: "tranUploadFile", Handler: HandleUploadFile},
-	tranSetClientUserInfo:  {Name: "tranSetClientUserInfo", Handler: HandleSetClientUserInfo},
-	tranNewNewsFldr:        {Name: "tranNewNewsFldr", Handler: HandleNewNewsFldr},
-	tranPostNewsArt:        {Name: "tranPostNewsArt", Handler: HandlePostNewsArt},
-	tranKeepAlive:          {Name: "tranKeepAlive", Handler: HandleKeepAlive},
-	tranGetFileNameList:    {Name: "tranGetFileNameList", Handler: HandleGetFileNameList},
-	tranDisconnectUser:     {Name: "tranDisconnectUser", Handler: HandleDisconnectUser},
-	tranOldPostNews:        {Name: "tranOldPostNews", Handler: HandleTranOldPostNews},
-	tranGetUser:            {Name: "tranGetUser", Handler: HandleGetUser},
-	tranSetUser:            {Name: "tranSetUser", Handler: HandleSetUser},
-	tranNewUser:            {Name: "tranNewUser", Handler: HandleNewUser},
-	tranDeleteUser:         {Name: "tranDeleteUser", Handler: HandleDeleteUser},
-	tranNewFolder:          {Name: "tranNewFolder", Handler: HandleNewFolder},
-	tranDeleteFile:         {Name: "tranDeleteFile", Handler: HandleDeleteFile},
-	tranMoveFile:           {Name: "tranMoveFile", Handler: HandleMoveFile},
-	tranSetFileInfo:        {Name: "tranSetFileInfo", Handler: HandleSetFileInfo},
-	tranSendInstantMsg:     {Name: "tranSendInstantMsg", Handler: HandleSendInstantMsg},
-	tranChatSend:           {Name: "tranChatSend", Handler: HandleChatSend},
-	tranGetMsgs:            {Name: "tranGetMsgs", Handler: HandleGetMsgs},
-	tranUserBroadcast:      {Name: "tranUserBroadcast", Handler: HandleUserBroadcast},
+	tranAgreed: {Name: "tranAgreed", Handler: HandleTranAgreed},
+	tranError: {
+		Name: "tranError",
+	},
+	tranUserAccess: {
+		Name: "tranUserAccess",
+	},
+	tranChatSend: {
+		Name:    "tranChatSend",
+		Handler: HandleChatSend,
+		Access:  accessSendChat,
+		DenyMsg: "You are not allowed to participate in chat.",
+	},
+	tranDelNewsArt:     {Name: "tranDelNewsArt", Handler: HandleDelNewsArt},
+	tranDelNewsItem:    {Name: "tranDelNewsItem", Handler: HandleDelNewsItem},
+	tranDeleteFile:     {Name: "tranDeleteFile", Handler: HandleDeleteFile},
+	tranDeleteUser:     {Name: "tranDeleteUser", Handler: HandleDeleteUser},
+	tranDisconnectUser: {Name: "tranDisconnectUser", Handler: HandleDisconnectUser},
+	tranDownloadFile: {
+		Name:    "tranDownloadFile",
+		Handler: HandleDownloadFile,
+		Access:  accessDownloadFile,
+		DenyMsg: "You are not allowed to download files.",
+	},
+	tranDownloadFldr: {
+		Name:    "tranDownloadFldr",
+		Handler: HandleDownloadFolder,
+	},
 	tranGetClientInfoText:  {Name: "tranGetClientInfoText", Handler: HandleGetClientConnInfoText},
-	tranGetUserNameList:    {Name: "tranHandleGetUserNameList", Handler: HandleGetUserNameList},
-	tranGetNewsCatNameList: {Name: "tranGetNewsCatNameList", Handler: HandleGetNewsCatNameList},
-	tranGetNewsArtNameList: {Name: "tranGetNewsArtNameList", Handler: HandleGetNewsArtNameList},
+	tranGetFileInfo:        {Name: "tranGetFileInfo", Handler: HandleGetFileInfo},
+	tranGetFileNameList:    {Name: "tranGetFileNameList", Handler: HandleGetFileNameList},
+	tranGetMsgs:            {Name: "tranGetMsgs", Handler: HandleGetMsgs},
 	tranGetNewsArtData:     {Name: "tranGetNewsArtData", Handler: HandleGetNewsArtData},
-	tranDelNewsItem:        {Name: "tranDelNewsItem", Handler: HandleDelNewsItem},
-	tranDelNewsArt:         {Name: "tranDelNewsArt", Handler: HandleDelNewsArt},
-	tranNewNewsCat:         {Name: "tranNewNewsCat", Handler: HandleNewNewsCat},
-	tranListUsers:          {Name: "tranListUsers", Handler: HandleListUsers},
+	tranGetNewsArtNameList: {Name: "tranGetNewsArtNameList", Handler: HandleGetNewsArtNameList},
+	tranGetNewsCatNameList: {Name: "tranGetNewsCatNameList", Handler: HandleGetNewsCatNameList},
+	tranGetUser:            {Name: "tranGetUser", Handler: HandleGetUser},
+	tranGetUserNameList:    {Name: "tranHandleGetUserNameList", Handler: HandleGetUserNameList},
 	tranInviteNewChat:      {Name: "tranInviteNewChat", Handler: HandleInviteNewChat},
 	tranInviteToChat:       {Name: "tranInviteToChat", Handler: HandleInviteToChat},
-	tranRejectChatInvite:   {Name: "tranRejectChatInvite", Handler: HandleRejectChatInvite},
 	tranJoinChat:           {Name: "tranJoinChat", Handler: HandleJoinChat},
+	tranKeepAlive:          {Name: "tranKeepAlive", Handler: HandleKeepAlive},
 	tranLeaveChat:          {Name: "tranJoinChat", Handler: HandleLeaveChat},
+	tranListUsers:          {Name: "tranListUsers", Handler: HandleListUsers},
+	tranMoveFile:           {Name: "tranMoveFile", Handler: HandleMoveFile},
+	tranNewFolder:          {Name: "tranNewFolder", Handler: HandleNewFolder},
+	tranNewNewsCat:         {Name: "tranNewNewsCat", Handler: HandleNewNewsCat},
+	tranNewNewsFldr:        {Name: "tranNewNewsFldr", Handler: HandleNewNewsFldr},
+	tranNewUser:            {Name: "tranNewUser", Handler: HandleNewUser},
+	tranOldPostNews:        {Name: "tranOldPostNews", Handler: HandleTranOldPostNews},
+	tranPostNewsArt:        {Name: "tranPostNewsArt", Handler: HandlePostNewsArt},
+	tranRejectChatInvite:   {Name: "tranRejectChatInvite", Handler: HandleRejectChatInvite},
+	tranSendInstantMsg:     {Name: "tranSendInstantMsg", Handler: HandleSendInstantMsg},
 	tranSetChatSubject:     {Name: "tranSetChatSubject", Handler: HandleSetChatSubject},
-	tranDownloadFldr:       {Name: "tranDownloadFldr", Handler: HandleDownloadFolder},
+	tranSetClientUserInfo:  {Name: "tranSetClientUserInfo", Handler: HandleSetClientUserInfo},
+	tranSetFileInfo:        {Name: "tranSetFileInfo", Handler: HandleSetFileInfo},
+	tranSetUser:            {Name: "tranSetUser", Handler: HandleSetUser},
+	tranUploadFile:         {Name: "tranUploadFile", Handler: HandleUploadFile},
 	tranUploadFldr:         {Name: "tranUploadFldr", Handler: HandleUploadFolder},
+	tranUserBroadcast:      {Name: "tranUserBroadcast", Handler: HandleUserBroadcast},
 }
 
 type Transaction struct {
@@ -126,12 +148,12 @@ type Transaction struct {
 	Fields     []Field
 }
 
-func NewTransaction(t, id int, f []Field) Transaction {
+func NewTransaction(t, _ int, f []Field) Transaction {
 	typeSlice := make([]byte, 2)
 	binary.BigEndian.PutUint16(typeSlice, uint16(t))
 
 	idSlice := make([]byte, 4)
-	binary.BigEndian.PutUint32(idSlice, uint32(id))
+	binary.BigEndian.PutUint32(idSlice, rand.Uint32())
 
 	return Transaction{
 		Flags:     0x00,
@@ -297,4 +319,23 @@ func (t Transaction) ReplyError(errMsg string) []byte {
 			NewField(fieldError, []byte(errMsg)),
 		},
 	}.Payload()
+}
+
+const max uint32 = 4294967295
+
+func (t Transaction) NewErrorReply(errMsg string) *Transaction {
+	idSlice := make([]byte, 4)
+
+	binary.BigEndian.PutUint32(idSlice, rand.Uint32())
+
+	return &Transaction{
+		Flags:     0x00,
+		IsReply:   0x01,
+		Type:      []byte{0, 0},
+		ID:        idSlice,
+		ErrorCode: []byte{0, 0, 0, 1},
+		Fields: []Field{
+			NewField(fieldError, []byte(errMsg)),
+		},
+	}
 }
