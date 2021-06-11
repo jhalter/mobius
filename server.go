@@ -403,7 +403,7 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 
 	var login string
 	for _, char := range encodedLogin {
-		login += string(255 - uint(char))
+		login += fmt.Sprint(255 - uint(char))
 	}
 	if login == "" {
 		login = GuestAccount

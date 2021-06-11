@@ -2,6 +2,7 @@ package hotline
 
 import (
 	"encoding/binary"
+	"fmt"
 )
 
 // GuestAccount is the account used when no login is provided for a connection
@@ -41,7 +42,7 @@ func (u User) Payload() []byte {
 func DecodeUserString(encodedString []byte) string {
 	var decodedString string
 	for _, char := range encodedString {
-		decodedString += string(255 - uint(char))
+		decodedString += fmt.Sprint(255 - uint(char))
 	}
 
 	return decodedString
