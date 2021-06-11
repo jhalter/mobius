@@ -59,7 +59,7 @@ func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
 			cc.Server.Outbox <- t
 		}
 	} else {
-		cc.Server.Logger.Infow(
+		cc.Server.Logger.Errorw(
 			"Unimplemented transaction type received",
 			"UserName", string(*cc.UserName), "RequestID", requestNum,
 		)
