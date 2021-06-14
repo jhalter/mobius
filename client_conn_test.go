@@ -4,23 +4,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"reflect"
-	"sort"
 	"testing"
 )
 
-type byTranID []egressTransaction
 
-func (s byTranID) Len() int {
-	return len(s)
-}
-
-func (s byTranID) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
-func (s byTranID) Less(i, j int) bool {
-	return s[i].Transaction.uint32ID() < s[j].Transaction.uint32ID()
-}
 
 func TestHandleGetUserNameList(t *testing.T) {
 	type args struct {
@@ -209,8 +196,6 @@ func TestHandleChatSend(t *testing.T) {
 		rand.Seed(1) // reset seed between tests to make transaction IDs predictable
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := HandleChatSend(tt.args.cc, tt.args.t)
-			sort.Sort(byTranID(got))
-			sort.Sort(byTranID(tt.want))
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("HandleChatSend() error = %v, wantErr %v", err, tt.wantErr)
@@ -325,7 +310,6 @@ func TestHandleSetChatSubject(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := HandleSetChatSubject(tt.args.cc, tt.args.t)
-			sort.Sort(byTranID(got))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("HandleSetChatSubject() error = %v, wantErr %v", err, tt.wantErr)
 				return

@@ -16,6 +16,24 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+type byClientID []*ClientConn
+
+func (s byClientID) Len() int {
+	return len(s)
+}
+
+func (s byClientID) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
+func (s byClientID) Less(i, j int) bool {
+	return s[i].uint16ID() < s[j].uint16ID()
+}
+
+//func (cc *ClientConn) uint16ID() uint16 {
+//	return binary.BigEndian.Uint16(*cc.ID)
+//}
+
 
 // ClientConn represents a client connected to a Server
 type ClientConn struct {
@@ -1380,9 +1398,15 @@ func HandleSetChatSubject(cc *ClientConn, t *Transaction) ([]egressTransaction, 
 	privChat := cc.Server.PrivateChats[chatInt]
 	privChat.Subject = string(t.GetField(fieldChatSubject).Data)
 
+	var clients []*ClientConn
 	for _, occ := range privChat.ClientConn {
+		clients = append(clients, occ)
+	}
+	sort.Sort(byClientID(clients))
+
+	for _, c := range clients {
 		replies = append(replies, egressTransaction{
-			ClientID: occ.ID,
+			ClientID: c.ID,
 			Transaction: NewNewTransaction(
 				tranNotifyChatSubject,
 				NewField(fieldChatID, chatID),
