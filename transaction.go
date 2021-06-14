@@ -79,6 +79,9 @@ var TransactionHandlers = map[uint16]TransactionType{
 	tranError: {
 		Name: "tranError",
 	},
+	tranShowAgreement: {
+		Name: "tranShowAgreement",
+	},
 	tranUserAccess: {
 		Name: "tranUserAccess",
 	},
@@ -146,6 +149,23 @@ type Transaction struct {
 	DataSize   []byte // Size of the data section of transaction in bytes
 	ParamCount []byte // Number of fields in transaction data
 	Fields     []Field
+}
+
+func NewNewTransaction(t int, fields ...Field) *Transaction{
+	typeSlice := make([]byte, 2)
+	binary.BigEndian.PutUint16(typeSlice, uint16(t))
+
+	idSlice := make([]byte, 4)
+	binary.BigEndian.PutUint32(idSlice, rand.Uint32())
+
+	return &Transaction{
+		Flags:     0x00,
+		IsReply:   0x00,
+		Type:      typeSlice,
+		ID:        idSlice,
+		ErrorCode: []byte{0, 0, 0, 0},
+		Fields:    fields,
+	}
 }
 
 func NewTransaction(t, _ int, f []Field) Transaction {

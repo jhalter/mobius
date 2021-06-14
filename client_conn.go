@@ -31,6 +31,13 @@ type ClientConn struct {
 	AutoReply  *[]byte
 }
 
+func (cc *ClientConn) send(t int, fields ...Field) {
+	cc.Server.outbox <- egressTransaction{
+		ClientID:    cc.ID,
+		Transaction: NewNewTransaction(t, fields...),
+	}
+}
+
 func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
 	requestNum := binary.BigEndian.Uint16(transaction.Type)
 
@@ -339,7 +346,10 @@ func HandleSetUser(cc *ClientConn, t *Transaction) ([]egressTransaction, error) 
 	account := cc.Server.Accounts[userLogin]
 	account.Access = &newAccessLvl
 	account.Name = userName
-	account.Password = hashAndSalt(t.GetField(fieldUserPassword).Data)
+
+	if len(t.GetField(fieldUserPassword).Data) > 1 {
+		account.Password = hashAndSalt(t.GetField(fieldUserPassword).Data)
+	}
 
 	file := cc.Server.ConfigDir + "Users/" + userLogin + ".yaml"
 	out, _ := yaml.Marshal(&account)
@@ -988,6 +998,7 @@ func (cc *ClientConn) Handshake() error {
 }
 
 func (cc *ClientConn) SendTransaction(id int, fields ...Field) error {
+	fmt.Printf("SendTransaction: %v \n", id)
 	cc.Connection.Write(
 		NewTransaction(
 			id,

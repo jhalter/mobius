@@ -405,7 +405,6 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 	for _, char := range encodedLogin {
 		login += string(rune(255 - uint(char)))
 	}
-	println(login)
 	if login == "" {
 		login = GuestAccount
 	}
@@ -440,36 +439,21 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 
 	s.Logger.Infow("Client connection received", "login", login, "version", *hotlineClientConn.Version, "RemoteAddr", conn.RemoteAddr().String())
 
-	_, err = hotlineClientConn.Connection.Write(
-		clientLogin.ReplyTransaction(
-			[]Field{
-				NewField(fieldVersion, []byte{0x00, 0xbe}),
-				NewField(fieldCommunityBannerID, []byte{0x00, 0x01}),
-				NewField(fieldServerName, []byte(s.Config.Name)),
-			},
-		).Payload(),
+	reply := clientLogin.ReplyTransaction(
+		[]Field{
+			NewField(fieldVersion, []byte{0x00, 0xbe}),
+			NewField(fieldCommunityBannerID, []byte{0x00, 0x01}),
+			NewField(fieldServerName, []byte(s.Config.Name)),
+		},
 	)
-	if err != nil {
-		return err
-	}
+	s.outbox <- egressTransaction{ClientID: hotlineClientConn.ID, Transaction: &reply}
 
 	// Send user access privs so client UI knows how to behave
-	err = hotlineClientConn.SendTransaction(
-		tranUserAccess,
-		NewField(fieldUserAccess, *hotlineClientConn.Account.Access),
-	)
-	if err != nil {
-		return err
-	}
+	hotlineClientConn.send(tranUserAccess, NewField(fieldUserAccess, *hotlineClientConn.Account.Access))
 
 	// Show agreement to client
-	err = hotlineClientConn.SendTransaction(
-		tranShowAgreement,
-		NewField(fieldData, s.Agreement),
-	)
-	if err != nil {
-		panic(err)
-	}
+	hotlineClientConn.send(tranShowAgreement, NewField(fieldData, s.Agreement))
+
 
 	// The Hotline ClientConn v1.2.3 has a different login sequence than 1.9.2
 	if string(*hotlineClientConn.Version) == "" {
