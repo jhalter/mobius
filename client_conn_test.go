@@ -14,13 +14,14 @@ func TestHandleGetUserNameList(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    []AddressedTransaction
+		want    []egressTransaction
 		wantErr bool
 	}{
 		{
 			name: "replies with userlist transaction",
 			args: args{
 				cc: &ClientConn{
+
 					ID: &[]byte{1, 1},
 					Server: &Server{
 						Clients: map[uint16]*ClientConn{
@@ -38,7 +39,7 @@ func TestHandleGetUserNameList(t *testing.T) {
 					Type: []byte{0, 1},
 				},
 			},
-			want: []AddressedTransaction{
+			want: []egressTransaction{
 				{
 					ClientID: &[]byte{1, 1},
 					Transaction: &Transaction{
@@ -81,7 +82,7 @@ func TestHandleChatSend(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    []AddressedTransaction
+		want    []egressTransaction
 		wantErr bool
 	}{
 		{
@@ -92,9 +93,15 @@ func TestHandleChatSend(t *testing.T) {
 					Server: &Server{
 						Clients: map[uint16]*ClientConn{
 							uint16(1): {
+								Account: &Account{
+									Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+								},
 								ID: &[]byte{0, 1},
 							},
 							uint16(2): {
+								Account: &Account{
+									Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+								},
 								ID: &[]byte{0, 2},
 							},
 						},
@@ -106,14 +113,14 @@ func TestHandleChatSend(t *testing.T) {
 					},
 				},
 			},
-			want: []AddressedTransaction{
+			want: []egressTransaction{
 				{
 					ClientID: &[]byte{0, 1},
 					Transaction: &Transaction{
 						Flags:     0x00,
 						IsReply:   0x00,
 						Type:      []byte{0, 0x6a},
-						ID:        []byte{0x55, 0x62, 0x7f, 0x73}, // Random ID from rand.Seed(1)
+						ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
 						ErrorCode: []byte{0, 0, 0, 0},
 						Fields: []Field{
 							NewField(fieldData, []byte{0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x01, 0x3a, 0x20, 0x20, 0x68, 0x61, 0x69, 0x0d}),
@@ -126,13 +133,59 @@ func TestHandleChatSend(t *testing.T) {
 						Flags:     0x00,
 						IsReply:   0x00,
 						Type:      []byte{0, 0x6a},
-						ID:        []byte{0x55, 0x62, 0x7f, 0x73}, // Random ID from rand.Seed(1)
+						ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
 						ErrorCode: []byte{0, 0, 0, 0},
 						Fields: []Field{
 							NewField(fieldData, []byte{0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x01, 0x3a, 0x20, 0x20, 0x68, 0x61, 0x69, 0x0d}),
 						},
 					},
 				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "only sends chat msg to clients with accessReadChat permission",
+			args: args{
+				cc: &ClientConn{
+					UserName: &[]byte{0x00, 0x01},
+					Server: &Server{
+						Clients: map[uint16]*ClientConn{
+							uint16(1): {
+								Account: &Account{
+									Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+								},
+								ID: &[]byte{0, 1},
+							},
+							uint16(2): {
+								Account: &Account{
+									Access: &[]byte{0, 0, 0, 0, 0, 0, 0, 0},
+								},
+								ID: &[]byte{0, 2},
+							},
+						},
+					},
+				},
+				t: &Transaction{
+					Fields: []Field{
+						NewField(fieldData, []byte("hai")),
+					},
+				},
+			},
+			want: []egressTransaction{
+				{
+					ClientID: &[]byte{0, 1},
+					Transaction: &Transaction{
+						Flags:     0x00,
+						IsReply:   0x00,
+						Type:      []byte{0, 0x6a},
+						ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
+						ErrorCode: []byte{0, 0, 0, 0},
+						Fields: []Field{
+							NewField(fieldData, []byte{0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x01, 0x3a, 0x20, 0x20, 0x68, 0x61, 0x69, 0x0d}),
+						},
+					},
+				},
+
 			},
 			wantErr: false,
 		},

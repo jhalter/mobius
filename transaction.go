@@ -70,7 +70,7 @@ const (
 type TransactionType struct {
 	Access  int
 	DenyMsg string
-	Handler func(cc *ClientConn, transaction *Transaction) ([]AddressedTransaction, error)
+	Handler func(cc *ClientConn, transaction *Transaction) ([]egressTransaction, error)
 	Name    string
 }
 
@@ -149,6 +149,7 @@ type Transaction struct {
 }
 
 func NewTransaction(t, _ int, f []Field) Transaction {
+	rand.Seed(1)
 	typeSlice := make([]byte, 2)
 	binary.BigEndian.PutUint16(typeSlice, uint16(t))
 

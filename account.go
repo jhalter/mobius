@@ -5,12 +5,11 @@ import (
 )
 
 type Account struct {
-	Login    string `yaml:"Login"`
-	Name     string `yaml:"Name"`
-	Password string `yaml:"Password"`
-	Access   *[]byte `yaml:"Access"`
+	Login    string  `yaml:"Login"`
+	Name     string  `yaml:"Name"`
+	Password string  `yaml:"Password"`
+	Access   *[]byte `yaml:"Access"` // 8 byte bitmap
 }
-
 
 // Example:
 //	00 04 // fieldCount?

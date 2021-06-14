@@ -24,10 +24,10 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const userIdleSeconds = 5
+const userIdleSeconds = 300
 const idleCheckInterval = 10
 
-type AddressedTransaction struct {
+type egressTransaction struct {
 	ClientID    *[]byte
 	Transaction *Transaction
 }
@@ -46,7 +46,7 @@ type Server struct {
 	PrivateChats  map[uint32]*PrivateChat
 	NextGuestID   *uint16
 	NextTranID    *uint32
-	Outbox        chan AddressedTransaction
+	outbox        chan egressTransaction
 
 	mux sync.Mutex
 }
@@ -105,7 +105,7 @@ func (s *Server) ServeFileTransfers(ln net.Listener) error {
 
 func (s *Server) SendTransactions() error {
 	for {
-		t := <-s.Outbox
+		t := <-s.outbox
 		requestNum := binary.BigEndian.Uint16(t.Transaction.Type)
 		clientID := binary.BigEndian.Uint16(*t.ClientID)
 		client := s.Clients[clientID]
@@ -164,7 +164,7 @@ func NewServer(configDir string) (*Server, error) {
 		Logger:        logger,
 		NextGuestID:   new(uint16),
 		NextTranID:    new(uint32),
-		Outbox:        make(chan AddressedTransaction),
+		outbox:        make(chan egressTransaction),
 	}
 
 	server.loadAgreement(configDir + "Agreement.txt")
@@ -228,7 +228,7 @@ func NewServer(configDir string) (*Server, error) {
 // NotifyAll sends a transaction to all connected clients.  For example, to notify clients of a new chat message.
 func (s *Server) NotifyAll(t Transaction) error {
 	for _, c := range s.Clients {
-		s.Outbox <- AddressedTransaction{ClientID: c.ID, Transaction: &t}
+		s.outbox <- egressTransaction{ClientID: c.ID, Transaction: &t}
 	}
 	return nil
 }
@@ -403,8 +403,9 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 
 	var login string
 	for _, char := range encodedLogin {
-		login += fmt.Sprint(255 - uint(char))
+		login += string(rune(255 - uint(char)))
 	}
+	println(login)
 	if login == "" {
 		login = GuestAccount
 	}

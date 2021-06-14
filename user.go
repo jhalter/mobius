@@ -42,9 +42,10 @@ func (u User) Payload() []byte {
 func DecodeUserString(encodedString []byte) string {
 	var decodedString string
 	for _, char := range encodedString {
-		decodedString += fmt.Sprint(255 - uint(char))
+		decodedString += string(rune(255 - uint(char)))
 	}
 
+	fmt.Println(decodedString)
 	return decodedString
 }
 
