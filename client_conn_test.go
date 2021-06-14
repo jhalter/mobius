@@ -2,9 +2,25 @@ package hotline
 
 import (
 	"github.com/stretchr/testify/assert"
+	"math/rand"
 	"reflect"
+	"sort"
 	"testing"
 )
+
+type byTranID []egressTransaction
+
+func (s byTranID) Len() int {
+	return len(s)
+}
+
+func (s byTranID) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
+func (s byTranID) Less(i, j int) bool {
+	return s[i].Transaction.uint32ID() < s[j].Transaction.uint32ID()
+}
 
 func TestHandleGetUserNameList(t *testing.T) {
 	type args struct {
@@ -185,20 +201,137 @@ func TestHandleChatSend(t *testing.T) {
 						},
 					},
 				},
-
 			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
+		rand.Seed(1) // reset seed between tests to make transaction IDs predictable
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := HandleChatSend(tt.args.cc, tt.args.t)
+			sort.Sort(byTranID(got))
+			sort.Sort(byTranID(tt.want))
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("HandleChatSend() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !assert.Equal(t, got, tt.want) {
+			if !assert.Equal(t, tt.want, got) {
 				t.Errorf("HandleChatSend() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHandleSetChatSubject(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []egressTransaction
+		wantErr bool
+	}{
+		{
+			name: "sends chat subject to private chat members",
+			args: args{
+				cc: &ClientConn{
+					UserName: &[]byte{0x00, 0x01},
+					Server: &Server{
+						PrivateChats: map[uint32]*PrivateChat{
+							uint32(1): {
+								Subject: "unset",
+								ClientConn: map[uint16]*ClientConn{
+									uint16(1): {
+										Account: &Account{
+											Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+										},
+										ID: &[]byte{0, 1},
+									},
+									uint16(2): {
+										Account: &Account{
+											Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+										},
+										ID: &[]byte{0, 2},
+									},
+								},
+							},
+						},
+						Clients: map[uint16]*ClientConn{
+							uint16(1): {
+								Account: &Account{
+									Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+								},
+								ID: &[]byte{0, 1},
+							},
+							uint16(2): {
+								Account: &Account{
+									Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+								},
+								ID: &[]byte{0, 2},
+							},
+						},
+					},
+				},
+				t: &Transaction{
+					Flags:     0x00,
+					IsReply:   0x00,
+					Type:      []byte{0, 0x6a},
+					ID:        []byte{0, 0, 0, 1},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(fieldChatID, []byte{0, 0, 0, 1}),
+						NewField(fieldChatSubject, []byte("Test Subject")),
+					},
+				},
+			},
+			want: []egressTransaction{
+				{
+					ClientID: &[]byte{0, 1},
+					Transaction: &Transaction{
+						Flags:     0x00,
+						IsReply:   0x00,
+						Type:      []byte{0, 0x77},
+						ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
+						ErrorCode: []byte{0, 0, 0, 0},
+						Fields: []Field{
+							NewField(fieldChatID, []byte{0, 0, 0, 1}),
+							NewField(fieldChatSubject, []byte("Test Subject")),
+						},
+					},
+				},
+				{
+					ClientID: &[]byte{0, 2},
+					Transaction: &Transaction{
+						Flags:     0x00,
+						IsReply:   0x00,
+						Type:      []byte{0, 0x77},
+						ID:        []byte{0xf0, 0xc5, 0x34, 0x1e}, // Random ID from rand.Seed(1)
+						ErrorCode: []byte{0, 0, 0, 0},
+						Fields: []Field{
+							NewField(fieldChatID, []byte{0, 0, 0, 1}),
+							NewField(fieldChatSubject, []byte("Test Subject")),
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		rand.Seed(1) // reset seed between tests to make transaction IDs predictable
+
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := HandleSetChatSubject(tt.args.cc, tt.args.t)
+			sort.Sort(byTranID(got))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("HandleSetChatSubject() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !assert.Equal(t, tt.want, got) {
+				t.Errorf("HandleSetChatSubject() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

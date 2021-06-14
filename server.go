@@ -108,8 +108,15 @@ func (s *Server) SendTransactions() error {
 		t := <-s.outbox
 		requestNum := binary.BigEndian.Uint16(t.Transaction.Type)
 		clientID := binary.BigEndian.Uint16(*t.ClientID)
+		tID := binary.BigEndian.Uint32(t.Transaction.ID)
+
+		s.mux.Lock()
 		client := s.Clients[clientID]
+		s.mux.Unlock()
+
 		handler := TransactionHandlers[requestNum]
+
+		println(requestNum)
 
 		var err error
 		var n int
@@ -117,7 +124,7 @@ func (s *Server) SendTransactions() error {
 			logger.Error("ohno")
 		}
 		logger.Debugw("Sent Transaction",
-			"ID", t.Transaction.ID,
+			"ID", tID,
 			"IsReply", t.Transaction.IsReply,
 			"type", handler.Name,
 			"bytes", n,
@@ -139,6 +146,7 @@ func (s *Server) Serve(ln net.Listener) error {
 			if err := s.HandleConnection(conn); err != nil {
 				if err == io.EOF {
 					s.Logger.Infow("Client disconnected", "RemoteAddr", conn.RemoteAddr())
+
 				} else {
 					s.Logger.Errorw("error serving request", "err", err)
 				}
@@ -453,7 +461,6 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 
 	// Show agreement to client
 	hotlineClientConn.send(tranShowAgreement, NewField(fieldData, s.Agreement))
-
 
 	// The Hotline ClientConn v1.2.3 has a different login sequence than 1.9.2
 	if string(*hotlineClientConn.Version) == "" {

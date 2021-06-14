@@ -75,7 +75,9 @@ type TransactionType struct {
 }
 
 var TransactionHandlers = map[uint16]TransactionType{
-	tranAgreed: {Name: "tranAgreed", Handler: HandleTranAgreed},
+	tranChatMsg:          {Name: "tranChatMsg"},
+	tranNotifyChangeUser: {Name: "tranNotifyChangeUser"},
+	tranAgreed:           {Name: "tranAgreed", Handler: HandleTranAgreed},
 	tranError: {
 		Name: "tranError",
 	},
@@ -137,6 +139,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 	tranUploadFile:         {Name: "tranUploadFile", Handler: HandleUploadFile},
 	tranUploadFldr:         {Name: "tranUploadFldr", Handler: HandleUploadFolder},
 	tranUserBroadcast:      {Name: "tranUserBroadcast", Handler: HandleUserBroadcast},
+	tranNotifyDeleteUser:   {Name: "tranNotifyDeleteUser"},
 }
 
 type Transaction struct {
@@ -151,7 +154,7 @@ type Transaction struct {
 	Fields     []Field
 }
 
-func NewNewTransaction(t int, fields ...Field) *Transaction{
+func NewNewTransaction(t int, fields ...Field) *Transaction {
 	typeSlice := make([]byte, 2)
 	binary.BigEndian.PutUint16(typeSlice, uint16(t))
 
@@ -169,7 +172,6 @@ func NewNewTransaction(t int, fields ...Field) *Transaction{
 }
 
 func NewTransaction(t, _ int, f []Field) Transaction {
-	rand.Seed(1)
 	typeSlice := make([]byte, 2)
 	binary.BigEndian.PutUint16(typeSlice, uint16(t))
 
@@ -199,6 +201,10 @@ func ReadTransaction(buf []byte) *Transaction {
 		ParamCount: buf[20:22],
 		Fields:     ReadFields(buf[20:22], buf[22:]),
 	}
+}
+
+func (t *Transaction) uint32ID() uint32 {
+	return binary.BigEndian.Uint32(t.ID)
 }
 
 func ReadTransactions(buf []byte) []Transaction {
@@ -316,6 +322,17 @@ func (t Transaction) GetFields(id int) []Field {
 	}
 
 	return fields
+}
+
+func (t Transaction) reply(f ...Field) *Transaction {
+	return &Transaction{
+		Flags:     0x00,
+		IsReply:   0x01,
+		Type:      t.Type,
+		ID:        t.ID,
+		ErrorCode: []byte{0, 0, 0, 0},
+		Fields:    f,
+	}
 }
 
 func (t Transaction) ReplyTransaction(f []Field) Transaction {

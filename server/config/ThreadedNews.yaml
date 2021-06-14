@@ -99,7 +99,7 @@ Categories:
             - 0
             - 0
             - 0
-            - 0
+            - 2
             ParentArt:
             - 0
             - 0
@@ -122,6 +122,50 @@ Categories:
             - 105
             - 110
             Data: I'm an article in a subcategory!
+          2:
+            Title: whoa
+            Poster: Baz
+            Date:
+            - 7
+            - 229
+            - 0
+            - 0
+            - 0
+            - 216
+            - 237
+            - 143
+            PrevArt:
+            - 0
+            - 0
+            - 0
+            - 1
+            NextArt:
+            - 0
+            - 0
+            - 0
+            - 0
+            ParentArt:
+            - 0
+            - 0
+            - 0
+            - 0
+            FirstChildArtArt:
+            - 0
+            - 0
+            - 0
+            - 0
+            DataFlav:
+            - 116
+            - 101
+            - 120
+            - 116
+            - 47
+            - 112
+            - 108
+            - 97
+            - 105
+            - 110
+            Data: zzz
         SubCats: {}
         count: []
         addsn: []

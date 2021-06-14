@@ -16,6 +16,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+
 // ClientConn represents a client connected to a Server
 type ClientConn struct {
 	Connection net.Conn
@@ -53,8 +54,8 @@ func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
 		}
 
 		cc.Server.Logger.Infow(
-			"Client transaction received",
-			"ID", transaction.ID, "UserName", string(*cc.UserName), "RequestID", requestNum, "RequestType", handler.Name,
+			"Received Transaction",
+			"UserName", string(*cc.UserName), "RequestID", requestNum, "RequestType", handler.Name,
 		)
 
 		var transactions []egressTransaction
@@ -171,20 +172,11 @@ func HandleChatSend(cc *ClientConn, t *Transaction) ([]egressTransaction, error)
 		},
 	)
 
-	keys := make([]uint16, 0)
-
 	for _, c := range cc.Server.Clients {
 		// Filter out clients that do not have the read chat permission
 		if c.Authorize(accessReadChat) {
-			keys = append(keys, c.uint16ID())
+			replies = append(replies, egressTransaction{ClientID: c.ID, Transaction: &replyTran})
 		}
-	}
-
-	// Sort the clients by id to make the ordering deterministic.  This only matters for ensuring the tests pass.
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
-	for _, k := range keys {
-		c := cc.Server.Clients[k]
-		replies = append(replies, egressTransaction{ClientID: c.ID, Transaction: &replyTran})
 	}
 
 	return replies, nil
@@ -954,6 +946,7 @@ func HandleGetMsgs(cc *ClientConn, transaction *Transaction) ([]egressTransactio
 
 // Disconnect notifies other clients that a client has disconnected
 func (cc ClientConn) Disconnect() {
+	fmt.Println("Disconnect called")
 	cc.Server.mux.Lock()
 	defer cc.Server.mux.Unlock()
 
@@ -966,23 +959,25 @@ func (cc ClientConn) Disconnect() {
 		),
 	)
 
-	cc.Server.NotifyAll(
-		NewTransaction(
-			tranChatMsg, 3,
-			[]Field{
-				NewField(fieldData, []byte("\r")),
-			},
-		),
-	)
+	//TODO: Do we really need to send a newline to all connected clients?
+	//cc.Server.NotifyAll(
+	//	NewTransaction(
+	//		tranChatMsg, 3,
+	//		[]Field{
+	//			NewField(fieldData, []byte("\r")),
+	//		},
+	//	),
+	//)
 
-	cc.Connection.Close()
+	_ = cc.Connection.Close()
 }
 
 // NotifyOthers sends transaction t to other clients connected to the server
 func (cc ClientConn) NotifyOthers(t Transaction) {
 	for _, c := range cc.Server.Clients {
 		if c.ID != cc.ID {
-			c.Connection.Write(t.Payload())
+			cc.Server.outbox <- egressTransaction{ClientID: c.ID, Transaction: &t}
+			//c.Connection.Write(t.Payload())
 		}
 	}
 }
@@ -1377,22 +1372,31 @@ func HandleLeaveChat(cc *ClientConn, t *Transaction) ([]egressTransaction, error
 }
 
 func HandleSetChatSubject(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+	var replies []egressTransaction
+
 	chatID := t.GetField(fieldChatID).Data
 	chatInt := binary.BigEndian.Uint32(chatID)
 
-	chatSubject := t.GetField(fieldChatSubject).Data
-
 	privChat := cc.Server.PrivateChats[chatInt]
-	privChat.Subject = string(chatSubject)
+	privChat.Subject = string(t.GetField(fieldChatSubject).Data)
 
 	for _, occ := range privChat.ClientConn {
-		occ.SendTransaction(
-			tranNotifyChatSubject,
-			NewField(fieldChatID, chatID),
-			NewField(fieldChatSubject, chatSubject),
-		)
+		replies = append(replies, egressTransaction{
+			ClientID: occ.ID,
+			Transaction: NewNewTransaction(
+				tranNotifyChatSubject,
+				NewField(fieldChatID, chatID),
+				NewField(fieldChatSubject, t.GetField(fieldChatSubject).Data),
+			),
+		})
 	}
 
-	err := cc.Reply(t)
-	return []egressTransaction{}, err
+	//replies = append(replies,
+	//	egressTransaction{
+	//		ClientID:    cc.ID,
+	//		Transaction: t.reply(),
+	//	},
+	//)
+
+	return replies, nil
 }
