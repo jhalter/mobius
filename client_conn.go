@@ -190,7 +190,13 @@ func HandleChatSend(cc *ClientConn, t *Transaction) ([]egressTransaction, error)
 		},
 	)
 
-	for _, c := range cc.Server.Clients {
+	var clients []*ClientConn
+	for _, occ := range cc.Server.Clients {
+		clients = append(clients, occ)
+	}
+	sort.Sort(byClientID(clients))
+
+	for _, c := range clients {
 		// Filter out clients that do not have the read chat permission
 		if c.Authorize(accessReadChat) {
 			replies = append(replies, egressTransaction{ClientID: c.ID, Transaction: &replyTran})
