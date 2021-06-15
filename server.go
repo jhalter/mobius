@@ -45,7 +45,6 @@ type Server struct {
 	Logger        *zap.SugaredLogger
 	PrivateChats  map[uint32]*PrivateChat
 	NextGuestID   *uint16
-	NextTranID    *uint32
 	outbox        chan egressTransaction
 
 	mux sync.Mutex
@@ -171,7 +170,6 @@ func NewServer(configDir string) (*Server, error) {
 		ConfigDir:     configDir,
 		Logger:        logger,
 		NextGuestID:   new(uint16),
-		NextTranID:    new(uint32),
 		outbox:        make(chan egressTransaction),
 	}
 
@@ -183,7 +181,6 @@ func NewServer(configDir string) (*Server, error) {
 	server.Config.FileRoot = configDir + "Files/"
 
 	*server.NextGuestID = 1
-	*server.NextTranID = 1
 
 	if server.Config.EnableTrackerRegistration == true {
 		for _, t := range server.Config.Trackers {

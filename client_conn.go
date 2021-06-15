@@ -34,7 +34,6 @@ func (s byClientID) Less(i, j int) bool {
 //	return binary.BigEndian.Uint16(*cc.ID)
 //}
 
-
 // ClientConn represents a client connected to a Server
 type ClientConn struct {
 	Connection net.Conn
@@ -64,7 +63,7 @@ func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
 		if !cc.Authorize(handler.Access) {
 			logger.Infow(
 				"Unauthorized Action",
-				"UserName", string(*cc.UserName), "RequestID", requestNum, "RequestType", handler.Name,
+				"UserName", string(*cc.UserName), "RequestType", handler.Name,
 			)
 			errT := transaction.NewErrorReply(handler.DenyMsg)
 			cc.Server.outbox <- egressTransaction{ClientID: cc.ID, Transaction: errT}
@@ -73,7 +72,7 @@ func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
 
 		cc.Server.Logger.Infow(
 			"Received Transaction",
-			"UserName", string(*cc.UserName), "RequestID", requestNum, "RequestType", handler.Name,
+			"UserName", string(*cc.UserName), "RequestType", handler.Name,
 		)
 
 		var transactions []egressTransaction
@@ -1395,9 +1394,7 @@ func HandleLeaveChat(cc *ClientConn, t *Transaction) ([]egressTransaction, error
 	return []egressTransaction{}, err
 }
 
-func HandleSetChatSubject(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
-	var replies []egressTransaction
-
+func HandleSetChatSubject(cc *ClientConn, t *Transaction) (replies []egressTransaction, err error) {
 	chatID := t.GetField(fieldChatID).Data
 	chatInt := binary.BigEndian.Uint32(chatID)
 
@@ -1420,13 +1417,6 @@ func HandleSetChatSubject(cc *ClientConn, t *Transaction) ([]egressTransaction, 
 			),
 		})
 	}
-
-	//replies = append(replies,
-	//	egressTransaction{
-	//		ClientID:    cc.ID,
-	//		Transaction: t.reply(),
-	//	},
-	//)
 
 	return replies, nil
 }

@@ -7,8 +7,6 @@ import (
 	"testing"
 )
 
-
-
 func TestHandleGetUserNameList(t *testing.T) {
 	type args struct {
 		cc *ClientConn
