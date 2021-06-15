@@ -27,11 +27,6 @@ import (
 const userIdleSeconds = 300
 const idleCheckInterval = 10
 
-type egressTransaction struct {
-	ClientID    *[]byte
-	Transaction *Transaction
-}
-
 type Server struct {
 	Addr          int
 	Accounts      map[string]*Account
@@ -45,7 +40,7 @@ type Server struct {
 	Logger        *zap.SugaredLogger
 	PrivateChats  map[uint32]*PrivateChat
 	NextGuestID   *uint16
-	outbox        chan egressTransaction
+	outbox        chan Transaction
 
 	mux sync.Mutex
 }
@@ -105,9 +100,9 @@ func (s *Server) ServeFileTransfers(ln net.Listener) error {
 func (s *Server) SendTransactions() error {
 	for {
 		t := <-s.outbox
-		requestNum := binary.BigEndian.Uint16(t.Transaction.Type)
-		clientID := binary.BigEndian.Uint16(*t.ClientID)
-		tID := binary.BigEndian.Uint32(t.Transaction.ID)
+		requestNum := binary.BigEndian.Uint16(t.Type)
+		clientID := binary.BigEndian.Uint16(*t.clientID)
+		tID := binary.BigEndian.Uint32(t.ID)
 
 		s.mux.Lock()
 		client := s.Clients[clientID]
@@ -119,12 +114,12 @@ func (s *Server) SendTransactions() error {
 
 		var err error
 		var n int
-		if n, err = client.Connection.Write(t.Transaction.Payload()); err != nil {
+		if n, err = client.Connection.Write(t.Payload()); err != nil {
 			logger.Error("ohno")
 		}
 		logger.Debugw("Sent Transaction",
 			"ID", tID,
-			"IsReply", t.Transaction.IsReply,
+			"IsReply", t.IsReply,
 			"type", handler.Name,
 			"bytes", n,
 			"client", client.Connection.RemoteAddr(),
@@ -170,7 +165,7 @@ func NewServer(configDir string) (*Server, error) {
 		ConfigDir:     configDir,
 		Logger:        logger,
 		NextGuestID:   new(uint16),
-		outbox:        make(chan egressTransaction),
+		outbox:        make(chan Transaction),
 	}
 
 	server.loadAgreement(configDir + "Agreement.txt")
@@ -233,7 +228,8 @@ func NewServer(configDir string) (*Server, error) {
 // NotifyAll sends a transaction to all connected clients.  For example, to notify clients of a new chat message.
 func (s *Server) NotifyAll(t Transaction) error {
 	for _, c := range s.Clients {
-		s.outbox <- egressTransaction{ClientID: c.ID, Transaction: &t}
+		t.clientID = c.ID
+		s.outbox <- t
 	}
 	return nil
 }
@@ -451,7 +447,8 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 			NewField(fieldServerName, []byte(s.Config.Name)),
 		},
 	)
-	s.outbox <- egressTransaction{ClientID: hotlineClientConn.ID, Transaction: &reply}
+	reply.clientID = hotlineClientConn.ID
+	s.outbox <- reply
 
 	// Send user access privs so client UI knows how to behave
 	hotlineClientConn.send(tranUserAccess, NewField(fieldUserAccess, *hotlineClientConn.Account.Access))

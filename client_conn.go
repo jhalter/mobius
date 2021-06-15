@@ -50,10 +50,9 @@ type ClientConn struct {
 }
 
 func (cc *ClientConn) send(t int, fields ...Field) {
-	cc.Server.outbox <- egressTransaction{
-		ClientID:    cc.ID,
-		Transaction: NewNewTransaction(t, fields...),
-	}
+	tran := NewNewTransaction(t, fields...)
+	tran.clientID = cc.ID
+	cc.Server.outbox <- *tran
 }
 
 func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
@@ -65,8 +64,7 @@ func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
 				"Unauthorized Action",
 				"UserName", string(*cc.UserName), "RequestType", handler.Name,
 			)
-			errT := transaction.NewErrorReply(handler.DenyMsg)
-			cc.Server.outbox <- egressTransaction{ClientID: cc.ID, Transaction: errT}
+			cc.Server.outbox <- *transaction.NewErrorReply(cc.ID, handler.DenyMsg)
 			return nil
 		}
 
@@ -75,7 +73,7 @@ func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
 			"UserName", string(*cc.UserName), "RequestType", handler.Name,
 		)
 
-		var transactions []egressTransaction
+		var transactions []Transaction
 		var err error
 		if transactions, err = handler.Handler(cc, transaction); err != nil {
 			return err
@@ -153,8 +151,8 @@ func (cc *ClientConn) Authorize(access int) bool {
 	return accessBitmap.Bit(63-access) == 1
 }
 
-func HandleChatSend(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
-	var replies []egressTransaction
+func HandleChatSend(cc *ClientConn, t *Transaction) ([]Transaction, error) {
+	var replies []Transaction
 	var replyTran Transaction
 
 	// Truncate long usernames
@@ -177,7 +175,8 @@ func HandleChatSend(cc *ClientConn, t *Transaction) ([]egressTransaction, error)
 
 		// send the message to all connected clients of the private chat
 		for _, c := range privChat.ClientConn {
-			replies = append(replies, egressTransaction{ClientID: c.ID, Transaction: &replyTran})
+			replyTran.clientID = c.ID
+			replies = append(replies, replyTran)
 		}
 		return replies, nil
 	}
@@ -198,7 +197,8 @@ func HandleChatSend(cc *ClientConn, t *Transaction) ([]egressTransaction, error)
 	for _, c := range clients {
 		// Filter out clients that do not have the read chat permission
 		if c.Authorize(accessReadChat) {
-			replies = append(replies, egressTransaction{ClientID: c.ID, Transaction: &replyTran})
+			replyTran.clientID = c.ID
+			replies = append(replies, replyTran)
 		}
 	}
 
@@ -211,7 +211,7 @@ func (cc *ClientConn) notifyOtherClientConn(ID []byte, t Transaction) error {
 	return err
 }
 
-func HandleSendInstantMsg(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleSendInstantMsg(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	msg := t.GetField(fieldData)
 	ID := t.GetField(fieldUserID)
 	//options := transaction.GetField(hotline.fieldOptions)
@@ -227,7 +227,7 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) ([]egressTransaction, 
 	)
 	// Send chat message to other cc
 	if err := cc.notifyOtherClientConn(ID.Data, sendChat); err != nil {
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
 	// Respond with auto reply if other client has it enabled
@@ -243,10 +243,10 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) ([]egressTransaction, 
 	}
 
 	err := cc.Reply(t)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleGetFileInfo(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleGetFileInfo(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	fileName := string(t.GetField(fieldFileName).Data)
 	filePath := cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFilePath).Data)
 
@@ -262,10 +262,10 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) ([]egressTransaction, err
 		NewField(fieldFileModifyDate, ffo.FlatFileInformationFork.ModifyDate),
 		NewField(fieldFileSize, ffo.FlatFileDataForkHeader.DataSize),
 	)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleSetFileInfo(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleSetFileInfo(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	// TODO: figure out how to handle file comments
 	fileName := string(t.GetField(fieldFileName).Data)
 	filePath := cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFilePath).Data)
@@ -276,18 +276,18 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) ([]egressTransaction, err
 		err := os.Rename(filePath+"/"+fileName, filePath+"/"+string(fileNewName))
 		if os.IsNotExist(err) {
 			_, err := cc.Connection.Write(t.ReplyError("Cannot delete file " + fileName + " because it does not exist or cannot be found."))
-			return []egressTransaction{}, err
+			return []Transaction{}, err
 		}
 	}
 
 	err := cc.Reply(t)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleDeleteFile(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleDeleteFile(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	if cc.Authorize(accessDeleteFile) == false {
 		_, err := cc.Connection.Write(t.ReplyError("You are not allowed to create new accounts."))
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
 	fileName := string(t.GetField(fieldFileName).Data)
@@ -298,15 +298,15 @@ func HandleDeleteFile(cc *ClientConn, t *Transaction) ([]egressTransaction, erro
 	err := os.Remove("./" + filePath + "/" + fileName)
 	if os.IsNotExist(err) {
 		_, err := cc.Connection.Write(t.ReplyError("Cannot delete file " + fileName + " because it does not exist or cannot be found."))
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 	// TODO: handle other possible errors; e.g. file delete fails due to file permission issue
 
 	err = cc.Reply(t)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleMoveFile(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleMoveFile(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	//if cc.Authorize(accessDeleteFile) == false {
 	//	_, err := cc.Connection.Write(t.ReplyError("You are not allowed to create new accounts."))
 	//	return err
@@ -321,18 +321,18 @@ func HandleMoveFile(cc *ClientConn, t *Transaction) ([]egressTransaction, error)
 	err := os.Rename(filePath+"/"+fileName, fileNewPath+"/"+fileName)
 	if os.IsNotExist(err) {
 		_, err := cc.Connection.Write(t.ReplyError("Cannot delete file " + fileName + " because it does not exist or cannot be found."))
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 	if err != nil {
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 	// TODO: handle other possible errors; e.g. file delete fails due to file permission issue
 
 	err = cc.Reply(t)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleNewFolder(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleNewFolder(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	newFolderPath := cc.Server.Config.FileRoot
 
 	// fieldFilePath is only present for nested paths
@@ -344,15 +344,15 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) ([]egressTransaction, error
 
 	if err := os.Mkdir(newFolderPath, 0777); err != nil {
 		// TODO: Send error response to client
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
 	err := cc.Reply(t)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleSetUser(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
-	var response []egressTransaction
+func HandleSetUser(cc *ClientConn, t *Transaction) ([]Transaction, error) {
+	var response []Transaction
 	userLogin := DecodeUserString(t.GetField(fieldUserLogin).Data)
 	userName := string(t.GetField(fieldUserName).Data)
 
@@ -369,7 +369,7 @@ func HandleSetUser(cc *ClientConn, t *Transaction) ([]egressTransaction, error) 
 	file := cc.Server.ConfigDir + "Users/" + userLogin + ".yaml"
 	out, _ := yaml.Marshal(&account)
 	if err := ioutil.WriteFile(file, out, 0666); err != nil {
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
 	// Notify connected clients logged in as the user of the new access level
@@ -421,7 +421,7 @@ func HandleSetUser(cc *ClientConn, t *Transaction) ([]egressTransaction, error) 
 	return response, err
 }
 
-func HandleGetUser(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleGetUser(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	userLogin := string(t.GetField(fieldUserLogin).Data)
 	decodedUserLogin := NegatedUserString(t.GetField(fieldUserLogin).Data)
 	account := cc.Server.Accounts[userLogin]
@@ -432,13 +432,13 @@ func HandleGetUser(cc *ClientConn, t *Transaction) ([]egressTransaction, error) 
 		NewField(fieldUserPassword, []byte(account.Password)),
 		NewField(fieldUserAccess, *account.Access),
 	)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleListUsers(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleListUsers(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	if cc.Authorize(accessOpenUser) == false {
 		_, err := cc.Connection.Write(t.ReplyError("You are not allowed to view accounts."))
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 	var userFields []Field
 	for _, acc := range cc.Server.Accounts {
@@ -447,14 +447,14 @@ func HandleListUsers(cc *ClientConn, t *Transaction) ([]egressTransaction, error
 	}
 
 	err := cc.Reply(t, userFields...)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
 // HandleNewUser creates a new user account
-func HandleNewUser(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleNewUser(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	if cc.Authorize(accessCreateUser) == false {
 		_, err := cc.Connection.Write(t.ReplyError("You are not allowed to create new accounts."))
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
 	login := DecodeUserString(t.GetField(fieldUserLogin).Data)
@@ -462,7 +462,7 @@ func HandleNewUser(cc *ClientConn, t *Transaction) ([]egressTransaction, error) 
 	// If the account already exists, reply with an error
 	if _, ok := cc.Server.Accounts[login]; ok {
 		_, err := cc.Connection.Write(t.ReplyError("Cannot create account " + login + " because there is already an account with that login."))
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
 	if err := cc.Server.NewUser(
@@ -471,18 +471,18 @@ func HandleNewUser(cc *ClientConn, t *Transaction) ([]egressTransaction, error) 
 		string(t.GetField(fieldUserPassword).Data),
 		t.GetField(fieldUserAccess).Data,
 	); err != nil {
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
 	_, err := cc.Connection.Write(t.ReplyTransaction([]Field{}).Payload())
 
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleDeleteUser(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleDeleteUser(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	if cc.Authorize(accessDeleteUser) == false {
 		_, err := cc.Connection.Write(t.ReplyError("You are not allowed to delete accounts."))
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
 	// TODO: Handle case where account doesn't exist; e.g. delete race condition
@@ -490,15 +490,15 @@ func HandleDeleteUser(cc *ClientConn, t *Transaction) ([]egressTransaction, erro
 	login := DecodeUserString(t.GetField(fieldUserLogin).Data)
 
 	if err := cc.Server.DeleteUser(login); err != nil {
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
 	err := cc.Reply(t)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
 // HandleUserBroadcast sends an Administrator Message to all connected clients of the server
-func HandleUserBroadcast(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleUserBroadcast(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	cc.NotifyOthers(
 		NewTransaction(
 			tranServerMsg, 0,
@@ -510,10 +510,10 @@ func HandleUserBroadcast(cc *ClientConn, t *Transaction) ([]egressTransaction, e
 	)
 
 	err := cc.Reply(t)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleGetClientConnInfoText(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleGetClientConnInfoText(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	clientConn := cc.Server.Clients[binary.BigEndian.Uint16(t.GetField(fieldUserID).Data)]
 
 	// TODO: Implement non-hardcoded values
@@ -551,21 +551,17 @@ None.
 		NewField(fieldData, []byte(template)),
 		NewField(fieldUserName, *clientConn.UserName),
 	)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleGetUserNameList(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleGetUserNameList(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	reply := t.ReplyTransaction(cc.Server.connectedUsers())
-	trans := []egressTransaction{
-		{
-			ClientID:    cc.ID,
-			Transaction: &reply,
-		},
-	}
-	return trans, nil
+	reply.clientID = cc.ID
+
+	return []Transaction{reply}, nil
 }
 
-func (cc *ClientConn) notifyNewUserHasJoined() ([]egressTransaction, error) {
+func (cc *ClientConn) notifyNewUserHasJoined() ([]Transaction, error) {
 	// Notify other ccs that a new user has connected
 	cc.NotifyOthers(
 		NewTransaction(
@@ -595,10 +591,10 @@ func (cc *ClientConn) notifyNewUserHasJoined() ([]egressTransaction, error) {
 		),
 	)
 
-	return []egressTransaction{}, nil
+	return []Transaction{}, nil
 }
 
-func HandleTranAgreed(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleTranAgreed(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	bs := make([]byte, 2)
 	binary.BigEndian.PutUint16(bs, *cc.Server.NextGuestID)
 
@@ -633,13 +629,13 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) ([]egressTransaction, erro
 
 	_, _ = cc.notifyNewUserHasJoined()
 	if err := cc.Reply(t); err != nil {
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
-	return []egressTransaction{}, nil
+	return []Transaction{}, nil
 }
 
-func HandleTranOldPostNews(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleTranOldPostNews(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	cc.Server.mux.Lock()
 	defer cc.Server.mux.Unlock()
 
@@ -652,12 +648,12 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) ([]egressTransaction,
 	cc.Server.FlatNews = append([]byte(newsPost), cc.Server.FlatNews...)
 
 	if _, err := cc.Connection.Write(t.ReplyTransaction([]Field{}).Payload()); err != nil {
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
 	err := ioutil.WriteFile(cc.Server.ConfigDir+"MessageBoard.txt", cc.Server.FlatNews, 0644)
 	if err != nil {
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
 	_ = cc.Server.NotifyAll(
@@ -669,30 +665,30 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) ([]egressTransaction,
 		),
 	)
 	// Notify all clients of updated news
-	return []egressTransaction{}, nil
+	return []Transaction{}, nil
 }
 
-func HandleDisconnectUser(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleDisconnectUser(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	if cc.Authorize(accessDisconUser) == false {
 		// TODO: Reply with server message:
 		// msg := "You are not allowed to disconnect users."
-		return []egressTransaction{}, nil
+		return []Transaction{}, nil
 	}
 
 	clientConn := cc.Server.Clients[binary.BigEndian.Uint16(t.GetField(fieldUserID).Data)]
 
 	if err := clientConn.Connection.Close(); err != nil {
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
 	_, err := cc.Connection.Write(
 		t.ReplyTransaction([]Field{}).Payload(),
 	)
 
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	// Fields used in the request:
 	// 325	News path	(Optional)
 
@@ -721,10 +717,10 @@ func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) ([]egressTransacti
 	}
 
 	err := cc.Reply(t, fieldData...)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleNewNewsCat(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleNewNewsCat(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	name := string(t.GetField(fieldNewsCatName).Data)
 	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
 
@@ -741,10 +737,10 @@ func HandleNewNewsCat(cc *ClientConn, t *Transaction) ([]egressTransaction, erro
 
 	_ = cc.Server.WriteThreadedNews()
 	err := cc.Reply(t)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleNewNewsFldr(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleNewNewsFldr(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	// Fields used in the request:
 	// 322	News category name
 	// 325	News path
@@ -763,7 +759,7 @@ func HandleNewNewsFldr(cc *ClientConn, t *Transaction) ([]egressTransaction, err
 	_ = cc.Server.WriteThreadedNews()
 
 	err := cc.Reply(t)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
 // Fields used in the request:
@@ -771,7 +767,7 @@ func HandleNewNewsFldr(cc *ClientConn, t *Transaction) ([]egressTransaction, err
 //
 // Reply fields:
 // 321	News article list data	Optional
-func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
 
 	var cat NewsCategoryListData15
@@ -785,10 +781,10 @@ func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) ([]egressTransacti
 	nald := cat.GetNewsArtListData()
 
 	err := cc.Reply(t, NewField(fieldNewsArtListData, nald.Payload()))
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleGetNewsArtData(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleGetNewsArtData(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	// Request fields
 	// 325	News path
 	// 326	News article ID
@@ -811,7 +807,7 @@ func HandleGetNewsArtData(cc *ClientConn, t *Transaction) ([]egressTransaction, 
 
 	if art == nil {
 		cc.Reply(t)
-		return []egressTransaction{}, nil
+		return []Transaction{}, nil
 	}
 
 	// Reply fields
@@ -839,10 +835,10 @@ func HandleGetNewsArtData(cc *ClientConn, t *Transaction) ([]egressTransaction, 
 	}
 
 	err := cc.Reply(t, fields...)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleDelNewsItem(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleDelNewsItem(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	// Access:		News Delete Folder (37) or News Delete Category (35)
 
 	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
@@ -864,10 +860,10 @@ func HandleDelNewsItem(cc *ClientConn, t *Transaction) ([]egressTransaction, err
 
 	// Reply params: none
 	err := cc.Reply(t)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleDelNewsArt(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleDelNewsArt(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	// Request Fields
 	// 325	News path
 	// 326	News article ID
@@ -886,14 +882,14 @@ func HandleDelNewsArt(cc *ClientConn, t *Transaction) ([]egressTransaction, erro
 	cats[catName] = cat
 	cc.Server.Logger.Infof("Deleting news article ID %s from %v", ID, catName)
 	if err := cc.Server.WriteThreadedNews(); err != nil {
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
 	err := cc.Reply(t)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandlePostNewsArt(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandlePostNewsArt(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	// Request fields
 	// 325	News path
 	// 326	News article ID	 						ID of the parent article?
@@ -954,17 +950,17 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) ([]egressTransaction, err
 	cc.Server.WriteThreadedNews()
 
 	err := cc.Reply(t)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleGetMsgs(cc *ClientConn, transaction *Transaction) ([]egressTransaction, error) {
+func HandleGetMsgs(cc *ClientConn, transaction *Transaction) ([]Transaction, error) {
 	_, err := cc.Connection.Write(
 		transaction.ReplyTransaction(
 			[]Field{NewField(fieldData, cc.Server.FlatNews)},
 		).Payload(),
 	)
 
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
 // Disconnect notifies other clients that a client has disconnected
@@ -999,8 +995,8 @@ func (cc ClientConn) Disconnect() {
 func (cc ClientConn) NotifyOthers(t Transaction) {
 	for _, c := range cc.Server.Clients {
 		if c.ID != cc.ID {
-			cc.Server.outbox <- egressTransaction{ClientID: c.ID, Transaction: &t}
-			//c.Connection.Write(t.Payload())
+			t.clientID = c.ID
+			cc.Server.outbox <- t
 		}
 	}
 }
@@ -1036,7 +1032,7 @@ func (cc *ClientConn) Reply(t *Transaction, fields ...Field) error {
 	return nil
 }
 
-func HandleDownloadFile(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleDownloadFile(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	fileName := t.GetField(fieldFileName).Data
 	filePath := ReadFilePath(t.GetField(fieldFilePath).Data)
 
@@ -1068,10 +1064,10 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) ([]egressTransaction, er
 		).Payload(),
 	)
 	if err != nil {
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
 // Download all files from the specified folder and sub-folders
@@ -1098,7 +1094,7 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) ([]egressTransaction, er
 //	00 6b // ref number
 //	00 04 // len
 //	00 03 64 b1
-func HandleDownloadFolder(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleDownloadFolder(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	transactionRef := cc.Server.NewTransactionRef()
 	data := binary.BigEndian.Uint32(transactionRef)
 
@@ -1122,7 +1118,7 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) ([]egressTransaction, 
 		NewField(fieldFolderItemCount, itemCount),       // TODO: Remove hardcode
 		NewField(fieldWaitingCount, []byte{0x00, 0x00}), // TODO: Implement waiting count
 	)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
 // Upload all files from the local folder and its subfolders to the specified path on the server
@@ -1132,7 +1128,7 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) ([]egressTransaction, 
 // 108	Transfer size	Total size of all items in the folder
 // 220	Folder item count
 // 204	File transfer options	"Optional Currently set to 1" (TODO: ??)
-func HandleUploadFolder(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleUploadFolder(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	transactionRef := cc.Server.NewTransactionRef()
 	data := binary.BigEndian.Uint32(transactionRef)
 
@@ -1147,10 +1143,10 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) ([]egressTransaction, er
 	cc.Server.FileTransfers[data] = fileTransfer
 
 	err := cc.Reply(t, NewField(fieldRefNum, transactionRef))
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleUploadFile(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleUploadFile(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	fileName := t.GetField(fieldFileName).Data
 	filePath := t.GetField(fieldFilePath).Data
 
@@ -1167,14 +1163,14 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) ([]egressTransaction, erro
 	cc.Server.FileTransfers[data] = fileTransfer
 
 	err := cc.Reply(t, NewField(fieldRefNum, transactionRef))
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
 const refusePM = 0
 const refuseChat = 1
 const autoResponse = 2
 
-func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	*cc.Icon = t.GetField(fieldUserIconID).Data
 	*cc.UserName = t.GetField(fieldUserName).Data
 
@@ -1216,18 +1212,18 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) ([]egressTransactio
 		),
 	)
 
-	return []egressTransaction{}, nil
+	return []Transaction{}, nil
 }
 
-func HandleKeepAlive(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleKeepAlive(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	// HL 1.9.2 Client sends keepalive msg every 3 minutes
 	// HL 1.2.3 Client doesn't send keepalives
 	err := cc.Reply(t)
 
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleGetFileNameList(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleGetFileNameList(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	filePath := cc.Server.Config.FileRoot
 
 	fieldFilePath := t.GetField(fieldFilePath).Data
@@ -1241,7 +1237,7 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) ([]egressTransaction,
 		).Payload(),
 	)
 
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
 // =================================
@@ -1257,7 +1253,7 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) ([]egressTransaction,
 // 1. ClientB sends tranJoinChat with fieldChatID
 
 // HandleInviteNewChat invites users to new private chat
-func HandleInviteNewChat(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleInviteNewChat(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	// Client to Invite
 	targetID := t.GetField(fieldUserID).Data
 
@@ -1272,7 +1268,7 @@ func HandleInviteNewChat(cc *ClientConn, t *Transaction) ([]egressTransaction, e
 		},
 	)
 	if err := cc.notifyOtherClientConn(targetID, inviteOther); err != nil {
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
 	err := cc.Reply(t,
@@ -1282,10 +1278,10 @@ func HandleInviteNewChat(cc *ClientConn, t *Transaction) ([]egressTransaction, e
 		NewField(fieldUserIconID, *cc.Icon),
 		NewField(fieldUserFlags, *cc.Flags),
 	)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleInviteToChat(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleInviteToChat(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	// Client to Invite
 	targetID := t.GetField(fieldUserID).Data
 	chatID := t.GetField(fieldChatID).Data
@@ -1299,7 +1295,7 @@ func HandleInviteToChat(cc *ClientConn, t *Transaction) ([]egressTransaction, er
 		},
 	)
 	if err := cc.notifyOtherClientConn(targetID, inviteOther); err != nil {
-		return []egressTransaction{}, err
+		return []Transaction{}, err
 	}
 
 	_, err := cc.Connection.Write(
@@ -1314,10 +1310,10 @@ func HandleInviteToChat(cc *ClientConn, t *Transaction) ([]egressTransaction, er
 		).Payload(),
 	)
 
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleRejectChatInvite(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleRejectChatInvite(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	chatID := t.GetField(fieldChatID).Data
 	chatInt := binary.BigEndian.Uint32(chatID)
 
@@ -1334,10 +1330,10 @@ func HandleRejectChatInvite(cc *ClientConn, t *Transaction) ([]egressTransaction
 		)
 	}
 
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleJoinChat(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleJoinChat(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	chatID := t.GetField(fieldChatID).Data
 	chatInt := binary.BigEndian.Uint32(chatID)
 
@@ -1370,11 +1366,11 @@ func HandleJoinChat(cc *ClientConn, t *Transaction) ([]egressTransaction, error)
 	}
 
 	err := cc.Reply(t, connectedUsers...)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 
 }
 
-func HandleLeaveChat(cc *ClientConn, t *Transaction) ([]egressTransaction, error) {
+func HandleLeaveChat(cc *ClientConn, t *Transaction) ([]Transaction, error) {
 	chatID := t.GetField(fieldChatID).Data
 	chatInt := binary.BigEndian.Uint32(chatID)
 
@@ -1391,10 +1387,10 @@ func HandleLeaveChat(cc *ClientConn, t *Transaction) ([]egressTransaction, error
 	}
 
 	err := cc.Reply(t)
-	return []egressTransaction{}, err
+	return []Transaction{}, err
 }
 
-func HandleSetChatSubject(cc *ClientConn, t *Transaction) (replies []egressTransaction, err error) {
+func HandleSetChatSubject(cc *ClientConn, t *Transaction) (replies []Transaction, err error) {
 	chatID := t.GetField(fieldChatID).Data
 	chatInt := binary.BigEndian.Uint32(chatID)
 
@@ -1408,14 +1404,13 @@ func HandleSetChatSubject(cc *ClientConn, t *Transaction) (replies []egressTrans
 	sort.Sort(byClientID(clients))
 
 	for _, c := range clients {
-		replies = append(replies, egressTransaction{
-			ClientID: c.ID,
-			Transaction: NewNewTransaction(
-				tranNotifyChatSubject,
-				NewField(fieldChatID, chatID),
-				NewField(fieldChatSubject, t.GetField(fieldChatSubject).Data),
-			),
-		})
+		tran := NewNewTransaction(
+			tranNotifyChatSubject,
+			NewField(fieldChatID, chatID),
+			NewField(fieldChatSubject, t.GetField(fieldChatSubject).Data),
+		)
+		tran.clientID = c.ID
+		replies = append(replies, *tran)
 	}
 
 	return replies, nil

@@ -70,7 +70,7 @@ const (
 type TransactionType struct {
 	Access  int
 	DenyMsg string
-	Handler func(cc *ClientConn, transaction *Transaction) ([]egressTransaction, error)
+	Handler func(cc *ClientConn, transaction *Transaction) ([]Transaction, error)
 	Name    string
 }
 
@@ -143,6 +143,8 @@ var TransactionHandlers = map[uint16]TransactionType{
 }
 
 type Transaction struct {
+	clientID *[]byte
+
 	Flags      byte
 	IsReply    byte
 	Type       []byte // Size 2
@@ -361,12 +363,13 @@ func (t Transaction) ReplyError(errMsg string) []byte {
 
 const max uint32 = 4294967295
 
-func (t Transaction) NewErrorReply(errMsg string) *Transaction {
+func (t Transaction) NewErrorReply(clientID *[]byte, errMsg string) *Transaction {
 	idSlice := make([]byte, 4)
 
 	binary.BigEndian.PutUint32(idSlice, rand.Uint32())
 
 	return &Transaction{
+		clientID: clientID,
 		Flags:     0x00,
 		IsReply:   0x01,
 		Type:      []byte{0, 0},
