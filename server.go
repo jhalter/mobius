@@ -14,6 +14,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -1014,4 +1015,15 @@ func (fp *FilePath) String() string {
 		out = append(out, string(i.Name))
 	}
 	return strings.Join(out, "/")
+}
+
+
+// sortedClients is a utility function that takes a map of *ClientConn and returns a sorted slice of the values.
+// The purpose of this is to ensure that the ordering of client connections is deterministic so that test assertions work.
+func sortedClients(unsortedClients map[uint16]*ClientConn) (clients []*ClientConn) {
+	for _, c := range unsortedClients {
+		clients = append(clients, c)
+	}
+	sort.Sort(byClientID(clients))
+	return clients
 }

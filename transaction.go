@@ -156,7 +156,7 @@ type Transaction struct {
 	Fields     []Field
 }
 
-func NewNewTransaction(t int, fields ...Field) *Transaction {
+func NewNewTransaction(t int, clientID *[]byte, fields ...Field) *Transaction {
 	typeSlice := make([]byte, 2)
 	binary.BigEndian.PutUint16(typeSlice, uint16(t))
 
@@ -164,6 +164,7 @@ func NewNewTransaction(t int, fields ...Field) *Transaction {
 	binary.BigEndian.PutUint32(idSlice, rand.Uint32())
 
 	return &Transaction{
+		clientID: clientID,
 		Flags:     0x00,
 		IsReply:   0x00,
 		Type:      typeSlice,
@@ -360,8 +361,6 @@ func (t Transaction) ReplyError(errMsg string) []byte {
 		},
 	}.Payload()
 }
-
-const max uint32 = 4294967295
 
 func (t Transaction) NewErrorReply(clientID *[]byte, errMsg string) *Transaction {
 	idSlice := make([]byte, 4)
