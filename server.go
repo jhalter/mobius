@@ -103,7 +103,6 @@ func (s *Server) SendTransactions() error {
 		t := <-s.outbox
 		requestNum := binary.BigEndian.Uint16(t.Type)
 		clientID := binary.BigEndian.Uint16(*t.clientID)
-		tID := binary.BigEndian.Uint32(t.ID)
 
 		s.mux.Lock()
 		client := s.Clients[clientID]
@@ -119,12 +118,12 @@ func (s *Server) SendTransactions() error {
 			logger.Error("ohno")
 		}
 		logger.Debugw("Sent Transaction",
-			"ID", tID,
+			"name", string(*client.UserName),
+			"login", client.Account.Login,
 			"IsReply", t.IsReply,
 			"type", handler.Name,
 			"bytes", n,
-			"client", client.Connection.RemoteAddr(),
-			"account", client.Account.Name,
+			"remoteAddr", client.Connection.RemoteAddr(),
 		)
 	}
 }
@@ -385,10 +384,10 @@ func (s *Server) loadFlatNews(flatNewsPath string) {
 }
 
 func (s *Server) HandleConnection(conn net.Conn) error {
-	hotlineClientConn := s.NewClientConn(conn)
-	defer hotlineClientConn.Disconnect()
+	c := s.NewClientConn(conn)
+	defer c.Disconnect()
 
-	if err := hotlineClientConn.Handshake(); err != nil {
+	if err := c.Handshake(); err != nil {
 		return err
 	}
 
@@ -401,7 +400,7 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 	clientLogin := ReadTransaction(buf)
 	encodedLogin := clientLogin.GetField(fieldUserLogin).Data
 	encodedPassword := clientLogin.GetField(fieldUserPassword).Data
-	*hotlineClientConn.Version = clientLogin.GetField(fieldVersion).Data
+	*c.Version = clientLogin.GetField(fieldVersion).Data
 
 	var login string
 	for _, char := range encodedLogin {
@@ -412,7 +411,7 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 	}
 
 	// If authentication fails, send error reply and close connection
-	if hotlineClientConn.Authenticate(login, encodedPassword) == false {
+	if c.Authenticate(login, encodedPassword) == false {
 		reply := clientLogin.ReplyTransaction(
 			[]Field{
 				NewField(fieldError, []byte("Incorrect login.")),
@@ -428,18 +427,18 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 		return fmt.Errorf("incorrect login")
 	}
 
-	if string(*hotlineClientConn.Version) == "" {
-		*hotlineClientConn.UserName = clientLogin.GetField(fieldUserName).Data
-		*hotlineClientConn.Icon = clientLogin.GetField(fieldUserIconID).Data
+	if string(*c.Version) == "" {
+		*c.UserName = clientLogin.GetField(fieldUserName).Data
+		*c.Icon = clientLogin.GetField(fieldUserIconID).Data
 	}
 
-	hotlineClientConn.Account = hotlineClientConn.Server.Accounts[login]
+	c.Account = c.Server.Accounts[login]
 
-	if hotlineClientConn.Authorize(accessDisconUser) == true {
-		*hotlineClientConn.Flags = []byte{0, 2}
+	if c.Authorize(accessDisconUser) == true {
+		*c.Flags = []byte{0, 2}
 	}
 
-	s.Logger.Infow("Client connection received", "login", login, "version", *hotlineClientConn.Version, "RemoteAddr", conn.RemoteAddr().String())
+	s.Logger.Infow("Client connection received", "login", login, "version", *c.Version, "RemoteAddr", conn.RemoteAddr().String())
 
 	reply := clientLogin.ReplyTransaction(
 		[]Field{
@@ -448,22 +447,22 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 			NewField(fieldServerName, []byte(s.Config.Name)),
 		},
 	)
-	reply.clientID = hotlineClientConn.ID
+	reply.clientID = c.ID
 	s.outbox <- reply
 
 	// Send user access privs so client UI knows how to behave
-	hotlineClientConn.send(tranUserAccess, NewField(fieldUserAccess, *hotlineClientConn.Account.Access))
+	c.send(tranUserAccess, NewField(fieldUserAccess, *c.Account.Access))
 
 	// Show agreement to client
-	hotlineClientConn.send(tranShowAgreement, NewField(fieldData, s.Agreement))
+	c.send(tranShowAgreement, NewField(fieldData, s.Agreement))
 
 	// The Hotline ClientConn v1.2.3 has a different login sequence than 1.9.2
-	if string(*hotlineClientConn.Version) == "" {
-		if _, err := hotlineClientConn.notifyNewUserHasJoined(); err != nil {
+	if string(*c.Version) == "" {
+		if _, err := c.notifyNewUserHasJoined(); err != nil {
 			return err
 		}
 
-		_, err = hotlineClientConn.Connection.Write(
+		_, err = c.Connection.Write(
 			Transaction{
 				Flags:     0x00,
 				IsReply:   0x01,
@@ -471,7 +470,7 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 				ID:        []byte{0, 0, 0, 3},
 				ErrorCode: []byte{0, 0, 0, 0},
 				Fields: []Field{
-					NewField(fieldData, hotlineClientConn.Server.FlatNews),
+					NewField(fieldData, c.Server.FlatNews),
 				},
 			}.Payload(),
 		)
@@ -483,16 +482,18 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 	// Main loop where we wait for and take action on client requests
 	for {
 		buf = make([]byte, 102400)
-		readLen, err := hotlineClientConn.Connection.Read(buf)
+		readLen, err := c.Connection.Read(buf)
 		if err != nil {
 			return err
 		}
 		transactions := ReadTransactions(buf[:readLen])
 
 		for _, t := range transactions {
-			err := hotlineClientConn.HandleTransaction(&t)
+			err := c.handleTransaction(&t)
 			if err != nil {
-				return err
+				c.Server.Logger.Errorw(
+					"Error handling transaction", "err", err,
+				)
 			}
 		}
 	}
@@ -1016,7 +1017,6 @@ func (fp *FilePath) String() string {
 	}
 	return strings.Join(out, "/")
 }
-
 
 // sortedClients is a utility function that takes a map of *ClientConn and returns a sorted slice of the values.
 // The purpose of this is to ensure that the ordering of client connections is deterministic so that test assertions work.

@@ -17,9 +17,5 @@ func newStdoutCore() zapcore.Core {
 	encoder := zapcore.NewConsoleEncoder(encoderCfg)
 	writer := zapcore.Lock(os.Stdout)
 
-	return zapcore.NewCore(
-		encoder,
-		writer,
-		zap.DebugLevel,
-	)
+	return zapcore.NewCore(encoder, writer, zap.DebugLevel)
 }

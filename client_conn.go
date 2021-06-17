@@ -37,19 +37,17 @@ type ClientConn struct {
 }
 
 func (cc *ClientConn) send(t int, fields ...Field) {
-	tran := NewNewTransaction(t, nil, fields...)
-	tran.clientID = cc.ID
-	cc.Server.outbox <- *tran
+	cc.Server.outbox <- *NewNewTransaction(t, cc.ID, fields...)
 }
 
-func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
+func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 	requestNum := binary.BigEndian.Uint16(transaction.Type)
 
 	if handler, ok := TransactionHandlers[requestNum]; ok {
-		if !cc.Authorize(handler.Access) {
+		if !authorize(cc.Account.Access, handler.Access) {
 			logger.Infow(
 				"Unauthorized Action",
-				"UserName", string(*cc.UserName), "RequestType", handler.Name,
+				"Account", cc.Account.Login, "UserName", string(*cc.UserName), "RequestType", handler.Name,
 			)
 			cc.Server.outbox <- *transaction.NewErrorReply(cc.ID, handler.DenyMsg)
 			return nil
@@ -57,12 +55,13 @@ func (cc *ClientConn) HandleTransaction(transaction *Transaction) error {
 
 		cc.Server.Logger.Infow(
 			"Received Transaction",
-			"Account", cc.Account.Login, "UserName", string(*cc.UserName), "RequestType", handler.Name,
+			"login", cc.Account.Login,
+			"name", string(*cc.UserName),
+			"RequestType", handler.Name,
 		)
 
-		var transactions []Transaction
-		var err error
-		if transactions, err = handler.Handler(cc, transaction); err != nil {
+		transactions, err := handler.Handler(cc, transaction)
+		if err != nil {
 			return err
 		}
 		for _, t := range transactions {
@@ -136,13 +135,6 @@ func (cc *ClientConn) Authorize(access int) bool {
 	return accessBitmap.Bit(63-access) == 1
 }
 
-func (cc *ClientConn) notifyOtherClientConn(ID []byte, t Transaction) error {
-	clientConn := cc.Server.Clients[binary.BigEndian.Uint16(ID)]
-	_, err := clientConn.Connection.Write(t.Payload())
-	return err
-}
-
-
 // Disconnect notifies other clients that a client has disconnected
 func (cc ClientConn) Disconnect() {
 	cc.Server.mux.Lock()
@@ -172,7 +164,7 @@ func (cc ClientConn) Disconnect() {
 
 // NotifyOthers sends transaction t to other clients connected to the server
 func (cc ClientConn) NotifyOthers(t Transaction) {
-	for _, c := range cc.Server.Clients {
+	for _, c := range sortedClients(cc.Server.Clients) {
 		if c.ID != cc.ID {
 			t.clientID = c.ID
 			cc.Server.outbox <- t
@@ -190,17 +182,17 @@ func (cc *ClientConn) Handshake() error {
 	return err
 }
 
-func (cc *ClientConn) SendTransaction(id int, fields ...Field) error {
-	cc.Connection.Write(
-		NewTransaction(
-			id,
-			0,
-			fields,
-		).Payload(),
-	)
-
-	return nil
-}
+//func (cc *ClientConn) SendTransaction(id int, fields ...Field) error {
+//	cc.Connection.Write(
+//		NewTransaction(
+//			id,
+//			0,
+//			fields,
+//		).Payload(),
+//	)
+//
+//	return nil
+//}
 
 func (cc *ClientConn) Reply(t *Transaction, fields ...Field) error {
 	if _, err := cc.Connection.Write(t.ReplyTransaction(fields).Payload()); err != nil {
@@ -217,4 +209,3 @@ func (cc *ClientConn) NewReply(t *Transaction, fields ...Field) Transaction {
 
 	return reply
 }
-

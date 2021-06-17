@@ -1,9 +1,7 @@
 package hotline
 
 import (
-	"bytes"
 	"encoding/binary"
-	"fmt"
 	"math/rand"
 )
 
@@ -67,81 +65,6 @@ const (
 	tranKeepAlive            = 500
 )
 
-type TransactionType struct {
-	Access  int
-	DenyMsg string
-	Handler func(cc *ClientConn, transaction *Transaction) ([]Transaction, error)
-	Name    string
-}
-
-var TransactionHandlers = map[uint16]TransactionType{
-	tranChatMsg:          {Name: "tranChatMsg"},
-	tranNotifyChangeUser: {Name: "tranNotifyChangeUser"},
-	tranAgreed:           {Name: "tranAgreed", Handler: HandleTranAgreed},
-	tranError: {
-		Name: "tranError",
-	},
-	tranShowAgreement: {
-		Name: "tranShowAgreement",
-	},
-	tranUserAccess: {
-		Name: "tranUserAccess",
-	},
-	tranChatSend: {
-		Name:    "tranChatSend",
-		Handler: HandleChatSend,
-		Access:  accessSendChat,
-		DenyMsg: "You are not allowed to participate in chat.",
-	},
-	tranDelNewsArt:     {Name: "tranDelNewsArt", Handler: HandleDelNewsArt},
-	tranDelNewsItem:    {Name: "tranDelNewsItem", Handler: HandleDelNewsItem},
-	tranDeleteFile:     {Name: "tranDeleteFile", Handler: HandleDeleteFile},
-	tranDeleteUser:     {Name: "tranDeleteUser", Handler: HandleDeleteUser},
-	tranDisconnectUser: {Name: "tranDisconnectUser", Handler: HandleDisconnectUser},
-	tranDownloadFile: {
-		Name:    "tranDownloadFile",
-		Handler: HandleDownloadFile,
-		Access:  accessDownloadFile,
-		DenyMsg: "You are not allowed to download files.",
-	},
-	tranDownloadFldr: {
-		Name:    "tranDownloadFldr",
-		Handler: HandleDownloadFolder,
-	},
-	tranGetClientInfoText:  {Name: "tranGetClientInfoText", Handler: HandleGetClientConnInfoText},
-	tranGetFileInfo:        {Name: "tranGetFileInfo", Handler: HandleGetFileInfo},
-	tranGetFileNameList:    {Name: "tranGetFileNameList", Handler: HandleGetFileNameList},
-	tranGetMsgs:            {Name: "tranGetMsgs", Handler: HandleGetMsgs},
-	tranGetNewsArtData:     {Name: "tranGetNewsArtData", Handler: HandleGetNewsArtData},
-	tranGetNewsArtNameList: {Name: "tranGetNewsArtNameList", Handler: HandleGetNewsArtNameList},
-	tranGetNewsCatNameList: {Name: "tranGetNewsCatNameList", Handler: HandleGetNewsCatNameList},
-	tranGetUser:            {Name: "tranGetUser", Handler: HandleGetUser},
-	tranGetUserNameList:    {Name: "tranHandleGetUserNameList", Handler: HandleGetUserNameList},
-	tranInviteNewChat:      {Name: "tranInviteNewChat", Handler: HandleInviteNewChat},
-	tranInviteToChat:       {Name: "tranInviteToChat", Handler: HandleInviteToChat},
-	tranJoinChat:           {Name: "tranJoinChat", Handler: HandleJoinChat},
-	tranKeepAlive:          {Name: "tranKeepAlive", Handler: HandleKeepAlive},
-	tranLeaveChat:          {Name: "tranJoinChat", Handler: HandleLeaveChat},
-	tranListUsers:          {Name: "tranListUsers", Handler: HandleListUsers},
-	tranMoveFile:           {Name: "tranMoveFile", Handler: HandleMoveFile},
-	tranNewFolder:          {Name: "tranNewFolder", Handler: HandleNewFolder},
-	tranNewNewsCat:         {Name: "tranNewNewsCat", Handler: HandleNewNewsCat},
-	tranNewNewsFldr:        {Name: "tranNewNewsFldr", Handler: HandleNewNewsFldr},
-	tranNewUser:            {Name: "tranNewUser", Handler: HandleNewUser},
-	tranOldPostNews:        {Name: "tranOldPostNews", Handler: HandleTranOldPostNews},
-	tranPostNewsArt:        {Name: "tranPostNewsArt", Handler: HandlePostNewsArt},
-	tranRejectChatInvite:   {Name: "tranRejectChatInvite", Handler: HandleRejectChatInvite},
-	tranSendInstantMsg:     {Name: "tranSendInstantMsg", Handler: HandleSendInstantMsg},
-	tranSetChatSubject:     {Name: "tranSetChatSubject", Handler: HandleSetChatSubject},
-	tranSetClientUserInfo:  {Name: "tranSetClientUserInfo", Handler: HandleSetClientUserInfo},
-	tranSetFileInfo:        {Name: "tranSetFileInfo", Handler: HandleSetFileInfo},
-	tranSetUser:            {Name: "tranSetUser", Handler: HandleSetUser},
-	tranUploadFile:         {Name: "tranUploadFile", Handler: HandleUploadFile},
-	tranUploadFldr:         {Name: "tranUploadFldr", Handler: HandleUploadFolder},
-	tranUserBroadcast:      {Name: "tranUserBroadcast", Handler: HandleUserBroadcast},
-	tranNotifyDeleteUser:   {Name: "tranNotifyDeleteUser"},
-}
-
 type Transaction struct {
 	clientID *[]byte
 
@@ -164,7 +87,7 @@ func NewNewTransaction(t int, clientID *[]byte, fields ...Field) *Transaction {
 	binary.BigEndian.PutUint32(idSlice, rand.Uint32())
 
 	return &Transaction{
-		clientID: clientID,
+		clientID:  clientID,
 		Flags:     0x00,
 		IsReply:   0x00,
 		Type:      typeSlice,
@@ -226,19 +149,19 @@ func ReadTransactions(buf []byte) []Transaction {
 	return transactions
 }
 
-func FindTransactions(id uint16, transactions []Transaction) (Transaction, error) {
-	bs := make([]byte, 2)
-	binary.BigEndian.PutUint16(bs, id)
-
-	for _, t := range transactions {
-		fmt.Printf("got: %#v, want: %#v\n", t.Type, bs)
-		if bytes.Compare(t.Type, bs) == 0 {
-			return t, nil
-		}
-	}
-
-	return Transaction{}, fmt.Errorf("transaction type %v not found", id)
-}
+//func FindTransactions(id uint16, transactions []Transaction) (Transaction, error) {
+//	bs := make([]byte, 2)
+//	binary.BigEndian.PutUint16(bs, id)
+//
+//	for _, t := range transactions {
+//		fmt.Printf("got: %#v, want: %#v\n", t.Type, bs)
+//		if bytes.Compare(t.Type, bs) == 0 {
+//			return t, nil
+//		}
+//	}
+//
+//	return Transaction{}, fmt.Errorf("transaction type %v not found", id)
+//}
 
 func ReadFields(paramCount []byte, buf []byte) []Field {
 	paramCountInt := int(binary.BigEndian.Uint16(paramCount))
@@ -316,27 +239,27 @@ func (t Transaction) GetField(id int) Field {
 	return Field{}
 }
 
-func (t Transaction) GetFields(id int) []Field {
-	var fields []Field
-	for _, field := range t.Fields {
-		if id == int(binary.BigEndian.Uint16(field.ID)) {
-			fields = append(fields, field)
-		}
-	}
+//func (t Transaction) GetFields(id int) []Field {
+//	var fields []Field
+//	for _, field := range t.Fields {
+//		if id == int(binary.BigEndian.Uint16(field.ID)) {
+//			fields = append(fields, field)
+//		}
+//	}
+//
+//	return fields
+//}
 
-	return fields
-}
-
-func (t Transaction) reply(f ...Field) *Transaction {
-	return &Transaction{
-		Flags:     0x00,
-		IsReply:   0x01,
-		Type:      t.Type,
-		ID:        t.ID,
-		ErrorCode: []byte{0, 0, 0, 0},
-		Fields:    f,
-	}
-}
+//func (t Transaction) reply(f ...Field) *Transaction {
+//	return &Transaction{
+//		Flags:     0x00,
+//		IsReply:   0x01,
+//		Type:      t.Type,
+//		ID:        t.ID,
+//		ErrorCode: []byte{0, 0, 0, 0},
+//		Fields:    f,
+//	}
+//}
 
 func (t Transaction) ReplyTransaction(f []Field) Transaction {
 	return Transaction{
@@ -349,6 +272,7 @@ func (t Transaction) ReplyTransaction(f []Field) Transaction {
 	}
 }
 
+// TODO: remove deprecated func
 func (t Transaction) ReplyError(errMsg string) []byte {
 	return Transaction{
 		Flags:     0x00,
@@ -363,16 +287,12 @@ func (t Transaction) ReplyError(errMsg string) []byte {
 }
 
 func (t Transaction) NewErrorReply(clientID *[]byte, errMsg string) *Transaction {
-	idSlice := make([]byte, 4)
-
-	binary.BigEndian.PutUint32(idSlice, rand.Uint32())
-
 	return &Transaction{
-		clientID: clientID,
+		clientID:  clientID,
 		Flags:     0x00,
 		IsReply:   0x01,
 		Type:      []byte{0, 0},
-		ID:        idSlice,
+		ID:        t.ID,
 		ErrorCode: []byte{0, 0, 0, 1},
 		Fields: []Field{
 			NewField(fieldError, []byte(errMsg)),

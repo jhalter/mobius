@@ -122,13 +122,13 @@ func (f FileNameWithInfo) Payload() []byte {
 	return out
 }
 
-func ReadFileNameWithInfo(b []byte) FileNameWithInfo {
-	return FileNameWithInfo{
-		Type:       string(b[0:4]),
-		Creator:    b[4:8],
-		FileSize:   1,
-		NameScript: b[12:16],
-		NameSize:   b[16:20],
-		Name:       string(b[20:]),
-	}
-}
+//func ReadFileNameWithInfo(b []byte) FileNameWithInfo {
+//	return FileNameWithInfo{
+//		Type:       string(b[0:4]),
+//		Creator:    b[4:8],
+//		FileSize:   1,
+//		NameScript: b[12:16],
+//		NameSize:   b[16:20],
+//		Name:       string(b[20:]),
+//	}
+//}

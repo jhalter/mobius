@@ -1,21 +1,26 @@
 package hotline
 
+import (
+	"encoding/binary"
+	"math/big"
+)
+
 const (
 	// File System Maintenance
-	accessDeleteFile       = 0
-	accessUploadFile       = 1
-	accessDownloadFile     = 2 // Can Download Files
-	accessRenameFile       = 3
-	accessMoveFile         = 4
-	accessCreateFolder     = 5
-	accessDeleteFolder     = 6
-	accessRenameFolder     = 7
-	accessMoveFolder       = 8
-	accessReadChat         = 9
-	accessSendChat         = 10
-	accessOpenChat         = 11
-	accessCloseChat        = 12
-	accessShowInList       = 13
+	accessDeleteFile   = 0
+	accessUploadFile   = 1
+	accessDownloadFile = 2 // Can Download Files
+	accessRenameFile   = 3
+	accessMoveFile     = 4
+	accessCreateFolder = 5
+	accessDeleteFolder = 6
+	accessRenameFolder = 7
+	accessMoveFolder   = 8
+	accessReadChat     = 9
+	accessSendChat     = 10
+	// accessOpenChat         = 11 // Documented but seemingly unused
+	// accessCloseChat        = 12 // Documented but seemingly unused
+	// accessShowInList       = 13 // Documented but seemingly unused
 	accessCreateUser       = 14
 	accessDeleteUser       = 15
 	accessOpenUser         = 16
@@ -40,4 +45,14 @@ const (
 	accessNewsDeleteCat    = 35
 	accessNewsCreateFldr   = 36
 	accessNewsDeleteFldr   = 37
+	accessAlwaysAllow      = -1 // Some transactions are always allowed
 )
+
+func authorize(access *[]byte, accessBit int) bool {
+	if accessBit == accessAlwaysAllow {
+		return true
+	}
+	accessBitmap := big.NewInt(int64(binary.BigEndian.Uint64(*access)))
+
+	return accessBitmap.Bit(63-accessBit) == 1
+}

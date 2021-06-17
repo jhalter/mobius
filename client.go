@@ -150,25 +150,25 @@ func (c *Client) Agree() {
 	//_ = c.WaitForTransaction(tranAgreed)
 }
 
-func (c *Client) WaitForTransaction(id uint16) Transaction {
-	var trans Transaction
-	for {
-		buf := make([]byte, 1400)
-		readLen, err := c.Connection.Read(buf)
-		if err != nil {
-			panic(err)
-		}
-
-		transactions := ReadTransactions(buf[:readLen])
-		tran, err := FindTransactions(id, transactions)
-		if err == nil {
-			fmt.Println("returning")
-			return tran
-		}
-	}
-
-	return trans
-}
+//func (c *Client) WaitForTransaction(id uint16) Transaction {
+//	var trans Transaction
+//	for {
+//		buf := make([]byte, 1400)
+//		readLen, err := c.Connection.Read(buf)
+//		if err != nil {
+//			panic(err)
+//		}
+//
+//		transactions := ReadTransactions(buf[:readLen])
+//		tran, err := FindTransactions(id, transactions)
+//		if err == nil {
+//			fmt.Println("returning")
+//			return tran
+//		}
+//	}
+//
+//	return trans
+//}
 
 func (c *Client) Read() error {
 	// Main loop where we wait for and take action on client requests

@@ -1,4 +1,11 @@
 package hotline
+
+import (
+	"fmt"
+	"math/big"
+	"testing"
+)
+
 //
 //import (
 //	"bytes"
@@ -791,3 +798,36 @@ package hotline
 //		test.Teardown(srv)
 //	}
 //}
+
+func Test_authorize(t *testing.T) {
+	accessBitmap := big.NewInt(int64(0))
+	accessBitmap.SetBit(accessBitmap, accessCreateFolder, 1)
+	fmt.Printf("%v %b %x\n", accessBitmap, accessBitmap, accessBitmap)
+	fmt.Printf("%b\n", 0b10000)
+
+	type args struct {
+		access    *[]byte
+		reqAccess int
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "fooz",
+			args: args{
+				access: &[]byte{4, 0, 0, 0, 0, 0, 0, 0x02},
+				reqAccess: accessDownloadFile,
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := authorize(tt.args.access, tt.args.reqAccess); got != tt.want {
+				t.Errorf("authorize() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
