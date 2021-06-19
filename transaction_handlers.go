@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"math/big"
@@ -377,19 +378,19 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		switch mode := fi.Mode(); {
 		case mode.IsDir():
 			if authorize(cc.Account.Access, accessRenameFolder) == false {
-				res = append(res, *t.NewErrorReply(cc.ID, "You are not allowed to rename folders."))
+				res = append(res, cc.NewErrReply(t, "You are not allowed to rename folders."))
 				return res, err
 			}
 		case mode.IsRegular():
 			if authorize(cc.Account.Access, accessRenameFile) == false {
-				res = append(res, *t.NewErrorReply(cc.ID, "You are not allowed to rename files."))
+				res = append(res, cc.NewErrReply(t, "You are not allowed to rename files."))
 				return res, err
 			}
 		}
 
 		err = os.Rename(filePath+"/"+fileName, filePath+"/"+string(fileNewName))
 		if os.IsNotExist(err) {
-			_, err := cc.Connection.Write(t.ReplyError("Cannot rename file " + fileName + " because it does not exist or cannot be found."))
+			res = append(res, cc.NewErrReply(t, "Cannot rename file "+fileName+" because it does not exist or cannot be found."))
 			return res, err
 		}
 	}
@@ -413,18 +414,18 @@ func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	fi, err := os.Stat(path)
 	if err != nil {
-		res = append(res, *t.NewErrorReply(cc.ID, "Cannot delete file "+fileName+" because it does not exist or cannot be found."))
+		res = append(res, cc.NewErrReply(t, "Cannot delete file "+fileName+" because it does not exist or cannot be found."))
 		return res, nil
 	}
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
 		if authorize(cc.Account.Access, accessDeleteFolder) == false {
-			res = append(res, *t.NewErrorReply(cc.ID, "You are not allowed to delete folders."))
+			res = append(res, cc.NewErrReply(t, "You are not allowed to delete folders."))
 			return res, err
 		}
 	case mode.IsRegular():
 		if authorize(cc.Account.Access, accessDeleteFile) == false {
-			res = append(res, *t.NewErrorReply(cc.ID, "You are not allowed to delete files."))
+			res = append(res, cc.NewErrReply(t, "You are not allowed to delete files."))
 			return res, err
 		}
 	}
@@ -453,20 +454,20 @@ func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
 		if authorize(cc.Account.Access, accessMoveFolder) == false {
-			_, err := cc.Connection.Write(t.ReplyError("You are not allowed to move folders."))
+			res = append(res, cc.NewErrReply(t, "You are not allowed to move folders."))
 			return res, err
 		}
 	case mode.IsRegular():
 		if authorize(cc.Account.Access, accessMoveFile) == false {
-			_, err := cc.Connection.Write(t.ReplyError("You are not allowed to move files."))
+			res = append(res, cc.NewErrReply(t, "You are not allowed to move files."))
 			return res, err
 		}
 	}
 
 	err = os.Rename(filePath+"/"+fileName, fileNewPath+"/"+fileName)
 	if os.IsNotExist(err) {
-		_, err := cc.Connection.Write(t.ReplyError("Cannot delete file " + fileName + " because it does not exist or cannot be found."))
-		return []Transaction{}, err
+		res = append(res, cc.NewErrReply(t, "Cannot delete file "+fileName+" because it does not exist or cannot be found."))
+		return res, err
 	}
 	if err != nil {
 		return []Transaction{}, err
@@ -492,12 +493,11 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err err
 		return []Transaction{}, err
 	}
 
-	err = cc.Reply(t)
-	return []Transaction{}, err
+	res = append(res, cc.NewReply(t))
+	return res, err
 }
 
 func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	var response []Transaction
 	userLogin := DecodeUserString(t.GetField(fieldUserLogin).Data)
 	userName := string(t.GetField(fieldUserName).Data)
 
@@ -525,10 +525,9 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 			//	tranUserAccess, 333, []Field{NewField(fieldUserAccess, newAccessLvl)},
 			//)
 			//
-			//response = append(response, egressTransaction{
-			//	ClientID:    c.ID,
-			//	Transaction: &newT,
-			//})
+			newT := NewNewTransaction(tranUserAccess, c.ID, NewField(fieldUserAccess, newAccessLvl))
+
+			res = append(res, *newT)
 
 			flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*c.Flags)))
 			if authorize(c.Account.Access, accessDisconUser) == true {
@@ -561,8 +560,8 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 	// TODO: If we have just promoted a connected user to admin, notify
 	// connected clients to turn the user red
 
-	err = cc.Reply(t)
-	return response, err
+	res = append(res, cc.NewReply(t))
+	return res, err
 }
 
 func HandleGetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
@@ -570,16 +569,18 @@ func HandleGetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 	decodedUserLogin := NegatedUserString(t.GetField(fieldUserLogin).Data)
 	account := cc.Server.Accounts[userLogin]
 	if account == nil {
-		return res, fmt.Errorf("unknown account: %v", userLogin)
+		errorT := cc.NewErrReply(t, "Account does not exist.")
+		res = append(res, errorT)
+		return res, err
 	}
 
-	err = cc.Reply(t,
+	res = append(res, cc.NewReply(t,
 		NewField(fieldUserName, []byte(account.Name)),
 		NewField(fieldUserLogin, []byte(decodedUserLogin)),
 		NewField(fieldUserPassword, []byte(account.Password)),
 		NewField(fieldUserAccess, *account.Access),
-	)
-	return []Transaction{}, err
+	))
+	return res, err
 }
 
 func HandleListUsers(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
@@ -601,8 +602,8 @@ func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 	// If the account already exists, reply with an error
 	// TODO: make order deterministic
 	if _, ok := cc.Server.Accounts[login]; ok {
-		_, err := cc.Connection.Write(t.ReplyError("Cannot create account " + login + " because there is already an account with that login."))
-		return []Transaction{}, err
+		res = append(res, cc.NewErrReply(t, "Cannot create account "+login+" because there is already an account with that login."))
+		return res, err
 	}
 
 	if err := cc.Server.NewUser(
@@ -651,8 +652,8 @@ func HandleGetClientConnInfoText(cc *ClientConn, t *Transaction) (res []Transact
 
 	// TODO: Implement non-hardcoded values
 	template := `Nickname:   %s
-Name:       %v
-Account:    guest
+Name:       %s
+Account:    %s
 Address:    %s
 
 -------- File Downloads ---------
@@ -676,15 +677,14 @@ None.
 None.
 
 	`
-	template = fmt.Sprintf(template, *clientConn.UserName, *clientConn.ID, clientConn.Connection.RemoteAddr().String())
+	template = fmt.Sprintf(template, *clientConn.UserName, clientConn.Account.Name, clientConn.Account.Login, clientConn.Connection.RemoteAddr().String())
 	template = strings.Replace(template, "\n", "\r", -1)
 
-	err = cc.Reply(
-		t,
+	res = append(res, cc.NewReply(t,
 		NewField(fieldData, []byte(template)),
 		NewField(fieldUserName, *clientConn.UserName),
-	)
-	return []Transaction{}, err
+	))
+	return res, err
 }
 
 func HandleGetUserNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
@@ -724,7 +724,7 @@ func (cc *ClientConn) notifyNewUserHasJoined() (res []Transaction, err error) {
 		),
 	)
 
-	return []Transaction{}, nil
+	return res, nil
 }
 
 func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
@@ -760,11 +760,10 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	}
 
 	_, _ = cc.notifyNewUserHasJoined()
-	if err := cc.Reply(t); err != nil {
-		return []Transaction{}, err
-	}
 
-	return []Transaction{}, nil
+	res = append(res, cc.NewReply(t))
+
+	return res, err
 }
 
 func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
@@ -780,12 +779,12 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 	cc.Server.FlatNews = append([]byte(newsPost), cc.Server.FlatNews...)
 
 	if _, err := cc.Connection.Write(t.ReplyTransaction([]Field{}).Payload()); err != nil {
-		return []Transaction{}, err
+		return res, err
 	}
 
 	err = ioutil.WriteFile(cc.Server.ConfigDir+"MessageBoard.txt", cc.Server.FlatNews, 0644)
 	if err != nil {
-		return []Transaction{}, err
+		return res, err
 	}
 
 	_ = cc.Server.NotifyAll(
@@ -796,8 +795,9 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 			},
 		),
 	)
+
 	// Notify all clients of updated news
-	return []Transaction{}, nil
+	return res, err
 }
 
 func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
@@ -848,7 +848,7 @@ func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) (res []Transaction
 		))
 	}
 
-	err = cc.Reply(t, fieldData...)
+	res = append(res, cc.NewReply(t, fieldData...))
 	return res, err
 }
 
@@ -867,8 +867,8 @@ func HandleNewNewsCat(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		SubCats:  make(map[string]NewsCategoryListData15),
 	}
 
-	_ = cc.Server.WriteThreadedNews()
-	err = cc.Reply(t)
+	_ = cc.Server.writeThreadedNews()
+	res = append(res, cc.NewReply(t))
 	return res, err
 }
 
@@ -888,9 +888,9 @@ func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		Articles: map[uint32]*NewsArtData{},
 		SubCats:  make(map[string]NewsCategoryListData15),
 	}
-	_ = cc.Server.WriteThreadedNews()
+	_ = cc.Server.writeThreadedNews()
 
-	err = cc.Reply(t)
+	res = append(res, cc.NewReply(t))
 	return res, err
 }
 
@@ -912,7 +912,7 @@ func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction
 
 	nald := cat.GetNewsArtListData()
 
-	err = cc.Reply(t, NewField(fieldNewsArtListData, nald.Payload()))
+	res = append(res, cc.NewReply(t, NewField(fieldNewsArtListData, nald.Payload())))
 	return res, err
 }
 
@@ -936,10 +936,9 @@ func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, er
 	convertedArtID := binary.BigEndian.Uint16(newsArtID)
 
 	art := cat.Articles[uint32(convertedArtID)]
-
 	if art == nil {
-		cc.Reply(t)
-		return []Transaction{}, nil
+		res = append(res, cc.NewReply(t))
+		return res, err
 	}
 
 	// Reply fields
@@ -953,20 +952,17 @@ func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, er
 	// 327	News article data flavor	"Should be “text/plain”
 	// 333	News article data	Optional (if data flavor is “text/plain”)
 
-	fields := []Field{
+	res = append(res, cc.NewReply(t,
 		NewField(fieldNewsArtTitle, []byte(art.Title)),
 		NewField(fieldNewsArtPoster, []byte(art.Poster)),
 		NewField(fieldNewsArtDate, art.Date),
-
 		NewField(fieldNewsArtPrevArt, art.PrevArt),
 		NewField(fieldNewsArtNextArt, art.NextArt),
 		NewField(fieldNewsArtParentArt, art.ParentArt),
 		NewField(fieldNewsArt1stChildArt, art.FirstChildArt),
 		NewField(fieldNewsArtDataFlav, []byte("text/plain")),
 		NewField(fieldNewsArtData, []byte(art.Data)),
-	}
-
-	err = cc.Reply(t, fields...)
+	))
 	return res, err
 }
 
@@ -974,6 +970,9 @@ func HandleDelNewsItem(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	// Access:		News Delete Folder (37) or News Delete Category (35)
 
 	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
+	spew.Dump(pathStrs)
+
+	// TODO: determine if path is a Folder (Bundle) or Category and check for permission
 
 	cc.Server.Logger.Infof("DelNewsItem %v", pathStrs)
 
@@ -988,10 +987,14 @@ func HandleDelNewsItem(cc *ClientConn, t *Transaction) (res []Transaction, err e
 
 	delete(cats, delName)
 
-	cc.Server.WriteThreadedNews()
+	err = cc.Server.writeThreadedNews()
+	if err != nil {
+		return res, err
+	}
 
 	// Reply params: none
-	err = cc.Reply(t)
+	res = append(res, cc.NewReply(t))
+
 	return res, err
 }
 
@@ -1013,11 +1016,11 @@ func HandleDelNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	cats[catName] = cat
 	cc.Server.Logger.Infof("Deleting news article ID %s from %v", ID, catName)
-	if err := cc.Server.WriteThreadedNews(); err != nil {
+	if err := cc.Server.writeThreadedNews(); err != nil {
 		return []Transaction{}, err
 	}
 
-	err = cc.Reply(t)
+	res = append(res, cc.NewReply(t))
 	return res, err
 }
 
@@ -1079,9 +1082,9 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 
 	cats[catName] = cat
 	cc.Server.Logger.Infof("Posting news article to %s", pathStrs)
-	cc.Server.WriteThreadedNews()
+	cc.Server.writeThreadedNews()
 
-	err = cc.Reply(t)
+	res = append(res, cc.NewReply(t))
 	return res, err
 }
 
@@ -1099,36 +1102,30 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 	fileName := t.GetField(fieldFileName).Data
 	filePath := ReadFilePath(t.GetField(fieldFilePath).Data)
 
-	ffo, _ := NewFlattenedFileObject(
+	ffo, err := NewFlattenedFileObject(
 		cc.Server.Config.FileRoot+filePath,
 		string(fileName),
 	)
+	if err != nil {
+		return res, err
+	}
 
 	transactionRef := cc.Server.NewTransactionRef()
 	data := binary.BigEndian.Uint32(transactionRef)
 
-	fileTransfer := &FileTransfer{
+	cc.Server.FileTransfers[data] = &FileTransfer{
 		FileName:        fileName,
 		FilePath:        []byte(filePath),
 		ReferenceNumber: transactionRef,
 		Type:            FileDownload,
 	}
 
-	cc.Server.FileTransfers[data] = fileTransfer
-
-	_, err = cc.Connection.Write(
-		t.ReplyTransaction(
-			[]Field{
-				NewField(fieldRefNum, transactionRef),
-				NewField(fieldWaitingCount, []byte{0x00, 0x00}), // TODO: Implement waiting count
-				NewField(fieldTransferSize, ffo.TransferSize()),
-				NewField(fieldFileSize, ffo.FlatFileDataForkHeader.DataSize),
-			},
-		).Payload(),
-	)
-	if err != nil {
-		return res, err
-	}
+	res = append(res, cc.NewReply(t,
+		NewField(fieldRefNum, transactionRef),
+		NewField(fieldWaitingCount, []byte{0x00, 0x00}), // TODO: Implement waiting count
+		NewField(fieldTransferSize, ffo.TransferSize()),
+		NewField(fieldFileSize, ffo.FlatFileDataForkHeader.DataSize),
+	))
 
 	return res, err
 }
@@ -1172,15 +1169,20 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 	fp := NewFilePath(t.GetField(fieldFilePath).Data)
 
 	fullFilePath := fmt.Sprintf("./%v/%v", cc.Server.Config.FileRoot+fp.String(), string(fileTransfer.FileName))
-	transferSize, _ := CalcTotalSize(fullFilePath)
-	itemCount, _ := CalcItemCount(fullFilePath)
-
-	err = cc.Reply(t,
+	transferSize, err := CalcTotalSize(fullFilePath)
+	if err != nil {
+		return res, err
+	}
+	itemCount, err := CalcItemCount(fullFilePath)
+	if err != nil {
+		return res, err
+	}
+	res = append(res, cc.NewReply(t,
 		NewField(fieldRefNum, transactionRef),
 		NewField(fieldTransferSize, transferSize),
 		NewField(fieldFolderItemCount, itemCount),       // TODO: Remove hardcode
 		NewField(fieldWaitingCount, []byte{0x00, 0x00}), // TODO: Implement waiting count
-	)
+	))
 	return res, err
 }
 
@@ -1205,7 +1207,7 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err 
 	}
 	cc.Server.FileTransfers[data] = fileTransfer
 
-	err = cc.Reply(t, NewField(fieldRefNum, transactionRef))
+	res = append(res, cc.NewReply(t, NewField(fieldRefNum, transactionRef)))
 	return res, err
 }
 
@@ -1225,7 +1227,7 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	cc.Server.FileTransfers[data] = fileTransfer
 
-	err = cc.Reply(t, NewField(fieldRefNum, transactionRef))
+	res = append(res, cc.NewReply(t, NewField(fieldRefNum, transactionRef)))
 	return res, err
 }
 
@@ -1274,13 +1276,14 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction,
 		),
 	)
 
-	return []Transaction{}, nil
+	return res, err
 }
 
+// HandleKeepAlive response to keepalive transactions with an empty reply
+// HL 1.9.2 Client sends keepalive msg every 3 minutes
+// HL 1.2.3 Client doesn't send keepalives
 func HandleKeepAlive(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	// HL 1.9.2 Client sends keepalive msg every 3 minutes
-	// HL 1.2.3 Client doesn't send keepalives
-	err = cc.Reply(t)
+	res = append(res, cc.NewReply(t))
 
 	return res, err
 }
@@ -1293,11 +1296,12 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 		filePath = cc.Server.Config.FileRoot + ReadFilePath(fieldFilePath)
 	}
 
-	_, err = cc.Connection.Write(
-		t.ReplyTransaction(
-			GetFileNameList(filePath),
-		).Payload(),
-	)
+	fileNames, err := getFileNameList(filePath)
+	if err != nil {
+		return res, err
+	}
+
+	res = append(res, cc.NewReply(t, fileNames...))
 
 	return res, err
 }

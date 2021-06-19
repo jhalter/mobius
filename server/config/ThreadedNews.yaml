@@ -274,3 +274,25 @@ Categories:
     addsn: []
     deletesn: []
     guid: []
+  parent:
+    Type:
+    - 0
+    - 2
+    Name: parent
+    Articles: {}
+    SubCats: {}
+    count: []
+    addsn: []
+    deletesn: []
+    guid: []
+  testbundle:
+    Type:
+    - 0
+    - 2
+    Name: testbundle
+    Articles: {}
+    SubCats: {}
+    count: []
+    addsn: []
+    deletesn: []
+    guid: []

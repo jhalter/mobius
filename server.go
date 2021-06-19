@@ -110,8 +110,6 @@ func (s *Server) SendTransactions() error {
 
 		handler := TransactionHandlers[requestNum]
 
-		println(requestNum)
-
 		var err error
 		var n int
 		if n, err = client.Connection.Write(t.Payload()); err != nil {
@@ -227,23 +225,27 @@ func NewServer(configDir string) (*Server, error) {
 
 // NotifyAll sends a transaction to all connected clients.  For example, to notify clients of a new chat message.
 func (s *Server) NotifyAll(t Transaction) error {
-	for _, c := range s.Clients {
+	for _, c := range sortedClients(s.Clients) {
 		t.clientID = c.ID
 		s.outbox <- t
 	}
 	return nil
 }
 
-func (s *Server) WriteThreadedNews() error {
+func (s *Server) writeThreadedNews() error {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
-	out, _ := yaml.Marshal(s.ThreadedNews)
-	return ioutil.WriteFile(
+	out, err := yaml.Marshal(s.ThreadedNews)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(
 		s.ConfigDir+"ThreadedNews.yaml",
 		out,
 		0666,
 	)
+	return err
 }
 
 func (s *Server) NewClientConn(conn net.Conn) *ClientConn {

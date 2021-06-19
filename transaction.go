@@ -239,28 +239,6 @@ func (t Transaction) GetField(id int) Field {
 	return Field{}
 }
 
-//func (t Transaction) GetFields(id int) []Field {
-//	var fields []Field
-//	for _, field := range t.Fields {
-//		if id == int(binary.BigEndian.Uint16(field.ID)) {
-//			fields = append(fields, field)
-//		}
-//	}
-//
-//	return fields
-//}
-
-//func (t Transaction) reply(f ...Field) *Transaction {
-//	return &Transaction{
-//		Flags:     0x00,
-//		IsReply:   0x01,
-//		Type:      t.Type,
-//		ID:        t.ID,
-//		ErrorCode: []byte{0, 0, 0, 0},
-//		Fields:    f,
-//	}
-//}
-
 func (t Transaction) ReplyTransaction(f []Field) Transaction {
 	return Transaction{
 		Flags:     0x00,
@@ -269,33 +247,5 @@ func (t Transaction) ReplyTransaction(f []Field) Transaction {
 		ID:        t.ID,
 		ErrorCode: []byte{0, 0, 0, 0},
 		Fields:    f,
-	}
-}
-
-// TODO: remove deprecated func
-func (t Transaction) ReplyError(errMsg string) []byte {
-	return Transaction{
-		Flags:     0x00,
-		IsReply:   0x01,
-		Type:      []byte{0, 0},
-		ID:        t.ID,
-		ErrorCode: []byte{0, 0, 0, 1},
-		Fields: []Field{
-			NewField(fieldError, []byte(errMsg)),
-		},
-	}.Payload()
-}
-
-func (t Transaction) NewErrorReply(clientID *[]byte, errMsg string) *Transaction {
-	return &Transaction{
-		clientID:  clientID,
-		Flags:     0x00,
-		IsReply:   0x01,
-		Type:      []byte{0, 0},
-		ID:        t.ID,
-		ErrorCode: []byte{0, 0, 0, 1},
-		Fields: []Field{
-			NewField(fieldError, []byte(errMsg)),
-		},
 	}
 }

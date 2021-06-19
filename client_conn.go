@@ -49,7 +49,8 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 				"Unauthorized Action",
 				"Account", cc.Account.Login, "UserName", string(*cc.UserName), "RequestType", handler.Name,
 			)
-			cc.Server.outbox <- *transaction.NewErrorReply(cc.ID, handler.DenyMsg)
+			cc.Server.outbox <- cc.NewErrReply(transaction, handler.DenyMsg)
+
 			return nil
 		}
 
@@ -182,30 +183,25 @@ func (cc *ClientConn) Handshake() error {
 	return err
 }
 
-//func (cc *ClientConn) SendTransaction(id int, fields ...Field) error {
-//	cc.Connection.Write(
-//		NewTransaction(
-//			id,
-//			0,
-//			fields,
-//		).Payload(),
-//	)
-//
-//	return nil
-//}
-
-func (cc *ClientConn) Reply(t *Transaction, fields ...Field) error {
-	if _, err := cc.Connection.Write(t.ReplyTransaction(fields).Payload()); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // NewReply returns a reply Transaction with fields for the ClientConn
 func (cc *ClientConn) NewReply(t *Transaction, fields ...Field) Transaction {
 	reply := t.ReplyTransaction(fields)
 	reply.clientID = cc.ID
 
 	return reply
+}
+
+// NewReply returns a reply Transaction with fields for the ClientConn
+func (cc *ClientConn) NewErrReply(t *Transaction, errMsg string) Transaction {
+	return 	Transaction{
+		clientID:  cc.ID,
+		Flags:     0x00,
+		IsReply:   0x01,
+		Type:      []byte{0, 0},
+		ID:        t.ID,
+		ErrorCode: []byte{0, 0, 0, 1},
+		Fields: []Field{
+			NewField(fieldError, []byte(errMsg)),
+		},
+	}
 }

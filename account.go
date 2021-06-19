@@ -11,6 +11,7 @@ type Account struct {
 	Access   *[]byte `yaml:"Access"` // 8 byte bitmap
 }
 
+// Payload marshals an account to byte slice
 // Example:
 //	00 04 // fieldCount?
 //	00 66 // 102 - fieldUserName

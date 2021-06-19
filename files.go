@@ -42,13 +42,12 @@ func fileCreatorFromFilename(fn string) string {
 	return code
 }
 
-// TODO: Return an error
-func GetFileNameList(filePath string) []Field {
+func getFileNameList(filePath string) ([]Field, error) {
 	var fields []Field
 
 	files, err := ioutil.ReadDir(filePath)
 	if err != nil {
-		return fields
+		return fields, nil
 	}
 
 	for _, file := range files {
@@ -85,7 +84,7 @@ func GetFileNameList(filePath string) []Field {
 		fields = append(fields, field)
 	}
 
-	return fields
+	return fields, nil
 }
 
 func CalcTotalSize(filePath string) ([]byte, error) {
