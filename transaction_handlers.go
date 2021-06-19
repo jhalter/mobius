@@ -154,6 +154,9 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Name:    "tranJoinChat",
 		Handler: HandleLeaveChat,
 	},
+	tranNotifyDeleteUser: {
+		Name: "tranNotifyDeleteUser",
+	},
 	tranListUsers: {
 		Access:  accessOpenUser,
 		DenyMsg: "You are not allowed to view accounts.",
@@ -216,6 +219,8 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleSetFileInfo,
 	},
 	tranSetUser: {
+		Access: accessModifyUser,
+		DenyMsg: "You are not allowed to modify accounts.",
 		Name:    "tranSetUser",
 		Handler: HandleSetUser,
 	},
@@ -230,11 +235,10 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleUploadFolder,
 	},
 	tranUserBroadcast: {
+		Access:  accessBroadcast,
+		DenyMsg: "You are not allowed to send broadcast messages.",
 		Name:    "tranUserBroadcast",
 		Handler: HandleUserBroadcast,
-	},
-	tranNotifyDeleteUser: {
-		Name: "tranNotifyDeleteUser",
 	},
 }
 
@@ -520,11 +524,6 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 	// Notify connected clients logged in as the user of the new access level
 	for _, c := range cc.Server.Clients {
 		if c.Account.Login == userLogin {
-			// TODO: Re-enable this
-			//newT := NewTransaction(
-			//	tranUserAccess, 333, []Field{NewField(fieldUserAccess, newAccessLvl)},
-			//)
-			//
 			newT := NewNewTransaction(tranUserAccess, c.ID, NewField(fieldUserAccess, newAccessLvl))
 
 			res = append(res, *newT)

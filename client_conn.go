@@ -191,9 +191,9 @@ func (cc *ClientConn) NewReply(t *Transaction, fields ...Field) Transaction {
 	return reply
 }
 
-// NewReply returns a reply Transaction with fields for the ClientConn
+// NewErrReply returns an error reply Transaction with errMsg
 func (cc *ClientConn) NewErrReply(t *Transaction, errMsg string) Transaction {
-	return 	Transaction{
+	return Transaction{
 		clientID:  cc.ID,
 		Flags:     0x00,
 		IsReply:   0x01,
