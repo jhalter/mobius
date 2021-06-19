@@ -125,7 +125,8 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleGetNewsCatNameList,
 	},
 	tranGetUser: {
-		//Access: accessOpenUser,
+		Access: accessOpenUser,
+		DenyMsg: "You are not allowed to view accounts.",
 		Name:    "tranGetUser",
 		Handler: HandleGetUser,
 	},
@@ -135,6 +136,8 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleGetUserNameList,
 	},
 	tranInviteNewChat: {
+		Access: accessOpenChat,
+		DenyMsg: "You are not allowed to request private chat.",
 		Name:    "tranInviteNewChat",
 		Handler: HandleInviteNewChat,
 	},
@@ -202,6 +205,8 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleRejectChatInvite,
 	},
 	tranSendInstantMsg: {
+		//Access: accessSendPrivMsg,
+		//DenyMsg: "You are not allowed to send private messages",
 		Name:    "tranSendInstantMsg",
 		Handler: HandleSendInstantMsg,
 	},
@@ -219,7 +224,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleSetFileInfo,
 	},
 	tranSetUser: {
-		Access: accessModifyUser,
+		Access:  accessModifyUser,
 		DenyMsg: "You are not allowed to modify accounts.",
 		Name:    "tranSetUser",
 		Handler: HandleSetUser,
@@ -511,21 +516,29 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 	account.Access = &newAccessLvl
 	account.Name = userName
 
+	// If the password field is cleared in the Hotline edit user UI, the SetUser transaction does
+	// not include fieldUserPassword
+	if t.GetField(fieldUserPassword).Data == nil {
+		account.Password = hashAndSalt([]byte(""))
+	}
 	if len(t.GetField(fieldUserPassword).Data) > 1 {
 		account.Password = hashAndSalt(t.GetField(fieldUserPassword).Data)
 	}
 
 	file := cc.Server.ConfigDir + "Users/" + userLogin + ".yaml"
-	out, _ := yaml.Marshal(&account)
+	out, err := yaml.Marshal(&account)
+	if err != nil {
+		return res, err
+	}
 	if err := ioutil.WriteFile(file, out, 0666); err != nil {
-		return []Transaction{}, err
+		return res, err
 	}
 
 	// Notify connected clients logged in as the user of the new access level
 	for _, c := range cc.Server.Clients {
 		if c.Account.Login == userLogin {
+			// Note: comment out these two lines to test server-side deny messages
 			newT := NewNewTransaction(tranUserAccess, c.ID, NewField(fieldUserAccess, newAccessLvl))
-
 			res = append(res, *newT)
 
 			flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*c.Flags)))
@@ -551,7 +564,7 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 				),
 			)
 			if err != nil {
-				panic(err)
+				return res, err
 			}
 		}
 	}
@@ -800,23 +813,19 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 }
 
 func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if cc.Authorize(accessDisconUser) == false {
-		// TODO: Reply with server message:
-		// msg := "You are not allowed to disconnect users."
-		return []Transaction{}, nil
-	}
-
 	clientConn := cc.Server.Clients[binary.BigEndian.Uint16(t.GetField(fieldUserID).Data)]
 
-	if err := clientConn.Connection.Close(); err != nil {
-		return []Transaction{}, err
+	if authorize(clientConn.Account.Access, accessCannotBeDiscon) {
+		res = append(res,  cc.NewErrReply(t, clientConn.Account.Login + " is not allowed to be disconnected."))
+		return res, err
 	}
 
-	_, err = cc.Connection.Write(
-		t.ReplyTransaction([]Field{}).Payload(),
-	)
+	if err := clientConn.Connection.Close(); err != nil {
+		return res, err
+	}
 
-	return []Transaction{}, err
+	res = append(res, cc.NewReply(t))
+	return res, err
 }
 
 func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
