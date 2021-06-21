@@ -280,6 +280,8 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 		},
 	)
 
+	cc.Server.mux.Lock()
+	defer cc.Server.mux.Unlock()
 	for _, c := range sortedClients(cc.Server.Clients) {
 		// Filter out clients that do not have the read chat permission
 		if authorize(c.Account.Access, accessReadChat) {
@@ -1247,28 +1249,31 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction,
 	*cc.Icon = t.GetField(fieldUserIconID).Data
 	*cc.UserName = t.GetField(fieldUserName).Data
 
+	// the options field is only passed by the client versions > 1.2.3.
 	options := t.GetField(fieldOptions).Data
-	optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
 
-	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*cc.Flags)))
+	if options != nil {
+		optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
+		flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*cc.Flags)))
 
-	// Check refuse private PM option
-	if optBitmap.Bit(refusePM) == 1 {
-		flagBitmap.SetBit(flagBitmap, userFlagRefusePM, 1)
-		binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
-	}
+		// Check refuse private PM option
+		if optBitmap.Bit(refusePM) == 1 {
+			flagBitmap.SetBit(flagBitmap, userFlagRefusePM, 1)
+			binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
+		}
 
-	// Check refuse private chat option
-	if optBitmap.Bit(refuseChat) == 1 {
-		flagBitmap.SetBit(flagBitmap, userFLagRefusePChat, 1)
-		binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
-	}
+		// Check refuse private chat option
+		if optBitmap.Bit(refuseChat) == 1 {
+			flagBitmap.SetBit(flagBitmap, userFLagRefusePChat, 1)
+			binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
+		}
 
-	// Check auto response
-	if optBitmap.Bit(autoResponse) == 1 {
-		*cc.AutoReply = t.GetField(fieldAutomaticResponse).Data
-	} else {
-		*cc.AutoReply = []byte{}
+		// Check auto response
+		if optBitmap.Bit(autoResponse) == 1 {
+			*cc.AutoReply = t.GetField(fieldAutomaticResponse).Data
+		} else {
+			*cc.AutoReply = []byte{}
+		}
 	}
 
 	// Notify all clients of updated user info

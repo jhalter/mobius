@@ -211,9 +211,8 @@ func NewServer(configDir string) (*Server, error) {
 						),
 					)
 					if err != nil {
-						panic(err)
+						server.Logger.Errorw("err", err)
 					}
-
 				}
 			}
 			server.mux.Unlock()
@@ -736,7 +735,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 
 			ffo, err := NewFlattenedFileObject(strings.Join(splitPath[:len(splitPath)-1], "/"), info.Name())
 			if err != nil {
-				panic(err)
+				return err
 			}
 			s.Logger.Infow("File download started",
 				"fileName", info.Name(),

@@ -66,7 +66,7 @@ func getFileNameList(filePath string) ([]Field, error) {
 
 			dir, err := ioutil.ReadDir(filePath + "/" + file.Name())
 			if err != nil {
-				panic(err)
+				return fields, err
 			}
 			fileSize = uint32(len(dir))
 		}
