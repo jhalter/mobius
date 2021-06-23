@@ -256,6 +256,14 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 	formattedMsg := fmt.Sprintf("%.13s:  %s\r", trunc, t.GetField(fieldData).Data)
 
 	chatID := t.GetField(fieldChatID).Data
+
+	// By holding the option key, Hotline chat allows users to send /me formatted messages like:
+	// *** Halcyon does stuff
+	// This is indicated by the presence of the optional field fieldChatOptions in the transaction payload
+	if t.GetField(fieldChatOptions).Data != nil {
+		formattedMsg = fmt.Sprintf("*** %s %s\r", *cc.UserName, t.GetField(fieldData).Data)
+	}
+
 	// a non-nil chatID indicates the message belongs to a private chat
 	if chatID != nil {
 		chatInt := binary.BigEndian.Uint32(chatID)
@@ -263,7 +271,6 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 
 		// send the message to all connected clients of the private chat
 		for _, c := range privChat.ClientConn {
-			//replyTran.clientID = c.ID
 			res = append(res, *NewNewTransaction(
 				tranChatMsg,
 				c.ID,
