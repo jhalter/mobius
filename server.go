@@ -391,6 +391,8 @@ func (s *Server) loadFlatNews(flatNewsPath string) {
 	}
 }
 
+const minTransactionLen = 22
+
 func (s *Server) HandleConnection(conn net.Conn) error {
 	c := s.NewClientConn(conn)
 	defer c.Disconnect()
@@ -400,12 +402,18 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 	}
 
 	buf := make([]byte, 1024)
-	_, err := conn.Read(buf)
+	readLen, err := conn.Read(buf)
+	if readLen < minTransactionLen {
+		return err
+	}
 	if err != nil {
 		return err
 	}
 
-	clientLogin := ReadTransaction(buf)
+	clientLogin, err := ReadTransaction(buf)
+	if err != nil {
+		return err
+	}
 	encodedLogin := clientLogin.GetField(fieldUserLogin).Data
 	encodedPassword := clientLogin.GetField(fieldUserPassword).Data
 	*c.Version = clientLogin.GetField(fieldVersion).Data
@@ -494,7 +502,12 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 		if err != nil {
 			return err
 		}
-		transactions := ReadTransactions(buf[:readLen])
+		transactions, err := ReadTransactions(buf[:readLen])
+		if err != nil {
+			c.Server.Logger.Errorw(
+				"Error handling transaction", "err", err,
+			)
+		}
 
 		for _, t := range transactions {
 			err := c.handleTransaction(&t)

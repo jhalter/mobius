@@ -3,6 +3,7 @@ package hotline
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"gopkg.in/yaml.v2"
@@ -125,7 +126,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleGetNewsCatNameList,
 	},
 	tranGetUser: {
-		Access: accessOpenUser,
+		Access:  accessOpenUser,
 		DenyMsg: "You are not allowed to view accounts.",
 		Name:    "tranGetUser",
 		Handler: HandleGetUser,
@@ -136,7 +137,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleGetUserNameList,
 	},
 	tranInviteNewChat: {
-		Access: accessOpenChat,
+		Access:  accessOpenChat,
 		DenyMsg: "You are not allowed to request private chat.",
 		Name:    "tranInviteNewChat",
 		Handler: HandleInviteNewChat,
@@ -663,6 +664,9 @@ func HandleUserBroadcast(cc *ClientConn, t *Transaction) (res []Transaction, err
 
 func HandleGetClientConnInfoText(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	clientConn := cc.Server.Clients[binary.BigEndian.Uint16(t.GetField(fieldUserID).Data)]
+	if clientConn == nil {
+		return res, errors.New("invalid client")
+	}
 
 	// TODO: Implement non-hardcoded values
 	template := `Nickname:   %s
@@ -691,7 +695,8 @@ None.
 None.
 
 	`
-	template = fmt.Sprintf(template, *clientConn.UserName, clientConn.Account.Name, clientConn.Account.Login, clientConn.Connection.RemoteAddr().String())
+	spew.Dump(clientConn)
+	template = fmt.Sprintf(template, clientConn.UserName, clientConn.Account.Name, clientConn.Account.Login, clientConn.Connection.RemoteAddr().String())
 	template = strings.Replace(template, "\n", "\r", -1)
 
 	res = append(res, cc.NewReply(t,
@@ -818,7 +823,7 @@ func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, er
 	clientConn := cc.Server.Clients[binary.BigEndian.Uint16(t.GetField(fieldUserID).Data)]
 
 	if authorize(clientConn.Account.Access, accessCannotBeDiscon) {
-		res = append(res,  cc.NewErrReply(t, clientConn.Account.Login + " is not allowed to be disconnected."))
+		res = append(res, cc.NewErrReply(t, clientConn.Account.Login+" is not allowed to be disconnected."))
 		return res, err
 	}
 
@@ -1122,6 +1127,8 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 
 	transactionRef := cc.Server.NewTransactionRef()
 	data := binary.BigEndian.Uint32(transactionRef)
+
+	cc.Server.Logger.Infow("File download", "path", filePath)
 
 	cc.Server.FileTransfers[data] = &FileTransfer{
 		FileName:        fileName,

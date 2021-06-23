@@ -2,6 +2,8 @@ package hotline
 
 import (
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"math/rand"
 )
 
@@ -115,10 +117,13 @@ func NewTransaction(t, _ int, f []Field) Transaction {
 }
 
 // ReadTransaction parses a byte slice into a struct
-func ReadTransaction(buf []byte) *Transaction {
+func ReadTransaction(buf []byte) (*Transaction, error) {
+	if len(buf) < minTransactionLen {
+		return nil, errors.New("invalid transaction: too small")
+	}
 	fields, err := ReadFields(buf[20:22], buf[22:])
 	if err != nil {
-		// TODO
+		return nil, err
 	}
 
 	return &Transaction{
@@ -131,45 +136,41 @@ func ReadTransaction(buf []byte) *Transaction {
 		DataSize:   buf[16:20],
 		ParamCount: buf[20:22],
 		Fields:     fields,
-	}
+	}, nil
 }
 
 func (t *Transaction) uint32ID() uint32 {
 	return binary.BigEndian.Uint32(t.ID)
 }
 
-func ReadTransactions(buf []byte) []Transaction {
+func ReadTransactions(buf []byte) ([]Transaction, error) {
 	var transactions []Transaction
 
 	bufLen := len(buf)
 
 	var bytesRead = 0
 	for bytesRead < bufLen {
-		t := ReadTransaction(buf[bytesRead:])
+		t, err := ReadTransaction(buf[bytesRead:])
+		if err != nil {
+			return []Transaction{}, err
+		}
 		bytesRead += len(t.Payload())
 
 		transactions = append(transactions, *t)
 	}
 
-	return transactions
+	return transactions, nil
 }
 
-//func FindTransactions(id uint16, transactions []Transaction) (Transaction, error) {
-//	bs := make([]byte, 2)
-//	binary.BigEndian.PutUint16(bs, id)
-//
-//	for _, t := range transactions {
-//		fmt.Printf("got: %#v, want: %#v\n", t.Type, bs)
-//		if bytes.Compare(t.Type, bs) == 0 {
-//			return t, nil
-//		}
-//	}
-//
-//	return Transaction{}, fmt.Errorf("transaction type %v not found", id)
-//}
-
+const minFieldLen = 4
 func ReadFields(paramCount []byte, buf []byte) ([]Field, error) {
 	paramCountInt := int(binary.BigEndian.Uint16(paramCount))
+
+	fmt.Printf("len(paramCount) %v\n", len(paramCount))
+	if paramCountInt > 0 && len(buf) < minFieldLen {
+		return []Field{}, fmt.Errorf("invalid field length %v", len(buf))
+	}
+
 
 	// A Field consists of:
 	// ID: 2 bytes

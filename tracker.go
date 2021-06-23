@@ -28,6 +28,9 @@ import (
 //				Description	size		Description of the server
 
 func (s *Server) register(tracker string) error {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+
 	name := []byte(s.Config.Name)
 	description := []byte(s.Config.Description)
 
