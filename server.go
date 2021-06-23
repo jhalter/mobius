@@ -27,6 +27,7 @@ import (
 
 const userIdleSeconds = 300
 const idleCheckInterval = 10
+const trackerUpdateInterval = 300
 
 type Server struct {
 	Addr          int
@@ -176,12 +177,18 @@ func NewServer(configDir string) (*Server, error) {
 	*server.NextGuestID = 1
 
 	if server.Config.EnableTrackerRegistration == true {
-		for _, t := range server.Config.Trackers {
-			server.Logger.Infof("Registering with tracker %v", t)
-			if err := server.RegisterWithTracker(t); err != nil {
-				server.Logger.Errorw("unable to register with tracker %v", "error", err)
+		go func() {
+			for {
+				for _, t := range server.Config.Trackers {
+					server.Logger.Infof("Registering with tracker %v", t)
+					if err := server.register(t); err != nil {
+						server.Logger.Errorw("unable to register with tracker %v", "error", err)
+					}
+				}
+
+				time.Sleep(trackerUpdateInterval * time.Second)
 			}
-		}
+		}()
 	}
 
 	// Start Client Keepalive go routine

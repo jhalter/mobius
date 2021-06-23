@@ -116,6 +116,11 @@ func NewTransaction(t, _ int, f []Field) Transaction {
 
 // ReadTransaction parses a byte slice into a struct
 func ReadTransaction(buf []byte) *Transaction {
+	fields, err := ReadFields(buf[20:22], buf[22:])
+	if err != nil {
+		// TODO
+	}
+
 	return &Transaction{
 		Flags:      buf[0],
 		IsReply:    buf[1],
@@ -125,7 +130,7 @@ func ReadTransaction(buf []byte) *Transaction {
 		TotalSize:  buf[12:16],
 		DataSize:   buf[16:20],
 		ParamCount: buf[20:22],
-		Fields:     ReadFields(buf[20:22], buf[22:]),
+		Fields:     fields,
 	}
 }
 
@@ -163,7 +168,7 @@ func ReadTransactions(buf []byte) []Transaction {
 //	return Transaction{}, fmt.Errorf("transaction type %v not found", id)
 //}
 
-func ReadFields(paramCount []byte, buf []byte) []Field {
+func ReadFields(paramCount []byte, buf []byte) ([]Field, error) {
 	paramCountInt := int(binary.BigEndian.Uint16(paramCount))
 
 	// A Field consists of:
@@ -186,7 +191,7 @@ func ReadFields(paramCount []byte, buf []byte) []Field {
 		buf = buf[fieldSizeInt+4:]
 	}
 
-	return fields
+	return fields, nil
 }
 
 func (t Transaction) Payload() []byte {

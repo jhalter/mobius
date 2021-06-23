@@ -3,6 +3,7 @@ package hotline
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 )
 
 type Transfer struct {
@@ -18,6 +19,10 @@ func NewReadTransfer(b []byte) (Transfer, error) {
 
 	if err := binary.Read(r, binary.BigEndian, &decodedEvent); err != nil {
 		return decodedEvent, err
+	}
+
+	if decodedEvent.Protocol != [4]byte{0x48, 0x54, 0x58, 0x46} {
+		return decodedEvent, errors.New("invalid protocol")
 	}
 
 	return decodedEvent, nil
