@@ -81,7 +81,6 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 	// Check if user was away before sending this transaction; if so, this transaction
 	// indicates they are no longer idle, so notify all clients to clear the away flag
 	if *cc.IdleTime > userIdleSeconds && requestNum != tranKeepAlive {
-		logger.Infow("User is no longer away")
 		flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*cc.Flags)))
 		flagBitmap.SetBit(flagBitmap, userFlagAway, 0)
 		binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
@@ -101,7 +100,7 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 			),
 		)
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		return nil
@@ -151,16 +150,19 @@ func (cc ClientConn) Disconnect() {
 	)
 
 	//TODO: Do we really need to send a newline to all connected clients?
-	//cc.Server.NotifyAll(
-	//	NewTransaction(
-	//		tranChatMsg, 3,
-	//		[]Field{
-	//			NewField(fieldData, []byte("\r")),
-	//		},
-	//	),
-	//)
+	cc.Server.NotifyAll(
+		NewTransaction(
+			tranChatMsg, 3,
+			[]Field{
+				NewField(fieldData, []byte("\r")),
+			},
+		),
+	)
 
-	_ = cc.Connection.Close()
+	err := cc.Connection.Close()
+	if err != nil {
+		cc.Server.Logger.Errorw("error closing client connection", "RemoteAddr", cc.Connection.RemoteAddr())
+	}
 }
 
 // NotifyOthers sends transaction t to other clients connected to the server

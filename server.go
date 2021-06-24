@@ -44,7 +44,8 @@ type Server struct {
 	NextGuestID   *uint16
 	outbox        chan Transaction
 
-	mux sync.Mutex
+	mux         sync.Mutex
+	flatNewsMux sync.Mutex
 }
 
 type PrivateChat struct {
@@ -53,7 +54,10 @@ type PrivateChat struct {
 }
 
 func ListenAndServe(addr int, configDir string) error {
-	srv, _ := NewServer(configDir)
+	srv, err := NewServer(configDir)
+	if err != nil {
+		return err
+	}
 	srv.Addr = addr
 
 	return srv.ListenAndServe()
@@ -107,6 +111,8 @@ func (s *Server) SendTransactions() error {
 
 		s.mux.Lock()
 		client := s.Clients[clientID]
+		userName := string(*client.UserName)
+		login := client.Account.Login
 		s.mux.Unlock()
 
 		handler := TransactionHandlers[requestNum]
@@ -114,11 +120,11 @@ func (s *Server) SendTransactions() error {
 		var err error
 		var n int
 		if n, err = client.Connection.Write(t.Payload()); err != nil {
-			logger.Error("ohno")
+			return err
 		}
-		logger.Debugw("Sent Transaction",
-			"name", string(*client.UserName),
-			"login", client.Account.Login,
+		s.Logger.Debugw("Sent Transaction",
+			"name", userName,
+			"login", login,
 			"IsReply", t.IsReply,
 			"type", handler.Name,
 			"bytes", n,
@@ -167,11 +173,25 @@ func NewServer(configDir string) (*Server, error) {
 		outbox:        make(chan Transaction),
 	}
 
-	server.loadAgreement(configDir + "Agreement.txt")
-	server.loadFlatNews(configDir + "MessageBoard.txt")
-	server.loadThreadedNews(configDir + "ThreadedNews.yaml")
-	server.loadConfig(configDir + "config.yaml")
-	server.loadAccounts(configDir + "Users/")
+	err := server.loadAgreement(configDir + "Agreement.txt")
+	if err != nil {
+		return nil, err
+	}
+	err = server.loadFlatNews(configDir + "MessageBoard.txt")
+	if err != nil {
+		return nil, err
+	}
+	err = server.loadThreadedNews(configDir + "ThreadedNews.yaml")
+	if err != nil {
+		return nil, err
+	}
+	err = server.loadConfig(configDir + "config.yaml")
+	if err != nil {
+		return nil, err
+	}
+	if err := server.loadAccounts(configDir + "Users/"); err != nil {
+		return nil, err
+	}
 	server.Config.FileRoot = configDir + "Files/"
 
 	*server.NextGuestID = 1
@@ -328,67 +348,80 @@ func (s *Server) connectedUsers() []Field {
 	return connectedUsers
 }
 
-func (s *Server) loadThreadedNews(threadedNewsPath string) {
+// loadThreadedNews loads the threaded news data from disk
+func (s *Server) loadThreadedNews(threadedNewsPath string) error {
 	fh, err := os.Open(threadedNewsPath)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	news := &ThreadedNews{}
 	decoder := yaml.NewDecoder(fh)
 	decoder.SetStrict(true)
 	err = decoder.Decode(news)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	s.ThreadedNews = news
+	return nil
 }
 
-func (s *Server) loadAccounts(userDir string) {
+// loadAccounts loads account data from disk
+func (s *Server) loadAccounts(userDir string) error {
 	matches, err := filepath.Glob(path.Join(userDir, "*.yaml"))
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	for _, file := range matches {
-		fh, _ := os.Open(file)
+		fh, err := os.Open(file)
+		if err != nil {
+			return err
+		}
 
 		account := Account{}
 		decoder := yaml.NewDecoder(fh)
 		decoder.SetStrict(true)
 		err = decoder.Decode(&account)
+		if err != nil {
+			return err
+		}
 
 		s.Accounts[account.Login] = &account
 	}
+	return nil
 }
 
-func (s *Server) loadConfig(path string) {
+func (s *Server) loadConfig(path string) error {
 	fh, err := os.Open(path)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	decoder := yaml.NewDecoder(fh)
 	decoder.SetStrict(true)
 	err = decoder.Decode(s.Config)
 	if err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }
 
-func (s *Server) loadAgreement(agreementPath string) {
+func (s *Server) loadAgreement(agreementPath string) error {
 	var err error
 	s.Agreement, err = ioutil.ReadFile(agreementPath)
 	if err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }
 
-func (s *Server) loadFlatNews(flatNewsPath string) {
+func (s *Server) loadFlatNews(flatNewsPath string) error {
 	var err error
 	s.FlatNews, err = ioutil.ReadFile(flatNewsPath)
 	if err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }
 
 const minTransactionLen = 22
@@ -410,10 +443,12 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 		return err
 	}
 
-	clientLogin, err := ReadTransaction(buf)
+	clientLogin, err := ReadTransaction(buf[:readLen])
 	if err != nil {
 		return err
 	}
+	spew.Dump(clientLogin)
+
 	encodedLogin := clientLogin.GetField(fieldUserLogin).Data
 	encodedPassword := clientLogin.GetField(fieldUserPassword).Data
 	*c.Version = clientLogin.GetField(fieldVersion).Data
@@ -502,7 +537,7 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 		if err != nil {
 			return err
 		}
-		transactions, err := ReadTransactions(buf[:readLen])
+		transactions, err := readTransactions(buf[:readLen])
 		if err != nil {
 			c.Server.Logger.Errorw(
 				"Error handling transaction", "err", err,
@@ -584,10 +619,13 @@ func (s *Server) TransferFile(conn net.Conn) error {
 	case FileDownload:
 		fullFilePath := fmt.Sprintf("./%v/%v", s.Config.FileRoot+string(fileTransfer.FilePath), string(fileTransfer.FileName))
 
-		ffo, _ := NewFlattenedFileObject(
+		ffo, err := NewFlattenedFileObject(
 			s.Config.FileRoot+string(fileTransfer.FilePath),
 			string(fileTransfer.FileName),
 		)
+		if err != nil {
+			return err
+		}
 
 		s.Logger.Infow("File download started", "transactionRef", fileTransfer.ReferenceNumber, "RemoteAddr", conn.RemoteAddr().String())
 

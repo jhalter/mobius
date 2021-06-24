@@ -47,10 +47,7 @@ func TestCalcTotalSize(t *testing.T) {
 	cwd, _ := os.Getwd()
 	defer os.Chdir(cwd)
 
-	err := os.Chdir("test/config/Files")
-	if err != nil {
-		panic(err)
-	}
+	_ = os.Chdir("test/config/Files")
 
 	type args struct {
 		filePath string

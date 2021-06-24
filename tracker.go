@@ -28,14 +28,13 @@ import (
 //				Description	size		Description of the server
 
 func (s *Server) register(tracker string) error {
-	s.mux.Lock()
-	defer s.mux.Unlock()
-
 	name := []byte(s.Config.Name)
 	description := []byte(s.Config.Description)
 
 	userCount := make([]byte, 2)
+	s.mux.Lock()
 	binary.BigEndian.PutUint16(userCount, uint16(len(s.Clients)))
+	s.mux.Unlock()
 
 	passId := []byte{0xd3, 0x8b, 0xb9, 0xc2} // TODO: remove hardcode
 	payload := []byte{

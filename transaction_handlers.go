@@ -288,8 +288,6 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 		},
 	)
 
-	cc.Server.mux.Lock()
-	defer cc.Server.mux.Unlock()
 	for _, c := range sortedClients(cc.Server.Clients) {
 		// Filter out clients that do not have the read chat permission
 		if authorize(c.Account.Access, accessReadChat) {
@@ -792,9 +790,12 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	return res, err
 }
 
+// HandleTranOldPostNews updates the flat news
+// Fields used in this request:
+// 101	Data
 func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	cc.Server.mux.Lock()
-	defer cc.Server.mux.Unlock()
+	cc.Server.flatNewsMux.Lock()
+	defer cc.Server.flatNewsMux.Unlock()
 
 	current := time.Now()
 	formattedDate := fmt.Sprintf("%s%02d %d:%d", current.Month().String()[:3], current.Day(), current.Hour(), current.Minute())
@@ -802,17 +803,16 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 	newsPost := fmt.Sprintf(newsTemplate, *cc.UserName, formattedDate, t.GetField(fieldData).Data)
 	newsPost = strings.Replace(newsPost, "\n", "\r", -1)
 
+	// update news in memory
 	cc.Server.FlatNews = append([]byte(newsPost), cc.Server.FlatNews...)
 
-	if _, err := cc.Connection.Write(t.ReplyTransaction([]Field{}).Payload()); err != nil {
-		return res, err
-	}
-
+	// update news on disk
 	err = ioutil.WriteFile(cc.Server.ConfigDir+"MessageBoard.txt", cc.Server.FlatNews, 0644)
 	if err != nil {
 		return res, err
 	}
 
+	// Notify all clients of updated news
 	_ = cc.Server.NotifyAll(
 		NewTransaction(
 			tranNewMsg, 0,
@@ -822,7 +822,7 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 		),
 	)
 
-	// Notify all clients of updated news
+	res = append(res, cc.NewReply(t))
 	return res, err
 }
 

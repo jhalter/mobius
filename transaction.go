@@ -118,10 +118,18 @@ func NewTransaction(t, _ int, f []Field) Transaction {
 
 // ReadTransaction parses a byte slice into a struct
 func ReadTransaction(buf []byte) (*Transaction, error) {
+	totalSize := binary.BigEndian.Uint32(buf[12:16])
+	dataSize := binary.BigEndian.Uint32(buf[16:20])
+
+	fmt.Printf("Transaction totalSize: %v, dataSize: %v\n", totalSize, dataSize)
+	// the buf may include extra bytes that are not part of the transaction
+	// tranLen represents the length of bytes that are part of the transaction
+	tranLen := 20 + dataSize
+
 	if len(buf) < minTransactionLen {
 		return nil, errors.New("invalid transaction: too small")
 	}
-	fields, err := ReadFields(buf[20:22], buf[22:])
+	fields, err := ReadFields(buf[20:22], buf[22:tranLen])
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +151,7 @@ func (t *Transaction) uint32ID() uint32 {
 	return binary.BigEndian.Uint32(t.ID)
 }
 
-func ReadTransactions(buf []byte) ([]Transaction, error) {
+func readTransactions(buf []byte) ([]Transaction, error) {
 	var transactions []Transaction
 
 	bufLen := len(buf)
@@ -165,12 +173,9 @@ func ReadTransactions(buf []byte) ([]Transaction, error) {
 const minFieldLen = 4
 func ReadFields(paramCount []byte, buf []byte) ([]Field, error) {
 	paramCountInt := int(binary.BigEndian.Uint16(paramCount))
-
-	fmt.Printf("len(paramCount) %v\n", len(paramCount))
 	if paramCountInt > 0 && len(buf) < minFieldLen {
 		return []Field{}, fmt.Errorf("invalid field length %v", len(buf))
 	}
-
 
 	// A Field consists of:
 	// ID: 2 bytes
@@ -178,9 +183,16 @@ func ReadFields(paramCount []byte, buf []byte) ([]Field, error) {
 	// Data: FieldSize number of bytes
 	var fields []Field
 	for i := 0; i < paramCountInt; i++ {
+		if len(buf) < minFieldLen {
+			return []Field{}, fmt.Errorf("invalid field length %v", len(buf))
+		}
 		fieldID := buf[0:2]
 		fieldSize := buf[2:4]
 		fieldSizeInt := int(binary.BigEndian.Uint16(buf[2:4]))
+		expectedLen := minFieldLen + fieldSizeInt
+		if len(buf) < expectedLen {
+			return []Field{}, fmt.Errorf("field length too short")
+		}
 		fieldData := buf[4 : 4+fieldSizeInt]
 
 		fields = append(fields, Field{
@@ -190,6 +202,10 @@ func ReadFields(paramCount []byte, buf []byte) ([]Field, error) {
 		})
 
 		buf = buf[fieldSizeInt+4:]
+	}
+
+	if len(buf) != 0 {
+		return []Field{}, fmt.Errorf("extra field bytes")
 	}
 
 	return fields, nil
