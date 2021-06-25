@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"github.com/davecgh/go-spew/spew"
 	"golang.org/x/crypto/bcrypt"
 	"math/big"
 	"net"
@@ -45,10 +44,26 @@ func (cc *ClientConn) send(t int, fields ...Field) {
 
 func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 	requestNum := binary.BigEndian.Uint16(transaction.Type)
-
 	if handler, ok := TransactionHandlers[requestNum]; ok {
-		for _, field := range handler.RequiredFields {
-			spew.Dump(transaction.GetField(field.ID))
+		for _, reqField := range handler.RequiredFields {
+			field := transaction.GetField(reqField.ID)
+
+			// Validate that required field is present
+			if field.ID == nil {
+				logger.Infow(
+					"Missing required field",
+					"Account", cc.Account.Login, "UserName", string(*cc.UserName), "RequestType", handler.Name, "FieldID", reqField.ID,
+				)
+				return nil
+			}
+
+			if len(field.Data) < reqField.minLen {
+				logger.Infow(
+					"Field does not meet minLen",
+					"Account", cc.Account.Login, "UserName", string(*cc.UserName), "RequestType", handler.Name, "FieldID", reqField.ID,
+				)
+				return nil
+			}
 		}
 		if !authorize(cc.Account.Access, handler.Access) {
 			logger.Infow(

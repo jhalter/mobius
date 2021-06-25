@@ -53,10 +53,8 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Name:    "tranChatSend",
 		RequiredFields: []requiredField{
 			{
-				ID: fieldChatID,
-			},
-			{
-				ID: fieldData,
+				ID:     fieldData,
+				minLen: 0,
 			},
 		},
 	},
@@ -219,6 +217,15 @@ var TransactionHandlers = map[uint16]TransactionType{
 		//DenyMsg: "You are not allowed to send private messages",
 		Name:    "tranSendInstantMsg",
 		Handler: HandleSendInstantMsg,
+		RequiredFields: []requiredField{
+			{
+				ID:     fieldData,
+				minLen: 0,
+			},
+			{
+				ID: fieldUserID,
+			},
+		},
 	},
 	tranSetChatSubject: {
 		Name:    "tranSetChatSubject",
@@ -263,7 +270,6 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 	// Truncate long usernames
 	trunc := fmt.Sprintf("%13s", *cc.UserName)
 	formattedMsg := fmt.Sprintf("%.13s:  %s\r", trunc, t.GetField(fieldData).Data)
-
 
 	// By holding the option key, Hotline chat allows users to send /me formatted messages like:
 	// *** Halcyon does stuff
@@ -338,15 +344,16 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 			NewField(fieldOptions, []byte{0, 1}),
 		),
 	)
-	spew.Dump(ID.Data)
-	var otherClient *ClientConn
-	if len(ID.Data) == 4 {
-		otherClient = cc.Server.Clients[uint16(binary.BigEndian.Uint32(ID.Data))]
-	} else if len(ID.Data) == 2 {
-		otherClient = cc.Server.Clients[binary.BigEndian.Uint16(ID.Data)]
-	}
+	id, _ := byteToInt(ID.Data)
+
+	//keys := make([]uint16, 0, len(cc.Server.Clients))
+	//for k := range cc.Server.Clients {
+	//	keys = append(keys, k)
+	//}
+
+	otherClient := cc.Server.Clients[uint16(id)]
 	if otherClient == nil {
-		return res, errors.New("invalid client")
+		return res, errors.New("ohno")
 	}
 
 	// Respond with auto reply if other client has it enabled

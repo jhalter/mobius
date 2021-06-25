@@ -159,7 +159,7 @@ func (s *Server) Serve(ln net.Listener) error {
 func NewServer(configDir string) (*Server, error) {
 	cores := []zapcore.Core{newStdoutCore()}
 	l := zap.New(zapcore.NewTee(cores...))
-	defer l.Sync()
+	defer func() { l.Sync() }()
 	logger = l.Sugar()
 
 	server := Server{
@@ -213,41 +213,43 @@ func NewServer(configDir string) (*Server, error) {
 	}
 
 	// Start Client Keepalive go routine
-	go func() {
-		for {
-			time.Sleep(idleCheckInterval * time.Second)
-			server.mux.Lock()
-
-			for _, c := range server.Clients {
-				*c.IdleTime += 10
-				if *c.IdleTime > userIdleSeconds && c.Idle != true {
-					c.Idle = true
-
-					flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*c.Flags)))
-					flagBitmap.SetBit(flagBitmap, userFlagAway, 1)
-					binary.BigEndian.PutUint16(*c.Flags, uint16(flagBitmap.Int64()))
-
-					err := c.Server.NotifyAll(
-						NewTransaction(
-							tranNotifyChangeUser, 0,
-							[]Field{
-								NewField(fieldUserID, *c.ID),
-								NewField(fieldUserFlags, *c.Flags),
-								NewField(fieldUserName, *c.UserName),
-								NewField(fieldUserIconID, *c.Icon),
-							},
-						),
-					)
-					if err != nil {
-						server.Logger.Errorw("err", err)
-					}
-				}
-			}
-			server.mux.Unlock()
-		}
-	}()
+	go server.keepaliveHandler()
 
 	return &server, nil
+}
+
+func (s *Server) keepaliveHandler (){
+	for {
+		time.Sleep(idleCheckInterval * time.Second)
+		s.mux.Lock()
+
+		for _, c := range s.Clients {
+			*c.IdleTime += 10
+			if *c.IdleTime > userIdleSeconds && c.Idle != true {
+				c.Idle = true
+
+				flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*c.Flags)))
+				flagBitmap.SetBit(flagBitmap, userFlagAway, 1)
+				binary.BigEndian.PutUint16(*c.Flags, uint16(flagBitmap.Int64()))
+
+				err := c.Server.NotifyAll(
+					NewTransaction(
+						tranNotifyChangeUser, 0,
+						[]Field{
+							NewField(fieldUserID, *c.ID),
+							NewField(fieldUserFlags, *c.Flags),
+							NewField(fieldUserName, *c.UserName),
+							NewField(fieldUserIconID, *c.Icon),
+						},
+					),
+				)
+				if err != nil {
+					s.Logger.Errorw("err", err)
+				}
+			}
+		}
+		s.mux.Unlock()
+	}
 }
 
 // NotifyAll sends a transaction to all connected clients.  For example, to notify clients of a new chat message.
@@ -427,7 +429,7 @@ func (s *Server) loadFlatNews(flatNewsPath string) error {
 
 const (
 	minTransactionLen = 22 // minimum length of any transaction
-	handshakeLen = 12      // expected length of a connection handshake
+	handshakeLen      = 12 // expected length of a connection handshake
 )
 
 // handleNewConnection takes a new net.Conn and performs the initial login sequence
@@ -534,8 +536,8 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 		}
 	}
 
-	const readBuffSize = 102400
-	// Main loop where we wait for and take action on client requests
+	const readBuffSize = 102400 // TODO: what should this be?
+	// Infinite loop where take action on incoming client requests until the connection is closed
 	for {
 		buf = make([]byte, readBuffSize)
 		readLen, err := c.Connection.Read(buf)
@@ -543,18 +545,16 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 			return err
 		}
 
-		// Parse the read bytes into a slice of transactions
+		// We may have read multiple requests worth of bytes from Connection.Read.  readTransactions splits them
+		// into a slice of transactions
 		transactions, err := readTransactions(buf[:readLen])
 		if err != nil {
 			c.Server.Logger.Errorw("Error handling transaction", "err", err)
 		}
 
 		for _, t := range transactions {
-			err := c.handleTransaction(&t)
-			if err != nil {
-				c.Server.Logger.Errorw(
-					"Error handling transaction", "err", err,
-				)
+			if err := c.handleTransaction(&t); err != nil {
+				c.Server.Logger.Errorw("Error handling transaction", "err", err)
 			}
 		}
 	}
@@ -606,7 +606,7 @@ const dlFldrAction_ResumeFile = 2
 const dlFldrAction_NextFile = 3
 
 func (s *Server) TransferFile(conn net.Conn) error {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	buf := make([]byte, 1024)
 	if _, err := conn.Read(buf); err != nil {
@@ -757,7 +757,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 
 		i := 0
 
-		filepath.Walk(fullFilePath+"/", func(path string, info os.FileInfo, err error) error {
+		_ = filepath.Walk(fullFilePath+"/", func(path string, info os.FileInfo, err error) error {
 			i += 1
 			subPath := path[basePathLen-2:]
 			logger.Infow("Sending fileheader", "i", i, "path", path, "fullFilePath", fullFilePath, "subPath", subPath, "IsDir", info.IsDir())
@@ -890,7 +890,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				"Folder upload continued",
 				"transactionRef", fmt.Sprintf("%x", fileTransfer.ReferenceNumber),
 				"RemoteAddr", conn.RemoteAddr().String(),
-				"FormattedPath", string(fu.FormattedPath()),
+				"FormattedPath", fu.FormattedPath(),
 				"IsFolder", fmt.Sprintf("%x", fu.IsFolder),
 				"PathItemCount", binary.BigEndian.Uint16(fu.PathItemCount),
 			)
