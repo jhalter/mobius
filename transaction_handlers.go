@@ -705,7 +705,10 @@ func byteToInt(bytes []byte) (int, error) {
 
 func HandleGetClientConnInfoText(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	spew.Dump(t.GetField(fieldUserID).Data)
-	clientConn := cc.Server.Clients[binary.BigEndian.Uint16(t.GetField(fieldUserID).Data)]
+
+	clientID, _ := byteToInt(t.GetField(fieldUserID).Data)
+
+	clientConn := cc.Server.Clients[uint16(clientID)]
 	if clientConn == nil {
 		return res, errors.New("invalid client")
 	}
@@ -749,6 +752,7 @@ None.
 
 func HandleGetUserNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	res = append(res, cc.NewReply(t, cc.Server.connectedUsers()...))
+
 
 	return res, err
 }

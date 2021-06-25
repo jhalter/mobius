@@ -3,7 +3,6 @@ package hotline
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 )
 
 // GuestAccount is the account used when no login is provided for a connection
@@ -28,13 +27,16 @@ type User struct {
 
 func (u User) Payload() []byte {
 	name := []byte(u.Name)
-	spew.Dump(u)
+	//spew.Dump(u)
 	nameLen := make([]byte, 2)
 	binary.BigEndian.PutUint16(nameLen, uint16(len(name)))
 
+	if len(u.Icon) == 4 {
+		u.Icon = u.Icon[2:]
+	}
 
-	out := append(u.ID, u.Icon...)
-	out = append(out, u.Flags...)
+	out := append(u.ID[:2], u.Icon[:2]...)
+	out = append(out, u.Flags[:2]...)
 	out = append(out, nameLen...)
 	out = append(out, name...)
 
