@@ -2,7 +2,6 @@ package hotline
 
 import (
 	"encoding/binary"
-	"fmt"
 )
 
 // GuestAccount is the account used when no login is provided for a connection
@@ -43,13 +42,11 @@ func (u User) Payload() []byte {
 	return out
 }
 
-func DecodeUserString(encodedString []byte) string {
-	var decodedString string
+func DecodeUserString(encodedString []byte) (decodedString string) {
 	for _, char := range encodedString {
 		decodedString += string(rune(255 - uint(char)))
 	}
 
-	fmt.Println(decodedString)
 	return decodedString
 }
 
@@ -57,11 +54,7 @@ func DecodeUserString(encodedString []byte) string {
 func NegatedUserString(encodedString []byte) string {
 	var decodedString string
 	for _, char := range encodedString {
-		// TODO: figure out better way to handle when converting a string to int
-		// returns 2 bytes:
-		// gore> len(string(130))
-		// (int)2
-		decodedString += string(255 - uint8(char))[1:] // halp
+		decodedString += string(255 - uint8(char))[1:]
 	}
 
 	return decodedString

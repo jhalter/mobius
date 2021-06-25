@@ -106,30 +106,35 @@ func (s *Server) ServeFileTransfers(ln net.Listener) error {
 func (s *Server) SendTransactions() error {
 	for {
 		t := <-s.outbox
-		requestNum := binary.BigEndian.Uint16(t.Type)
-		clientID, err := byteToInt(*t.clientID)
-
-		s.mux.Lock()
-		client := s.Clients[uint16(clientID)]
-		userName := string(*client.UserName)
-		login := client.Account.Login
-		s.mux.Unlock()
-
-		handler := TransactionHandlers[requestNum]
-
-		var n int
-		if n, err = client.Connection.Write(t.Payload()); err != nil {
-			return err
-		}
-		s.Logger.Debugw("Sent Transaction",
-			"name", userName,
-			"login", login,
-			"IsReply", t.IsReply,
-			"type", handler.Name,
-			"bytes", n,
-			"remoteAddr", client.Connection.RemoteAddr(),
-		)
+		go s.sendTransaction(t)
 	}
+}
+
+func (s *Server) sendTransaction(t Transaction) error {
+	requestNum := binary.BigEndian.Uint16(t.Type)
+	clientID, err := byteToInt(*t.clientID)
+
+	s.mux.Lock()
+	client := s.Clients[uint16(clientID)]
+	userName := string(*client.UserName)
+	login := client.Account.Login
+	s.mux.Unlock()
+
+	handler := TransactionHandlers[requestNum]
+
+	var n int
+	if n, err = client.Connection.Write(t.Payload()); err != nil {
+		return err
+	}
+	s.Logger.Debugw("Sent Transaction",
+		"name", userName,
+		"login", login,
+		"IsReply", t.IsReply,
+		"type", handler.Name,
+		"bytes", n,
+		"remoteAddr", client.Connection.RemoteAddr(),
+	)
+	return nil
 }
 
 func (s *Server) Serve(ln net.Listener) error {
