@@ -790,6 +790,7 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	bs := make([]byte, 2)
 	binary.BigEndian.PutUint16(bs, *cc.Server.NextGuestID)
 
+	spew.Dump(t)
 	*cc.UserName = t.GetField(fieldUserName).Data
 	*cc.ID = bs
 	*cc.Icon = t.GetField(fieldUserIconID).Data

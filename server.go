@@ -488,8 +488,20 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 		return fmt.Errorf("incorrect login")
 	}
 
-	if string(*c.Version) == "" {
+	fmt.Println("version=-----")
+	spew.Dump(*c.Version)
+	// Hotline 1.2.3 client does not send fieldVersion
+	// Nostalgia client sends ""
+	//if string(*c.Version) == "" {
+	//	*c.UserName = clientLogin.GetField(fieldUserName).Data
+	//	*c.Icon = clientLogin.GetField(fieldUserIconID).Data
+	//}
+	//
+	if clientLogin.GetField(fieldUserName).Data != nil {
 		*c.UserName = clientLogin.GetField(fieldUserName).Data
+	}
+
+	if clientLogin.GetField(fieldUserIconID).Data != nil {
 		*c.Icon = clientLogin.GetField(fieldUserIconID).Data
 	}
 
