@@ -107,17 +107,16 @@ func (s *Server) SendTransactions() error {
 	for {
 		t := <-s.outbox
 		requestNum := binary.BigEndian.Uint16(t.Type)
-		clientID := binary.BigEndian.Uint16(*t.clientID)
+		clientID, err := byteToInt(*t.clientID)
 
 		s.mux.Lock()
-		client := s.Clients[clientID]
+		client := s.Clients[uint16(clientID)]
 		userName := string(*client.UserName)
 		login := client.Account.Login
 		s.mux.Unlock()
 
 		handler := TransactionHandlers[requestNum]
 
-		var err error
 		var n int
 		if n, err = client.Connection.Write(t.Payload()); err != nil {
 			return err
@@ -142,12 +141,14 @@ func (s *Server) Serve(ln net.Listener) error {
 
 		go s.SendTransactions()
 		go func() {
-			if err := s.HandleConnection(conn); err != nil {
+			if err := s.handleNewConnection(conn); err != nil {
 				if err == io.EOF {
 					s.Logger.Infow("Client disconnected", "RemoteAddr", conn.RemoteAddr())
-
 				} else {
-					s.Logger.Errorw("error serving request", "err", err)
+					s.Logger.Errorw("error serving request",
+						"RemoteAddr", conn.RemoteAddr(),
+						"err", err,
+					)
 				}
 			}
 		}()
@@ -424,13 +425,21 @@ func (s *Server) loadFlatNews(flatNewsPath string) error {
 	return nil
 }
 
-const minTransactionLen = 22
+const (
+	minTransactionLen = 22 // minimum length of any transaction
+	handshakeLen = 12      // expected length of a connection handshake
+)
 
-func (s *Server) HandleConnection(conn net.Conn) error {
+// handleNewConnection takes a new net.Conn and performs the initial login sequence
+func (s *Server) handleNewConnection(conn net.Conn) error {
 	c := s.NewClientConn(conn)
 	defer c.Disconnect()
 
-	if err := c.Handshake(); err != nil {
+	handshakeBuf := make([]byte, handshakeLen)
+	if _, err := c.Connection.Read(handshakeBuf); err != nil {
+		return err
+	}
+	if err := c.Handshake(handshakeBuf[:12]); err != nil {
 		return err
 	}
 
@@ -447,7 +456,6 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 	if err != nil {
 		return err
 	}
-	spew.Dump(clientLogin)
 
 	encodedLogin := clientLogin.GetField(fieldUserLogin).Data
 	encodedPassword := clientLogin.GetField(fieldUserPassword).Data
@@ -491,15 +499,11 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 
 	s.Logger.Infow("Client connection received", "login", login, "version", *c.Version, "RemoteAddr", conn.RemoteAddr().String())
 
-	reply := clientLogin.ReplyTransaction(
-		[]Field{
-			NewField(fieldVersion, []byte{0x00, 0xbe}),
-			NewField(fieldCommunityBannerID, []byte{0x00, 0x01}),
-			NewField(fieldServerName, []byte(s.Config.Name)),
-		},
+	s.outbox <- c.NewReply(clientLogin,
+		NewField(fieldVersion, []byte{0x00, 0xbe}),
+		NewField(fieldCommunityBannerID, []byte{0x00, 0x01}),
+		NewField(fieldServerName, []byte(s.Config.Name)),
 	)
-	reply.clientID = c.ID
-	s.outbox <- reply
 
 	// Send user access privs so client UI knows how to behave
 	c.send(tranUserAccess, NewField(fieldUserAccess, *c.Account.Access))
@@ -530,18 +534,19 @@ func (s *Server) HandleConnection(conn net.Conn) error {
 		}
 	}
 
+	const readBuffSize = 102400
 	// Main loop where we wait for and take action on client requests
 	for {
-		buf = make([]byte, 102400)
+		buf = make([]byte, readBuffSize)
 		readLen, err := c.Connection.Read(buf)
 		if err != nil {
 			return err
 		}
+
+		// Parse the read bytes into a slice of transactions
 		transactions, err := readTransactions(buf[:readLen])
 		if err != nil {
-			c.Server.Logger.Errorw(
-				"Error handling transaction", "err", err,
-			)
+			c.Server.Logger.Errorw("Error handling transaction", "err", err)
 		}
 
 		for _, t := range transactions {

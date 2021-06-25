@@ -63,6 +63,12 @@ type Field struct {
 	Data      []byte
 }
 
+type requiredField struct {
+	ID     int
+	minLen int
+	maxLen int
+}
+
 func NewField(id uint16, data []byte) Field {
 	idBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(idBytes, id)

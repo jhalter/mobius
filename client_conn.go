@@ -1,7 +1,10 @@
 package hotline
 
 import (
+	"bytes"
 	"encoding/binary"
+	"errors"
+	"github.com/davecgh/go-spew/spew"
 	"golang.org/x/crypto/bcrypt"
 	"math/big"
 	"net"
@@ -44,6 +47,9 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 	requestNum := binary.BigEndian.Uint16(transaction.Type)
 
 	if handler, ok := TransactionHandlers[requestNum]; ok {
+		for _, field := range handler.RequiredFields {
+			spew.Dump(transaction.GetField(field.ID))
+		}
 		if !authorize(cc.Account.Access, handler.Access) {
 			logger.Infow(
 				"Unauthorized Action",
@@ -121,7 +127,8 @@ func (cc *ClientConn) Authenticate(login string, password []byte) bool {
 }
 
 func (cc *ClientConn) uint16ID() uint16 {
-	return binary.BigEndian.Uint16(*cc.ID)
+	id, _ := byteToInt(*cc.ID)
+	return uint16(id)
 }
 
 // Authorize checks if the user account has the specified permission
@@ -175,13 +182,44 @@ func (cc ClientConn) NotifyOthers(t Transaction) {
 	}
 }
 
-func (cc *ClientConn) Handshake() error {
-	buf := make([]byte, 1024)
-	_, err := cc.Connection.Read(buf)
-	if err != nil {
+type handshake struct {
+	Protocol   [4]byte
+	SubProtol  [4]byte
+	Version    [2]byte
+	SubVersion [2]byte
+}
+
+// Handshake
+// After establishing TCP connection, both client and server start the handshake process
+// in order to confirm that each of them comply with requirements of the other.
+// The information provided in this initial data exchange identifies protocols,
+// and their versions, used in the communication. In the case where, after inspection,
+// the capabilities of one of the subjects do not comply with the requirements of the other,
+// the connection is dropped.
+//
+// The following information is sent to the server:
+// Description		Size 	Data	Note
+// Protocol ID		4		TRTP	0x54525450
+// Sub-protocol ID	4		HOTL	User defined
+// Version			2		1		Currently 1
+// Sub-version		2		2		User defined
+//
+// The server replies with the following:
+// Description		Size 	Data	Note
+// Protocol ID		4		TRTP
+//Error code		4				Error code returned by the server (0 = no error)
+func (cc *ClientConn) Handshake(buf []byte) error {
+	var handshake handshake
+	r := bytes.NewReader(buf)
+	if err := binary.Read(r, binary.BigEndian, &handshake); err != nil {
 		return err
 	}
-	_, err = cc.Connection.Write([]byte{84, 82, 84, 80, 0, 0, 0, 0})
+
+	if handshake.Protocol != [4]byte{0x54, 0x52, 0x54, 0x50} {
+		return errors.New("invalid handshake")
+	}
+
+	_, err := cc.Connection.Write([]byte{84, 82, 84, 80, 0, 0, 0, 0})
 	return err
 }
 

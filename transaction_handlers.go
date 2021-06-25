@@ -16,10 +16,11 @@ import (
 )
 
 type TransactionType struct {
-	Access  int                                                    // Specifies access privilege required to perform the transaction
-	DenyMsg string                                                 // The error reply message when user does not have access
-	Handler func(*ClientConn, *Transaction) ([]Transaction, error) // function for handling the transaction type
-	Name    string                                                 // Name of transaction as it will appear in logging
+	Access         int                                                    // Specifies access privilege required to perform the transaction
+	DenyMsg        string                                                 // The error reply message when user does not have access
+	Handler        func(*ClientConn, *Transaction) ([]Transaction, error) // function for handling the transaction type
+	Name           string                                                 // Name of transaction as it will appear in logging
+	RequiredFields []requiredField
 }
 
 var TransactionHandlers = map[uint16]TransactionType{
@@ -50,6 +51,14 @@ var TransactionHandlers = map[uint16]TransactionType{
 		DenyMsg: "You are not allowed to participate in chat.",
 		Handler: HandleChatSend,
 		Name:    "tranChatSend",
+		RequiredFields: []requiredField{
+			{
+				ID: fieldChatID,
+			},
+			{
+				ID: fieldData,
+			},
+		},
 	},
 	tranDelNewsArt: {
 		Access:  accessNewsDeleteArt,
@@ -255,7 +264,6 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 	trunc := fmt.Sprintf("%13s", *cc.UserName)
 	formattedMsg := fmt.Sprintf("%.13s:  %s\r", trunc, t.GetField(fieldData).Data)
 
-	chatID := t.GetField(fieldChatID).Data
 
 	// By holding the option key, Hotline chat allows users to send /me formatted messages like:
 	// *** Halcyon does stuff
@@ -264,6 +272,7 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 		formattedMsg = fmt.Sprintf("*** %s %s\r", *cc.UserName, t.GetField(fieldData).Data)
 	}
 
+	chatID := t.GetField(fieldChatID).Data
 	// a non-nil chatID indicates the message belongs to a private chat
 	if chatID != nil {
 		chatInt := binary.BigEndian.Uint32(chatID)
@@ -329,9 +338,18 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 			NewField(fieldOptions, []byte{0, 1}),
 		),
 	)
+	spew.Dump(ID.Data)
+	var otherClient *ClientConn
+	if len(ID.Data) == 4 {
+		otherClient = cc.Server.Clients[uint16(binary.BigEndian.Uint32(ID.Data))]
+	} else if len(ID.Data) == 2 {
+		otherClient = cc.Server.Clients[binary.BigEndian.Uint16(ID.Data)]
+	}
+	if otherClient == nil {
+		return res, errors.New("invalid client")
+	}
 
 	// Respond with auto reply if other client has it enabled
-	otherClient := cc.Server.Clients[binary.BigEndian.Uint16(ID.Data)]
 	if len(*otherClient.AutoReply) > 0 {
 		res = append(res,
 			*NewNewTransaction(
@@ -667,7 +685,19 @@ func HandleUserBroadcast(cc *ClientConn, t *Transaction) (res []Transaction, err
 	return res, err
 }
 
+func byteToInt(bytes []byte) (int, error) {
+	switch len(bytes) {
+	case 2:
+		return int(binary.BigEndian.Uint16(bytes)), nil
+	case 4:
+		return int(binary.BigEndian.Uint32(bytes)), nil
+	}
+
+	return 0, errors.New("unknown byte length")
+}
+
 func HandleGetClientConnInfoText(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	spew.Dump(t.GetField(fieldUserID).Data)
 	clientConn := cc.Server.Clients[binary.BigEndian.Uint16(t.GetField(fieldUserID).Data)]
 	if clientConn == nil {
 		return res, errors.New("invalid client")
@@ -700,8 +730,7 @@ None.
 None.
 
 	`
-	spew.Dump(clientConn)
-	template = fmt.Sprintf(template, clientConn.UserName, clientConn.Account.Name, clientConn.Account.Login, clientConn.Connection.RemoteAddr().String())
+	template = fmt.Sprintf(template, *clientConn.UserName, clientConn.Account.Name, clientConn.Account.Login, clientConn.Connection.RemoteAddr().String())
 	template = strings.Replace(template, "\n", "\r", -1)
 
 	res = append(res, cc.NewReply(t,
@@ -712,10 +741,9 @@ None.
 }
 
 func HandleGetUserNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	reply := t.ReplyTransaction(cc.Server.connectedUsers())
-	reply.clientID = cc.ID
+	res = append(res, cc.NewReply(t, cc.Server.connectedUsers()...))
 
-	return []Transaction{reply}, nil
+	return res, err
 }
 
 func (cc *ClientConn) notifyNewUserHasJoined() (res []Transaction, err error) {
@@ -1110,14 +1138,11 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	return res, err
 }
 
-func HandleGetMsgs(cc *ClientConn, transaction *Transaction) (res []Transaction, err error) {
-	_, err = cc.Connection.Write(
-		transaction.ReplyTransaction(
-			[]Field{NewField(fieldData, cc.Server.FlatNews)},
-		).Payload(),
-	)
+// HandleGetMsgs returns the flat news data
+func HandleGetMsgs(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	res = append(res, cc.NewReply(t, NewField(fieldData, cc.Server.FlatNews)))
 
-	return []Transaction{}, err
+	return res, err
 }
 
 func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
