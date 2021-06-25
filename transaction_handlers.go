@@ -753,7 +753,6 @@ None.
 func HandleGetUserNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	res = append(res, cc.NewReply(t, cc.Server.connectedUsers()...))
 
-
 	return res, err
 }
 
@@ -1297,7 +1296,14 @@ const refuseChat = 1
 const autoResponse = 2
 
 func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	*cc.Icon = t.GetField(fieldUserIconID).Data
+	spew.Dump(t)
+	var icon []byte
+	if len(t.GetField(fieldUserIconID).Data) == 4{
+		icon = t.GetField(fieldUserIconID).Data[2:]
+	} else {
+		icon = t.GetField(fieldUserIconID).Data
+	}
+	*cc.Icon = icon
 	*cc.UserName = t.GetField(fieldUserName).Data
 
 	// the options field is only passed by the client versions > 1.2.3.
@@ -1511,6 +1517,7 @@ func HandleJoinChat(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 // Reply is not expected.
 func HandleLeaveChat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	chatID := t.GetField(fieldChatID).Data
+	spew.Dump(chatID)
 	chatInt := binary.BigEndian.Uint32(chatID)
 
 	privChat := cc.Server.PrivateChats[chatInt]

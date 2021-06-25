@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-var hotlineServer *hotline.Server
-
 func main() {
 	err := sentry.Init(sentry.ClientOptions{
 		Dsn: "https://f21adf4c207c449687dda034709f6b2e@o258088.ingest.sentry.io/5831364",

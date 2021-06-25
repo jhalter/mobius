@@ -34,6 +34,10 @@ func (u User) Payload() []byte {
 		u.Icon = u.Icon[2:]
 	}
 
+	if len(u.Flags) == 4 {
+		u.Flags = u.Flags[2:]
+	}
+
 	out := append(u.ID[:2], u.Icon[:2]...)
 	out = append(out, u.Flags[:2]...)
 	out = append(out, nameLen...)

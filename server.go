@@ -3,6 +3,7 @@ package hotline
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"io"
@@ -116,9 +117,12 @@ func (s *Server) sendTransaction(t Transaction) error {
 
 	s.mux.Lock()
 	client := s.Clients[uint16(clientID)]
+	s.mux.Unlock()
+	if client == nil {
+		return errors.New("invalid client")
+	}
 	userName := string(*client.UserName)
 	login := client.Account.Login
-	s.mux.Unlock()
 
 	handler := TransactionHandlers[requestNum]
 
