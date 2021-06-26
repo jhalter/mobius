@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"golang.org/x/crypto/bcrypt"
 	"math/big"
 	"net"
+	"runtime/debug"
 )
 
 type byClientID []*ClientConn
@@ -43,6 +45,13 @@ func (cc *ClientConn) send(t int, fields ...Field) {
 }
 
 func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("stacktrace from panic: \n" + string(debug.Stack()))
+			cc.Server.Logger.Errorw("PANIC", "err", r)
+		}
+	}()
+
 	requestNum := binary.BigEndian.Uint16(transaction.Type)
 	if handler, ok := TransactionHandlers[requestNum]; ok {
 		for _, reqField := range handler.RequiredFields {

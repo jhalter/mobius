@@ -267,6 +267,8 @@ var TransactionHandlers = map[uint16]TransactionType{
 func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	var replyTran Transaction
 
+	panic("ohno")
+
 	// Truncate long usernames
 	trunc := fmt.Sprintf("%13s", *cc.UserName)
 	formattedMsg := fmt.Sprintf("%.13s:  %s\r", trunc, t.GetField(fieldData).Data)

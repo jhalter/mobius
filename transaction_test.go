@@ -62,7 +62,7 @@ func TestReadFields(t *testing.T) {
 					0x01, 0x02, 0x03, // Data
 				},
 			},
-			want:    []Field(nil),
+			want:    []Field{},
 			wantErr: true,
 		},
 		{
@@ -78,7 +78,7 @@ func TestReadFields(t *testing.T) {
 					0x01, 0x02, 0x03, // Data
 				},
 			},
-			want:    []Field(nil),
+			want:    []Field{},
 			wantErr: true,
 		},
 		{
@@ -91,7 +91,7 @@ func TestReadFields(t *testing.T) {
 					0x01, 0x02, 0x03, // Data
 				},
 			},
-			want:    []Field(nil),
+			want:    []Field{},
 			wantErr: true,
 		},
 	}

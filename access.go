@@ -6,6 +6,8 @@ import (
 )
 
 const (
+	accessAlwaysAllow      = -1 // Some transactions are always allowed
+
 	// File System Maintenance
 	accessDeleteFile   = 0
 	accessUploadFile   = 1
@@ -45,7 +47,6 @@ const (
 	accessNewsDeleteCat    = 35
 	accessNewsCreateFldr   = 36
 	accessNewsDeleteFldr   = 37
-	accessAlwaysAllow      = -1 // Some transactions are always allowed
 )
 
 func authorize(access *[]byte, accessBit int) bool {

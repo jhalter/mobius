@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
+	"go.uber.org/zap"
 	"io"
 	"io/ioutil"
 	"log"
@@ -20,8 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v2"
 )
@@ -54,16 +53,6 @@ type PrivateChat struct {
 	ClientConn map[uint16]*ClientConn
 }
 
-func ListenAndServe(addr int, configDir string) error {
-	srv, err := NewServer(configDir)
-	if err != nil {
-		return err
-	}
-	srv.Addr = addr
-
-	return srv.ListenAndServe()
-}
-
 func (s *Server) ListenAndServe() error {
 	var wg sync.WaitGroup
 
@@ -73,7 +62,6 @@ func (s *Server) ListenAndServe() error {
 	}
 	wg.Add(1)
 	go func() { s.Logger.Fatal(s.Serve(ln)) }()
-	s.Logger.Infow("Hotline server started", "Addr", fmt.Sprintf(":%v", s.Addr))
 
 	ln2, err := net.Listen("tcp", fmt.Sprintf(":%v", s.Addr+1))
 	if err != nil {
@@ -82,14 +70,16 @@ func (s *Server) ListenAndServe() error {
 	wg.Add(1)
 
 	go func() { s.Logger.Fatal(s.ServeFileTransfers(ln2)) }()
-	s.Logger.Infow("Hotline file transfer server started", "Addr", fmt.Sprintf(":%v", s.Addr+1))
 
+	// block until wait counter is zero
 	wg.Wait()
 
 	return nil
 }
 
 func (s *Server) ServeFileTransfers(ln net.Listener) error {
+	s.Logger.Infow("Hotline file transfer server started", "Addr", fmt.Sprintf(":%v", s.Addr+1))
+
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -142,6 +132,8 @@ func (s *Server) sendTransaction(t Transaction) error {
 }
 
 func (s *Server) Serve(ln net.Listener) error {
+	s.Logger.Infow("Hotline server started", "Addr", fmt.Sprintf(":%v", s.Addr))
+
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -165,13 +157,9 @@ func (s *Server) Serve(ln net.Listener) error {
 }
 
 // NewServer constructs a new Server from a config dir
-func NewServer(configDir string) (*Server, error) {
-	cores := []zapcore.Core{newStdoutCore()}
-	l := zap.New(zapcore.NewTee(cores...))
-	defer func() { l.Sync() }()
-	logger = l.Sugar()
-
+func NewServer(configDir string, addr int, logger *zap.SugaredLogger) (*Server, error) {
 	server := Server{
+		Addr:          addr,
 		Accounts:      make(map[string]*Account),
 		Config:        new(Config),
 		Clients:       make(map[uint16]*ClientConn),
@@ -227,7 +215,7 @@ func NewServer(configDir string) (*Server, error) {
 	return &server, nil
 }
 
-func (s *Server) keepaliveHandler (){
+func (s *Server) keepaliveHandler() {
 	for {
 		time.Sleep(idleCheckInterval * time.Second)
 		s.mux.Lock()
@@ -540,18 +528,19 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 			return err
 		}
 
-		_, err = c.Connection.Write(
-			Transaction{
-				Flags:     0x00,
-				IsReply:   0x01,
-				Type:      make([]byte, 2),
-				ID:        []byte{0, 0, 0, 3},
-				ErrorCode: []byte{0, 0, 0, 0},
-				Fields: []Field{
-					NewField(fieldData, c.Server.FlatNews),
-				},
-			}.Payload(),
-		)
+		// TODO: seeming not needed?
+		//_, err = c.Connection.Write(
+		//	Transaction{
+		//		Flags:     0x00,
+		//		IsReply:   0x01,
+		//		Type:      make([]byte, 2),
+		//		ID:        []byte{0, 0, 0, 3},
+		//		ErrorCode: []byte{0, 0, 0, 0},
+		//		Fields: []Field{
+		//			NewField(fieldData, c.Server.FlatNews),
+		//		},
+		//	}.Payload(),
+		//)
 		if err != nil {
 			return err
 		}

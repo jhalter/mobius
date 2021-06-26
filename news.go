@@ -128,7 +128,6 @@ func (s byID) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 func (s byID) Less(i, j int) bool {
-
 	return binary.BigEndian.Uint32(s[i].ID) < binary.BigEndian.Uint32(s[j].ID)
 }
 
