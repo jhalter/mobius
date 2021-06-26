@@ -16,7 +16,7 @@ func main() {
 
 	cores := []zapcore.Core{newStdoutCore()}
 	l := zap.New(zapcore.NewTee(cores...))
-	defer func() { l.Sync() }()
+	defer func() { _ = l.Sync() }()
 	logger := l.Sugar()
 
 	srv, err := hotline.NewServer(*configDir, *basePort, logger)

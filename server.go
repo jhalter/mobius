@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"go.uber.org/zap"
 	"io"
 	"io/ioutil"
@@ -29,6 +28,33 @@ const userIdleSeconds = 300
 const idleCheckInterval = 10
 const trackerUpdateInterval = 300
 
+type Stats struct {
+	LoginCount int           `yaml:"login count"`
+	StartTime  time.Time     `yaml:"start time"`
+	Uptime     time.Duration `yaml:"uptime"`
+}
+
+func (s *Stats) String() string {
+	template := `
+Server Stats:
+  Start Time:		%v
+  Uptime:			%s
+  Login Count:	%v
+`
+	d := time.Now().Sub(s.StartTime)
+	d = d.Round(time.Minute)
+	h := d / time.Hour
+	d -= h * time.Hour
+	m := d / time.Minute
+
+	return fmt.Sprintf(
+		template,
+		s.StartTime.Format(time.RFC1123Z),
+		fmt.Sprintf("%02d:%02d", h, m),
+		s.LoginCount,
+	)
+}
+
 type Server struct {
 	Addr          int
 	Accounts      map[string]*Account
@@ -43,6 +69,7 @@ type Server struct {
 	PrivateChats  map[uint32]*PrivateChat
 	NextGuestID   *uint16
 	outbox        chan Transaction
+	Stats         *Stats
 
 	mux         sync.Mutex
 	flatNewsMux sync.Mutex
@@ -97,13 +124,20 @@ func (s *Server) ServeFileTransfers(ln net.Listener) error {
 func (s *Server) SendTransactions() error {
 	for {
 		t := <-s.outbox
-		go s.sendTransaction(t)
+		go func() {
+			if err := s.sendTransaction(t); err != nil {
+				s.Logger.Errorw("error sending transaction", "err", err)
+			}
+		}()
 	}
 }
 
 func (s *Server) sendTransaction(t Transaction) error {
 	requestNum := binary.BigEndian.Uint16(t.Type)
 	clientID, err := byteToInt(*t.clientID)
+	if err != nil {
+		return err
+	}
 
 	s.mux.Lock()
 	client := s.Clients[uint16(clientID)]
@@ -125,7 +159,7 @@ func (s *Server) sendTransaction(t Transaction) error {
 		"login", login,
 		"IsReply", t.IsReply,
 		"type", handler.Name,
-		"bytes", n,
+		"sentBytes", n,
 		"remoteAddr", client.Connection.RemoteAddr(),
 	)
 	return nil
@@ -169,6 +203,7 @@ func NewServer(configDir string, addr int, logger *zap.SugaredLogger) (*Server, 
 		Logger:        logger,
 		NextGuestID:   new(uint16),
 		outbox:        make(chan Transaction),
+		Stats:         &Stats{StartTime: time.Now()},
 	}
 
 	err := server.loadAgreement(configDir + "Agreement.txt")
@@ -194,7 +229,7 @@ func NewServer(configDir string, addr int, logger *zap.SugaredLogger) (*Server, 
 
 	*server.NextGuestID = 1
 
-	if server.Config.EnableTrackerRegistration == true {
+	if server.Config.EnableTrackerRegistration {
 		go func() {
 			for {
 				for _, t := range server.Config.Trackers {
@@ -222,7 +257,7 @@ func (s *Server) keepaliveHandler() {
 
 		for _, c := range s.Clients {
 			*c.IdleTime += 10
-			if *c.IdleTime > userIdleSeconds && c.Idle != true {
+			if *c.IdleTime > userIdleSeconds && !c.Idle {
 				c.Idle = true
 
 				flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*c.Flags)))
@@ -469,7 +504,7 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 	}
 
 	// If authentication fails, send error reply and close connection
-	if c.Authenticate(login, encodedPassword) == false {
+	if !c.Authenticate(login, encodedPassword) {
 		reply := clientLogin.ReplyTransaction(
 			[]Field{
 				NewField(fieldError, []byte("Incorrect login.")),
@@ -485,8 +520,6 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 		return fmt.Errorf("incorrect login")
 	}
 
-	fmt.Println("version=-----")
-	spew.Dump(*c.Version)
 	// Hotline 1.2.3 client does not send fieldVersion
 	// Nostalgia client sends ""
 	//if string(*c.Version) == "" {
@@ -504,7 +537,7 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 
 	c.Account = c.Server.Accounts[login]
 
-	if c.Authorize(accessDisconUser) == true {
+	if c.Authorize(accessDisconUser) {
 		*c.Flags = []byte{0, 2}
 	}
 
@@ -545,6 +578,8 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 			return err
 		}
 	}
+
+	c.Server.Stats.LoginCount += 1
 
 	const readBuffSize = 102400 // TODO: what should this be?
 	// Infinite loop where take action on incoming client requests until the connection is closed
@@ -759,18 +794,16 @@ func (s *Server) TransferFile(conn net.Conn) error {
 
 		basePathLen := len(fullFilePath)
 
-		fmt.Printf("FileTransferBasePath")
-
 		readBuffer := make([]byte, 1024)
 
-		logger.Infow("Start folder download", "path", fullFilePath, "ReferenceNumber", fileTransfer.ReferenceNumber, "RemoteAddr", conn.RemoteAddr())
+		s.Logger.Infow("Start folder download", "path", fullFilePath, "ReferenceNumber", fileTransfer.ReferenceNumber, "RemoteAddr", conn.RemoteAddr())
 
 		i := 0
 
 		_ = filepath.Walk(fullFilePath+"/", func(path string, info os.FileInfo, err error) error {
 			i += 1
 			subPath := path[basePathLen-2:]
-			logger.Infow("Sending fileheader", "i", i, "path", path, "fullFilePath", fullFilePath, "subPath", subPath, "IsDir", info.IsDir())
+			s.Logger.Infow("Sending fileheader", "i", i, "path", path, "fullFilePath", fullFilePath, "subPath", subPath, "IsDir", info.IsDir())
 
 			fileHeader := NewFileHeader("", subPath, info.IsDir())
 			//
@@ -786,18 +819,18 @@ func (s *Server) TransferFile(conn net.Conn) error {
 
 			// Send the file header to client
 			if _, err := conn.Write(fileHeader.Payload()); err != nil {
-				logger.Errorf("error sending file header: %v", err)
+				s.Logger.Errorf("error sending file header: %v", err)
 				return err
 			}
 
 			// Read the client's Next Action request
 			//TODO: Remove hardcoded behavior and switch behaviors based on the next action send
 			if _, err := conn.Read(readBuffer); err != nil {
-				logger.Errorf("error reading next action: %v", err)
+				s.Logger.Errorf("error reading next action: %v", err)
 				return err
 			}
 
-			logger.Infow("Client folder download action", "action", fmt.Sprintf("%X", readBuffer[0:2]))
+			s.Logger.Infow("Client folder download action", "action", fmt.Sprintf("%X", readBuffer[0:2]))
 
 			if info.IsDir() {
 				return nil
@@ -817,17 +850,15 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				"TransferSize", fmt.Sprintf("%x", ffo.TransferSize()),
 			)
 
-			spew.Dump(len(ffo.Payload()))
-
 			// Send fileSize to client
 			if _, err := conn.Write(ffo.TransferSize()); err != nil {
-				logger.Error(err)
+				s.Logger.Error(err)
 				return err
 			}
 
 			// Send FFO to client
 			if _, err := conn.Write(ffo.Payload()); err != nil {
-				logger.Error(err)
+				s.Logger.Error(err)
 				return err
 			}
 
@@ -846,7 +877,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 					// Read the client's Next Action request
 					//TODO: Remove hardcoded behavior and switch behaviors based on the next action send
 					if _, err := conn.Read(readBuffer); err != nil {
-						logger.Errorf("error reading next action: %v", err)
+						s.Logger.Errorf("error reading next action: %v", err)
 						return err
 					}
 					break
@@ -863,7 +894,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 
 	case FolderUpload:
 		dstPath := s.Config.FileRoot + ReadFilePath(fileTransfer.FilePath) + "/" + string(fileTransfer.FileName)
-		logger.Infow(
+		s.Logger.Infow(
 			"Folder upload started",
 			"transactionRef", fileTransfer.ReferenceNumber,
 			"RemoteAddr", conn.RemoteAddr().String(),
@@ -874,9 +905,9 @@ func (s *Server) TransferFile(conn net.Conn) error {
 
 		// Check if the target folder exists.  If not, create it.
 		if _, err := os.Stat(dstPath); os.IsNotExist(err) {
-			logger.Infow("Target path does not exist; Creating...", "dstPath", dstPath)
+			s.Logger.Infow("Target path does not exist; Creating...", "dstPath", dstPath)
 			if err := os.Mkdir(dstPath, 0777); err != nil {
-				logger.Error(err)
+				s.Logger.Error(err)
 			}
 		}
 
@@ -896,7 +927,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			}
 			fu := readFolderUpload(readBuffer)
 
-			logger.Infow(
+			s.Logger.Infow(
 				"Folder upload continued",
 				"transactionRef", fmt.Sprintf("%x", fileTransfer.ReferenceNumber),
 				"RemoteAddr", conn.RemoteAddr().String(),
@@ -905,17 +936,17 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				"PathItemCount", binary.BigEndian.Uint16(fu.PathItemCount),
 			)
 
-			if bytes.Compare(fu.IsFolder, []byte{0, 1}) == 0 {
+			if bytes.Equal(fu.IsFolder, []byte{0, 1}) {
 				if _, err := os.Stat(dstPath + "/" + fu.FormattedPath()); os.IsNotExist(err) {
-					logger.Infow("Target path does not exist; Creating...", "dstPath", dstPath)
+					s.Logger.Infow("Target path does not exist; Creating...", "dstPath", dstPath)
 					if err := os.Mkdir(dstPath+"/"+fu.FormattedPath(), 0777); err != nil {
-						logger.Error(err)
+						s.Logger.Error(err)
 					}
 				}
-				logger.Infof("Send NextFile to client")
+				s.Logger.Infof("Send NextFile to client")
 				// Tell client to send next file
 				if _, err := conn.Write([]byte{0, dlFldrAction_NextFile}); err != nil {
-					logger.Error(err)
+					s.Logger.Error(err)
 					return err
 				}
 			} else {
@@ -929,15 +960,15 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				if _, err := conn.Read(fileSize); err != nil {
 					fmt.Println("Error reading:", err.Error()) // TODO: handle
 				}
-				logger.Infow("Size of next file", "fileSize", fmt.Sprintf("%x", fileSize))
-				logger.Infof("Starting transfer of file %v/%v", i+1, itemCount)
+				s.Logger.Infow("Size of next file", "fileSize", fmt.Sprintf("%x", fileSize))
+				s.Logger.Infof("Starting transfer of file %v/%v", i+1, itemCount)
 				if err := transferFile(conn, dstPath+"/"+fu.FormattedPath()); err != nil {
-					logger.Error(err)
+					s.Logger.Error(err)
 				}
 
 				// Tell client to send next file
 				if _, err := conn.Write([]byte{0, dlFldrAction_NextFile}); err != nil {
-					logger.Error(err)
+					s.Logger.Error(err)
 					return err
 				}
 
@@ -948,14 +979,13 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				}
 			}
 		}
-		logger.Infof("Folder upload complete")
+		s.Logger.Infof("Folder upload complete")
 	}
 
 	return nil
 }
 
 func transferFile(conn net.Conn, dst string) error {
-	logger.Infof("Starting file transfer: %v\n", dst)
 	const buffSize = 1024
 	buf := make([]byte, buffSize)
 
@@ -979,12 +1009,12 @@ func transferFile(conn net.Conn, dst string) error {
 
 	for {
 		if (fileSize - receivedBytes) < buffSize {
-			logger.Infow(
-				"File transfer complete",
-				"RemoteAddr", conn.RemoteAddr().String(),
-				"size", fileSize,
-				"dstFile", dst,
-			)
+			//logger.Infow(
+			//	"File transfer complete",
+			//	"RemoteAddr", conn.RemoteAddr().String(),
+			//	"size", fileSize,
+			//	"dstFile", dst,
+			//)
 
 			_, err := io.CopyN(newFile, conn, int64(fileSize-receivedBytes))
 			return err

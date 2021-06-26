@@ -2,6 +2,10 @@
 
 NAME_TBD implements the [Hotline protocol](https://en.wikipedia.org/wiki/Hotline_Communications)
 
+## Features
+
+* Hotline 1.2.3
+
 ## Usage
 
 ### Precompiled binaries
@@ -12,9 +16,11 @@ To get started quickly, download the precompiled binaries for your platform:
 
 ## Compatibility
 
-The server has been tested against:
- * Hotline Client version 1.2.3 PPC
- * Hotline Client version 1.9
+The server has been tested with:
+ * Hotline Client version 1.2.3
+ * Hotline Client version 1.8.2   
+ * Hotline Client version 1.9.2
+ * Nostalgia
 
 ### Docker
 

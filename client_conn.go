@@ -59,7 +59,7 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 
 			// Validate that required field is present
 			if field.ID == nil {
-				logger.Infow(
+				cc.Server.Logger.Infow(
 					"Missing required field",
 					"Account", cc.Account.Login, "UserName", string(*cc.UserName), "RequestType", handler.Name, "FieldID", reqField.ID,
 				)
@@ -67,7 +67,7 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 			}
 
 			if len(field.Data) < reqField.minLen {
-				logger.Infow(
+				cc.Server.Logger.Infow(
 					"Field does not meet minLen",
 					"Account", cc.Account.Login, "UserName", string(*cc.UserName), "RequestType", handler.Name, "FieldID", reqField.ID,
 				)
@@ -75,7 +75,7 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 			}
 		}
 		if !authorize(cc.Account.Access, handler.Access) {
-			logger.Infow(
+			cc.Server.Logger.Infow(
 				"Unauthorized Action",
 				"Account", cc.Account.Login, "UserName", string(*cc.UserName), "RequestType", handler.Name,
 			)

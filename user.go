@@ -26,7 +26,6 @@ type User struct {
 
 func (u User) Payload() []byte {
 	name := []byte(u.Name)
-	//spew.Dump(u)
 	nameLen := make([]byte, 2)
 	binary.BigEndian.PutUint16(nameLen, uint16(len(name)))
 

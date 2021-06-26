@@ -119,12 +119,10 @@ func NewTransaction(t, _ int, f []Field) Transaction {
 // ReadTransaction parses a byte slice into a struct
 func ReadTransaction(buf []byte) (*Transaction, error) {
 	totalSize := binary.BigEndian.Uint32(buf[12:16])
-	dataSize := binary.BigEndian.Uint32(buf[16:20])
 
-	fmt.Printf("Transaction totalSize: %v, dataSize: %v\n", totalSize, dataSize)
 	// the buf may include extra bytes that are not part of the transaction
 	// tranLen represents the length of bytes that are part of the transaction
-	tranLen := 20 + dataSize
+	tranLen := 20 + totalSize
 
 	if len(buf) < minTransactionLen {
 		return nil, errors.New("invalid transaction: too small")
@@ -145,10 +143,6 @@ func ReadTransaction(buf []byte) (*Transaction, error) {
 		ParamCount: buf[20:22],
 		Fields:     fields,
 	}, nil
-}
-
-func (t *Transaction) uint32ID() uint32 {
-	return binary.BigEndian.Uint32(t.ID)
 }
 
 func readTransactions(buf []byte) ([]Transaction, error) {

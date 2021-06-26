@@ -54,7 +54,7 @@ func getFileNameList(filePath string) ([]Field, error) {
 		var fileType string
 		var fileCreator []byte
 		var fileSize uint32
-		if file.IsDir() != true {
+		if !file.IsDir()  {
 			fileType = fileTypeFromFilename(file.Name())
 			fileCreator = []byte(
 				fileCreatorFromFilename(file.Name()),
@@ -91,7 +91,7 @@ func CalcTotalSize(filePath string) ([]byte, error) {
 	var totalSize uint32
 	err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			logger.Error(err)
+			return err
 		}
 
 		if info.IsDir() {
@@ -118,7 +118,7 @@ func CalcItemCount(filePath string) ([]byte, error) {
 		itemcount += 1
 
 		if err != nil {
-			logger.Error(err)
+			return err
 		}
 
 		return nil
@@ -128,12 +128,10 @@ func CalcItemCount(filePath string) ([]byte, error) {
 	}
 
 	bs := make([]byte, 2)
-	binary.BigEndian.PutUint16(bs, itemcount - 1)
+	binary.BigEndian.PutUint16(bs, itemcount-1)
 
 	return bs, nil
 }
-
-
 
 func EncodeFilePath(filePath string) []byte {
 	pathSections := strings.Split(filePath, "/")
@@ -143,7 +141,7 @@ func EncodeFilePath(filePath string) []byte {
 	bytes := pathItemCount
 
 	for _, section := range pathSections {
-		bytes = append(bytes, []byte{0,0}...)
+		bytes = append(bytes, []byte{0, 0}...)
 
 		pathStr := []byte(section)
 		bytes = append(bytes, byte(len(pathStr)))

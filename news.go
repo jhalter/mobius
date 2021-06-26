@@ -160,7 +160,7 @@ func (newscat *NewsCategoryListData15) Payload() []byte {
 
 	out := append(newscat.Type, count...)
 
-	if bytes.Compare(newscat.Type, []byte{0, 3}) == 0 {
+	if bytes.Equal(newscat.Type, []byte{0, 3}) {
 		// Generate a random GUID
 		b := make([]byte, 16)
 		_, err := rand.Read(b)
@@ -187,7 +187,7 @@ func ReadNewsCategoryListData(payload []byte) NewsCategoryListData15 {
 		Count: payload[2:4],
 	}
 
-	if bytes.Compare(ncld.Type, []byte{0, 3}) == 0 {
+	if bytes.Equal(ncld.Type, []byte{0, 3}) {
 		ncld.GUID = payload[4:20]
 		ncld.AddSN = payload[20:24]
 		ncld.AddSN = payload[24:28]

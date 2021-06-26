@@ -278,6 +278,10 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 		formattedMsg = fmt.Sprintf("*** %s %s\r", *cc.UserName, t.GetField(fieldData).Data)
 	}
 
+	if bytes.Equal(t.GetField(fieldData).Data, []byte("/stats")) {
+		formattedMsg = strings.Replace(cc.Server.Stats.String(), "\n", "\r", -1)
+	}
+
 	chatID := t.GetField(fieldChatID).Data
 	// a non-nil chatID indicates the message belongs to a private chat
 	if chatID != nil {
@@ -419,12 +423,12 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		}
 		switch mode := fi.Mode(); {
 		case mode.IsDir():
-			if authorize(cc.Account.Access, accessRenameFolder) == false {
+			if !authorize(cc.Account.Access, accessRenameFolder) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to rename folders."))
 				return res, err
 			}
 		case mode.IsRegular():
-			if authorize(cc.Account.Access, accessRenameFile) == false {
+			if !authorize(cc.Account.Access, accessRenameFile) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to rename files."))
 				return res, err
 			}
@@ -452,7 +456,7 @@ func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	path := "./" + filePath + "/" + fileName
 
-	logger.Debugw("Delete file", "src", filePath+"/"+fileName)
+	cc.Server.Logger.Debugw("Delete file", "src", filePath+"/"+fileName)
 
 	fi, err := os.Stat(path)
 	if err != nil {
@@ -461,12 +465,12 @@ func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	}
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
-		if authorize(cc.Account.Access, accessDeleteFolder) == false {
+		if !authorize(cc.Account.Access, accessDeleteFolder) {
 			res = append(res, cc.NewErrReply(t, "You are not allowed to delete folders."))
 			return res, err
 		}
 	case mode.IsRegular():
-		if authorize(cc.Account.Access, accessDeleteFile) == false {
+		if !authorize(cc.Account.Access, accessDeleteFile) {
 			res = append(res, cc.NewErrReply(t, "You are not allowed to delete files."))
 			return res, err
 		}
@@ -486,7 +490,7 @@ func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 	filePath := "./" + cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFilePath).Data)
 	fileNewPath := "./" + cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFileNewPath).Data)
 
-	logger.Debugw("Move file", "src", filePath+"/"+fileName, "dst", fileNewPath+"/"+fileName)
+	cc.Server.Logger.Debugw("Move file", "src", filePath+"/"+fileName, "dst", fileNewPath+"/"+fileName)
 
 	path := filePath + "/" + fileName
 	fi, err := os.Stat(path)
@@ -495,12 +499,12 @@ func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 	}
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
-		if authorize(cc.Account.Access, accessMoveFolder) == false {
+		if !authorize(cc.Account.Access, accessMoveFolder) {
 			res = append(res, cc.NewErrReply(t, "You are not allowed to move folders."))
 			return res, err
 		}
 	case mode.IsRegular():
-		if authorize(cc.Account.Access, accessMoveFile) == false {
+		if !authorize(cc.Account.Access, accessMoveFile) {
 			res = append(res, cc.NewErrReply(t, "You are not allowed to move files."))
 			return res, err
 		}
@@ -575,7 +579,7 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 			res = append(res, *newT)
 
 			flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*c.Flags)))
-			if authorize(c.Account.Access, accessDisconUser) == true {
+			if authorize(c.Account.Access, accessDisconUser) {
 				flagBitmap.SetBit(flagBitmap, userFlagAdmin, 1)
 			} else {
 				flagBitmap.SetBit(flagBitmap, userFlagAdmin, 0)
@@ -841,7 +845,6 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 	current := time.Now()
 	current = current.Add(time.Duration(-10) * time.Minute)
 	formattedDate := fmt.Sprintf(newsDateFormat, current.Month().String()[:3], current.Day(), current.Hour(), current.Minute())
-	// TODO: format news post
 	newsPost := fmt.Sprintf(newsTemplate, *cc.UserName, formattedDate, t.GetField(fieldData).Data)
 	newsPost = strings.Replace(newsPost, "\n", "\r", -1)
 
@@ -849,8 +852,7 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 	cc.Server.FlatNews = append([]byte(newsPost), cc.Server.FlatNews...)
 
 	// update news on disk
-	err = ioutil.WriteFile(cc.Server.ConfigDir+"MessageBoard.txt", cc.Server.FlatNews, 0644)
-	if err != nil {
+	if err := ioutil.WriteFile(cc.Server.ConfigDir+"MessageBoard.txt", cc.Server.FlatNews, 0644); err != nil {
 		return res, err
 	}
 
@@ -931,7 +933,9 @@ func HandleNewNewsCat(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		SubCats:  make(map[string]NewsCategoryListData15),
 	}
 
-	_ = cc.Server.writeThreadedNews()
+	if err := cc.Server.writeThreadedNews(); err != nil {
+		return res, err
+	}
 	res = append(res, cc.NewReply(t))
 	return res, err
 }
@@ -952,8 +956,9 @@ func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		Articles: map[uint32]*NewsArtData{},
 		SubCats:  make(map[string]NewsCategoryListData15),
 	}
-	_ = cc.Server.writeThreadedNews()
-
+	if err := cc.Server.writeThreadedNews(); err != nil {
+		return res, err
+	}
 	res = append(res, cc.NewReply(t))
 	return res, err
 }
@@ -1137,7 +1142,7 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	if parentID != 0 {
 		parentArt := cat.Articles[uint32(parentID)]
 
-		if bytes.Compare(parentArt.FirstChildArt, []byte{0, 0, 0, 0}) == 0 {
+		if bytes.Equal(parentArt.FirstChildArt, []byte{0, 0, 0, 0}) {
 			binary.BigEndian.PutUint32(parentArt.FirstChildArt, nextID)
 		}
 	}
@@ -1294,14 +1299,16 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	return res, err
 }
 
-const refusePM = 0
-const refuseChat = 1
-const autoResponse = 2
+// User flag bits
+const (
+	refusePM     = 0
+	refuseChat   = 1
+	autoResponse = 2
+)
 
 func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	spew.Dump(t)
 	var icon []byte
-	if len(t.GetField(fieldUserIconID).Data) == 4{
+	if len(t.GetField(fieldUserIconID).Data) == 4 {
 		icon = t.GetField(fieldUserIconID).Data[2:]
 	} else {
 		icon = t.GetField(fieldUserIconID).Data

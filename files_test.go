@@ -37,7 +37,7 @@ func TestEncodeFilePath(t *testing.T) {
 
 	for _, test := range tests {
 		got := EncodeFilePath(test.filePath)
-		if bytes.Compare(got, test.want) != 0 {
+		if !bytes.Equal(got, test.want) {
 			t.Errorf("field mismatch:  want: %#v got: %#v", test.want, got)
 		}
 	}
@@ -45,7 +45,7 @@ func TestEncodeFilePath(t *testing.T) {
 
 func TestCalcTotalSize(t *testing.T) {
 	cwd, _ := os.Getwd()
-	defer os.Chdir(cwd)
+	defer func() {_ = os.Chdir(cwd)}()
 
 	_ = os.Chdir("test/config/Files")
 
