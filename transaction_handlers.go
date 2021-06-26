@@ -837,7 +837,8 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 	defer cc.Server.flatNewsMux.Unlock()
 
 	current := time.Now()
-	formattedDate := fmt.Sprintf("%s%02d %d:%d", current.Month().String()[:3], current.Day(), current.Hour(), current.Minute())
+	current = current.Add(time.Duration(-10) * time.Minute)
+	formattedDate := fmt.Sprintf("%s%02d %d:%02d", current.Month().String()[:3], current.Day(), current.Hour(), current.Minute())
 	// TODO: format news post
 	newsPost := fmt.Sprintf(newsTemplate, *cc.UserName, formattedDate, t.GetField(fieldData).Data)
 	newsPost = strings.Replace(newsPost, "\n", "\r", -1)
