@@ -829,6 +829,8 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	return res, err
 }
 
+const newsDateFormat = "%s%02d %d:%02d" // Jun23 20:49
+
 // HandleTranOldPostNews updates the flat news
 // Fields used in this request:
 // 101	Data
@@ -838,7 +840,7 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 
 	current := time.Now()
 	current = current.Add(time.Duration(-10) * time.Minute)
-	formattedDate := fmt.Sprintf("%s%02d %d:%02d", current.Month().String()[:3], current.Day(), current.Hour(), current.Minute())
+	formattedDate := fmt.Sprintf(newsDateFormat, current.Month().String()[:3], current.Day(), current.Hour(), current.Minute())
 	// TODO: format news post
 	newsPost := fmt.Sprintf(newsTemplate, *cc.UserName, formattedDate, t.GetField(fieldData).Data)
 	newsPost = strings.Replace(newsPost, "\n", "\r", -1)
