@@ -245,10 +245,8 @@ func ReadNewsPath(newsPath []byte) []string {
 
 func (s *Server) GetNewsCatByPath(paths []string) map[string]NewsCategoryListData15 {
 	cats := s.ThreadedNews.Categories
-	if len(paths) > 0 {
-		for _, path := range paths {
-			cats = cats[path].SubCats
-		}
+	for _, path := range paths {
+		cats = cats[path].SubCats
 	}
 	return cats
 }

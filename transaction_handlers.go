@@ -833,7 +833,14 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	return res, err
 }
 
-const newsDateFormat = "%s%02d %d:%02d" // Jun23 20:49
+const defaultNewsDateFormat = "Jan02 15:04" // Jun23 20:49
+//  "Mon, 02 Jan 2006 15:04:05 MST"
+
+const defaultNewsTemplate = `From %s (%s):
+
+%s
+
+__________________________________________________________`
 
 // HandleTranOldPostNews updates the flat news
 // Fields used in this request:
@@ -842,9 +849,17 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 	cc.Server.flatNewsMux.Lock()
 	defer cc.Server.flatNewsMux.Unlock()
 
-	current := time.Now()
-	formattedDate := fmt.Sprintf(newsDateFormat, current.Month().String()[:3], current.Day(), current.Hour(), current.Minute())
-	newsPost := fmt.Sprintf(newsTemplate, *cc.UserName, formattedDate, t.GetField(fieldData).Data)
+	newsDateTemplate := defaultNewsDateFormat
+	if cc.Server.Config.NewsDateFormat != "" {
+		newsDateTemplate = cc.Server.Config.NewsDateFormat
+	}
+
+	newsTemplate := defaultNewsTemplate
+	if cc.Server.Config.NewsDelimiter != "" {
+		newsTemplate = cc.Server.Config.NewsDelimiter
+	}
+
+	newsPost := fmt.Sprintf(newsTemplate + "\r", *cc.UserName, time.Now().Format(newsDateTemplate), t.GetField(fieldData).Data)
 	newsPost = strings.Replace(newsPost, "\n", "\r", -1)
 
 	// update news in memory
@@ -921,10 +936,7 @@ func HandleNewNewsCat(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	name := string(t.GetField(fieldNewsCatName).Data)
 	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
 
-	cc.Server.Logger.Infof("Creating new news cat %s in %v", name, pathStrs)
-
 	cats := cc.Server.GetNewsCatByPath(pathStrs)
-
 	cats[name] = NewsCategoryListData15{
 		Name:     name,
 		Type:     []byte{0, 3},

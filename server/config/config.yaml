@@ -5,3 +5,10 @@ FileRoot: config/Files/
 EnableTrackerRegistration: false
 Trackers: 
   - hltracker.com:5499
+NewsDateFormat: "Jan 02 15:04 2006"
+NewsDelimiter: |
+  From %s (%s):
+
+  %s
+
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
