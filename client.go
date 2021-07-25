@@ -210,7 +210,7 @@ func (ui *UI) renderSettingsForm() *tview.Flex {
 	iconStr := strconv.Itoa(ui.HLClient.pref.IconID)
 	settingsForm := tview.NewForm()
 	settingsForm.AddInputField("Your Name", ui.HLClient.pref.Username, 0, nil, nil)
-	settingsForm.AddInputField("IconID",iconStr, 0, func(idStr string, _ rune) bool {
+	settingsForm.AddInputField("IconID", iconStr, 0, func(idStr string, _ rune) bool {
 		_, err := strconv.Atoi(idStr)
 		return err == nil
 	}, nil)
@@ -249,12 +249,6 @@ func (ui *UI) renderSettingsForm() *tview.Flex {
 	return centerFlex
 }
 
-var (
-	srvIP    string
-	srvLogin string
-	srvPass  string
-)
-
 // DebugBuffer wraps a *tview.TextView and adds a Sync() method to make it available as a Zap logger
 type DebugBuffer struct {
 	TextView *tview.TextView
@@ -284,19 +278,13 @@ func (ui *UI) joinServer(addr, login, password string) error {
 }
 
 func (ui *UI) renderJoinServerForm(server, login, password, backPage string, save, defaultConnect bool) *tview.Flex {
-	srvIP = server
 	joinServerForm := tview.NewForm()
 	joinServerForm.
-		AddInputField("Server", server, 20, nil, func(text string) {
-			srvIP = text
-		}).
-		AddInputField("Login", login, 20, nil, func(text string) {
-			l := []byte(text)
-			ui.HLClient.Login = &l
-		}).
-		AddPasswordField("Password", password, 20, '*', nil).
+		AddInputField("Server", server, 0, nil, nil).
+		AddInputField("Login", login, 0, nil, nil).
+		AddPasswordField("Password", password, 0, '*', nil).
 		AddCheckbox("Save", save, func(checked bool) {
-			// TODO
+			// TODO: Implement bookmark saving
 		}).
 		AddButton("Cancel", func() {
 			ui.Pages.SwitchToPage(backPage)
