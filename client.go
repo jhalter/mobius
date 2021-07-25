@@ -44,6 +44,12 @@ type ClientPrefs struct {
 	Tracker   string     `yaml:"Tracker"`
 }
 
+func (cp *ClientPrefs) IconBytes() []byte {
+	iconBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(iconBytes, uint16(cp.IconID))
+	return iconBytes
+}
+
 func readConfig(cfgPath string) (*ClientPrefs, error) {
 	fh, err := os.Open(cfgPath)
 	if err != nil {
@@ -717,7 +723,7 @@ func handleClientTranShowAgreement(c *Client, t *Transaction) (res []Transaction
 					*NewTransaction(
 						tranAgreed, nil,
 						NewField(fieldUserName, []byte(c.pref.Username)),
-						NewField(fieldUserIconID, *c.Icon),
+						NewField(fieldUserIconID, c.pref.IconBytes()),
 						NewField(fieldUserFlags, []byte{0x00, 0x00}),
 						NewField(fieldOptions, []byte{0x00, 0x00}),
 					),
@@ -726,7 +732,7 @@ func handleClientTranShowAgreement(c *Client, t *Transaction) (res []Transaction
 				c.UI.Pages.HidePage("agreement")
 				c.UI.App.SetFocus(c.UI.chatInput)
 			} else {
-				c.Disconnect()
+				_ = c.Disconnect()
 				c.UI.Pages.SwitchToPage("home")
 			}
 		},
@@ -838,7 +844,7 @@ func (c *Client) LogIn(login string, password string) error {
 		*NewTransaction(
 			tranLogin, nil,
 			NewField(fieldUserName, []byte(c.pref.Username)),
-			NewField(fieldUserIconID, []byte{0x07, 0xd1}),
+			NewField(fieldUserIconID, c.pref.IconBytes()),
 			NewField(fieldUserLogin, []byte(NegatedUserString([]byte(login)))),
 			NewField(fieldUserPassword, []byte(NegatedUserString([]byte(password)))),
 			NewField(fieldVersion, []byte{0, 2}),
