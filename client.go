@@ -490,7 +490,7 @@ func (ui *UI) Start() {
 
 	home.AddItem(
 		tview.NewFlex().AddItem(bannerItem, 0, 1, false),
-		13, 1, false)
+		14, 1, false)
 	home.AddItem(tview.NewFlex().
 		AddItem(nil, 0, 1, false).
 		AddItem(mainMenu, 0, 1, true).
