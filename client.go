@@ -410,9 +410,10 @@ func (ui *UI) renderServerUI() *tview.Flex {
 				case tcell.KeyTab:
 					ui.App.SetFocus(newsPostTextArea)
 				case tcell.KeyEnter:
+					newsText := strings.ReplaceAll(newsPostTextArea.GetText(true), "\n", "\r")
 					err := ui.HLClient.Send(
 						*NewTransaction(tranOldPostNews, nil,
-							NewField(fieldData, []byte(newsPostTextArea.GetText(true))),
+							NewField(fieldData, []byte(newsText)),
 						),
 					)
 					if err != nil {
@@ -442,7 +443,7 @@ func (ui *UI) renderServerUI() *tview.Flex {
 					fmt.Fprintf(newsPostTextArea, "\n")
 				default:
 					switch event.Rune() {
-					case 127:
+					case 127: // backspace
 						curTxt := newsPostTextArea.GetText(true)
 						if len(curTxt) > 0 {
 							curTxt = curTxt[:len(curTxt)-1]
