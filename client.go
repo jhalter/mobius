@@ -68,10 +68,8 @@ func readConfig(cfgPath string) (*ClientPrefs, error) {
 type Client struct {
 	DebugBuf    *DebugBuffer
 	Connection  net.Conn
-	UserName    []byte
 	Login       *[]byte
 	Password    *[]byte
-	Icon        *[]byte
 	Flags       *[]byte
 	ID          *[]byte
 	Version     []byte
@@ -467,7 +465,6 @@ func (ui *UI) Start() {
 
 func NewClient(username string, logger *zap.SugaredLogger) *Client {
 	c := &Client{
-		Icon:        &[]byte{0x07, 0xd7},
 		Logger:      logger,
 		activeTasks: make(map[uint32]*Transaction),
 		Handlers:    clientHandlers,
@@ -691,15 +688,15 @@ func (c *Client) renderUserList() {
 	for _, u := range c.UserList {
 		flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(u.Flags)))
 		if flagBitmap.Bit(userFlagAdmin) == 1 {
-			fmt.Fprintf(c.UI.userList, "[red::b]%s[-:-:-]\n", u.Name)
+			_, _ = fmt.Fprintf(c.UI.userList, "[red::b]%s[-:-:-]\n", u.Name)
 		} else {
-			fmt.Fprintf(c.UI.userList, "%s\n", u.Name)
+			_, _ = fmt.Fprintf(c.UI.userList, "%s\n", u.Name)
 		}
 	}
 }
 
 func handleClientChatMsg(c *Client, t *Transaction) (res []Transaction, err error) {
-	fmt.Fprintf(c.UI.chatBox, "%s \n", t.GetField(fieldData).Data)
+	_, _ = fmt.Fprintf(c.UI.chatBox, "%s \n", t.GetField(fieldData).Data)
 
 	return res, err
 }
