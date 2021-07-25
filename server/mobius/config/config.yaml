@@ -1,0 +1,12 @@
+Name: My Hotline server
+Description: A default configured Hotline server running Mobius v0.0.1
+BannerID: 0
+FileRoot: Files/
+EnableTrackerRegistration: false
+Trackers:
+- hltracker.com:5499
+NewsDelimiter: ""
+NewsDateFormat: ""
+MaxDownloads: 0
+MaxDownloadsPerClient: 0
+MaxConnectionsPerIP: 0

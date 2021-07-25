@@ -1,0 +1,7 @@
+Username: unnamed
+IconID: 2000
+Bookmarks:
+  - Name: Example Server
+    Addr: localhost:5500
+    Login: guest
+    Password: ""
