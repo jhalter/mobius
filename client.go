@@ -353,7 +353,7 @@ func randomBanner() string {
 func (ui *UI) renderServerUI() *tview.Flex {
 	commandList := tview.NewTextView().SetDynamicColors(true)
 	commandList.
-		SetText("[yellow]^n[-::]: Read News\n[yellow]^l[-::]: View Logs\n").
+		SetText("[yellow]^n[-::]: Read News   [yellow]^p[-::]: Post News\n[yellow]^l[-::]: View Logs\n").
 		SetBorder(true).
 		SetTitle("Keyboard Shortcuts")
 
@@ -388,6 +388,89 @@ func (ui *UI) renderServerUI() *tview.Flex {
 			if err := ui.HLClient.Send(*NewTransaction(tranGetMsgs, nil)); err != nil {
 				ui.HLClient.Logger.Errorw("err", "err", err)
 			}
+		}
+
+		// Post news
+		if event.Key() == tcell.KeyCtrlP {
+
+			newsFlex := tview.NewFlex()
+
+			newsPostTextArea := tview.NewTextView()
+			newsPostTextArea.SetBackgroundColor(tcell.ColorDimGray)
+			newsPostTextArea.SetChangedFunc(func() {
+				ui.App.Draw() // TODO: docs say this is bad but it's the only way to show content during initial render??
+			})
+			//newsPostTextArea.SetBorderPadding(0, 0, 1, 1)
+
+			newsPostForm := tview.NewForm().
+				SetButtonsAlign(tview.AlignRight).
+				AddButton("Post", nil)
+			newsPostForm.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+				switch event.Key() {
+				case tcell.KeyTab:
+					ui.App.SetFocus(newsPostTextArea)
+				case tcell.KeyEnter:
+					err := ui.HLClient.Send(
+						*NewTransaction(tranOldPostNews, nil,
+							NewField(fieldData, []byte(newsPostTextArea.GetText(true))),
+						),
+					)
+					if err != nil {
+						ui.HLClient.Logger.Errorw("Error posting news", "err", err)
+						// TODO: display errModal to user
+					}
+					//newsInput.SetText("") // clear the input field after chat send
+					ui.Pages.RemovePage("newsInput")
+				}
+
+				return event
+			})
+
+			newsFlex.
+				SetDirection(tview.FlexRow).
+				SetBorder(true).
+				SetTitle("News Post")
+
+			newsPostTextArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+				ui.HLClient.Logger.Infow("key", "key", event.Key(), "rune", event.Rune())
+				switch event.Key() {
+				case tcell.KeyEscape:
+					ui.Pages.RemovePage("newsInput")
+				case tcell.KeyTab:
+					ui.App.SetFocus(newsPostForm)
+				case tcell.KeyEnter:
+					fmt.Fprintf(newsPostTextArea, "\n")
+				default:
+					switch event.Rune() {
+					case 127:
+						curTxt := newsPostTextArea.GetText(true)
+						if len(curTxt) > 0 {
+							curTxt = curTxt[:len(curTxt)-1]
+							newsPostTextArea.SetText(curTxt)
+						}
+					default:
+						fmt.Fprintf(newsPostTextArea, string(event.Rune()))
+					}
+				}
+
+				return event
+			})
+
+			newsFlex.AddItem(newsPostTextArea, 10, 0, true)
+			newsFlex.AddItem(newsPostForm, 3, 0, false)
+
+			newsPostPage := tview.NewFlex().
+				AddItem(nil, 0, 1, false).
+				AddItem(tview.NewFlex().
+					SetDirection(tview.FlexRow).
+					AddItem(nil, 0, 1, false).
+					AddItem(newsFlex, 15, 1, true).
+					//AddItem(newsPostForm, 3, 0, false).
+					AddItem(nil, 0, 1, false), 40, 1, false).
+				AddItem(nil, 0, 1, false)
+
+			ui.Pages.AddPage("newsInput", newsPostPage, true, true)
+			ui.App.SetFocus(newsPostTextArea)
 		}
 
 		return event
