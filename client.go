@@ -101,7 +101,6 @@ func NewUI(c *Client) *UI {
 	app := tview.NewApplication()
 	chatBox := tview.NewTextView().
 		SetScrollable(true).
-		SetText("").
 		SetDynamicColors(true).
 		SetWordWrap(true).
 		SetChangedFunc(func() {
@@ -113,7 +112,6 @@ func NewUI(c *Client) *UI {
 	chatInput.
 		SetLabel("> ").
 		SetFieldBackgroundColor(tcell.ColorDimGray).
-		//SetFieldTextColor(tcell.ColorWhite).
 		SetDoneFunc(func(key tcell.Key) {
 			// skip send if user hit enter with no other text
 			if len(chatInput.GetText()) == 0 {
@@ -130,10 +128,12 @@ func NewUI(c *Client) *UI {
 
 	chatInput.Box.SetBorder(true).SetTitle("Send")
 
-	userList := tview.NewTextView().SetDynamicColors(true)
-	userList.SetChangedFunc(func() {
-		app.Draw() // TODO: docs say this is bad but it's the only way to show content during initial render??
-	})
+	userList := tview.
+		NewTextView().
+		SetDynamicColors(true).
+		SetChangedFunc(func() {
+			app.Draw() // TODO: docs say this is bad but it's the only way to show content during initial render??
+		})
 	userList.Box.SetBorder(true).SetTitle("Users")
 
 	return &UI{
@@ -147,12 +147,6 @@ func NewUI(c *Client) *UI {
 		HLClient:    c,
 	}
 }
-
-const defaultUsername = "unnamed"
-
-const (
-	trackerListPage = "trackerList"
-)
 
 func (ui *UI) showBookmarks() *tview.List {
 	list := tview.NewList()
@@ -429,9 +423,8 @@ func (ui *UI) Start() {
 		0, 1, true,
 	)
 
-	joinServerPage := ui.renderJoinServerForm("", GuestAccount, "", "home", false, false)
-
 	mainMenu.AddItem("Join Server", "", 'j', func() {
+		joinServerPage := ui.renderJoinServerForm("", GuestAccount, "", "home", false, false)
 		ui.Pages.AddPage("joinServer", joinServerPage, true, true)
 	}).
 		AddItem("Bookmarks", "", 'b', func() {
@@ -867,61 +860,6 @@ func (c *Client) LogIn(login string, password string) error {
 		),
 	)
 }
-
-//// Agree agrees to the server agreement and sends user info, completing the login sequence
-//func (c *Client) Agree() {
-//	c.Send(
-//		NewTransaction(
-//			tranAgreed, 3,
-//			[]Field{
-//				NewField(fieldUserName, []byte("test")),
-//				NewField(fieldUserIconID, *c.Icon),
-//				NewField(fieldUserFlags, []byte{0x00, 0x00}),
-//			},
-//		),
-//	)
-//	//
-//	//// Block until we receive the agreement reply from the server
-//	//_ = c.WaitForTransaction(tranAgreed)
-//}
-
-//func (c *Client) WaitForTransaction(id uint16) Transaction {
-//	var trans Transaction
-//	for {
-//		buf := make([]byte, 1400)
-//		readLen, err := c.Connection.Read(buf)
-//		if err != nil {
-//			panic(err)
-//		}
-//
-//		transactions := ReadTransactions(buf[:readLen])
-//		tran, err := FindTransactions(id, transactions)
-//		if err == nil {
-//			fmt.Println("returning")
-//			return tran
-//		}
-//	}
-//
-//	return trans
-//}
-
-//func (c *Client) Read() error {
-//	// Main loop where we wait for and take action on client requests
-//	for {
-//		buf := make([]byte, 1400)
-//		readLen, err := c.Connection.Read(buf)
-//		if err != nil {
-//			panic(err)
-//		}
-//		transactions, _, _ := readTransactions(buf[:readLen])
-//
-//		for _, t := range transactions {
-//			c.HandleTransaction(&t)
-//		}
-//	}
-//
-//	return nil
-//}
 
 func (c *Client) Send(t Transaction) error {
 	requestNum := binary.BigEndian.Uint16(t.Type)
