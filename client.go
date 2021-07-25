@@ -435,8 +435,6 @@ func (ui *UI) Start() {
 			ui.Pages.AddAndSwitchToPage("trackerList", ui.trackerList, true)
 		}).
 		AddItem("Settings", "", 's', func() {
-			//ui.Pages.AddPage("settings", ui.renderSettingsForm(), true, false)
-
 			ui.Pages.AddPage("settings", ui.renderSettingsForm(), true, true)
 		}).
 		AddItem("Quit", "", 'q', func() {
@@ -454,12 +452,10 @@ func (ui *UI) Start() {
 		}
 		// Show Logs
 		if event.Key() == tcell.KeyCtrlL {
-			//curPage, _ := ui.Pages.GetFrontPage()
 			ui.HLClient.DebugBuf.TextView.ScrollToEnd()
 			ui.HLClient.DebugBuf.TextView.SetBorder(true).SetTitle("Logs")
 			ui.HLClient.DebugBuf.TextView.SetDoneFunc(func(key tcell.Key) {
 				if key == tcell.KeyEscape {
-					//ui.Pages.SwitchToPage("serverUI")
 					ui.Pages.RemovePage("logs")
 				}
 			})
@@ -470,7 +466,8 @@ func (ui *UI) Start() {
 	})
 
 	if err := ui.App.SetRoot(ui.Pages, true).SetFocus(ui.Pages).Run(); err != nil {
-		panic(err)
+		ui.App.Stop()
+		os.Exit(1)
 	}
 }
 

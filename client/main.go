@@ -8,17 +8,11 @@ import (
 	"github.com/rivo/tview"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 )
-
-//var defaultTrackerList = []string{
-//	"hltracker.com:5498",
-//}
-
-const connectTimeout = 3 * time.Second
 
 func main() {
 	_, cancelRoot := context.WithCancel(context.Background())
@@ -28,10 +22,8 @@ func main() {
 
 	version := flag.Bool("version", false, "print version and exit")
 	logLevel := flag.String("log-level", "info", "Log level")
-	userName := flag.String("name", "unnamed", "User name")
-	//srvAddr := flag.String("server", "localhost:5500", "Hostname/Port of server")
-	//login := flag.String("login", "guest", "Login Name")
-	//pass := flag.String("password", "", "Login Password")
+	logFile := flag.String("log-file", "", "output logs to file")
+
 	flag.Parse()
 
 	if *version {
@@ -50,10 +42,22 @@ func main() {
 		TextView: tview.NewTextView(),
 	}
 
-	cores := []zapcore.Core{
-		newDebugCore(zapLvl, db),
-		//newStderrCore(zapLvl),
+	cores := []zapcore.Core{newZapCore(zapLvl, db)}
+
+	// Add file logger if optional log-file flag was passed
+	if *logFile != "" {
+		f, err := os.OpenFile(*logFile,
+			os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Println(err)
+		}
+		defer f.Close()
+		if err != nil {
+			panic(err)
+		}
+		cores = append(cores, newZapCore(zapLvl, f))
 	}
+
 	l := zap.New(zapcore.NewTee(cores...))
 	defer func() { _ = l.Sync() }()
 	logger := l.Sugar()
@@ -65,32 +69,20 @@ func main() {
 		cancelRoot()
 	}()
 
-	client := hotline.NewClient(*userName, logger)
+	client := hotline.NewClient("", logger)
 	client.DebugBuf = db
 	client.UI.Start()
 
 }
 
-func newDebugCore(level zapcore.Level, db *hotline.DebugBuffer) zapcore.Core {
+func newZapCore(level zapcore.Level, syncer zapcore.WriteSyncer) zapcore.Core {
 	encoderCfg := zap.NewProductionEncoderConfig()
 	encoderCfg.TimeKey = "timestamp"
 	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
 
 	return zapcore.NewCore(
 		zapcore.NewConsoleEncoder(encoderCfg),
-		zapcore.Lock(db),
-		level,
-	)
-}
-
-func newStderrCore(level zapcore.Level) zapcore.Core {
-	encoderCfg := zap.NewProductionEncoderConfig()
-	encoderCfg.TimeKey = "timestamp"
-	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
-
-	return zapcore.NewCore(
-		zapcore.NewConsoleEncoder(encoderCfg),
-		zapcore.Lock(os.Stderr),
+		zapcore.Lock(syncer),
 		level,
 	)
 }
