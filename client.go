@@ -17,11 +17,15 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const clientConfigPath = "/usr/local/etc/mobius-client-config.yaml"
+const (
+	trackerListPage = "trackerList"
+)
 
 //go:embed client/banners/*.txt
 var bannerDir embed.FS
@@ -37,6 +41,7 @@ type ClientPrefs struct {
 	Username  string     `yaml:"Username"`
 	IconID    int        `yaml:"IconID"`
 	Bookmarks []Bookmark `yaml:"Bookmarks"`
+	Tracker   string     `yaml:"Tracker"`
 }
 
 func readConfig(cfgPath string) (*ClientPrefs, error) {
@@ -177,7 +182,7 @@ func (ui *UI) showBookmarks() *tview.List {
 }
 
 func (ui *UI) getTrackerList() *tview.List {
-	listing, err := GetListing("hltracker.com:5498")
+	listing, err := GetListing(ui.HLClient.pref.Tracker)
 	if err != nil {
 		spew.Dump(err)
 	}
@@ -208,10 +213,20 @@ func (ui *UI) getTrackerList() *tview.List {
 }
 
 func (ui *UI) renderSettingsForm() *tview.Flex {
+	iconStr := strconv.Itoa(ui.HLClient.pref.IconID)
 	settingsForm := tview.NewForm()
-	settingsForm.AddInputField("Your Name", ui.HLClient.pref.Username, 20, nil, nil)
+	settingsForm.AddInputField("Your Name", ui.HLClient.pref.Username, 0, nil, nil)
+	settingsForm.AddInputField("IconID",iconStr, 0, func(idStr string, _ rune) bool {
+		_, err := strconv.Atoi(idStr)
+		return err == nil
+	}, nil)
+	settingsForm.AddInputField("Tracker", ui.HLClient.pref.Tracker, 0, nil, nil)
 	settingsForm.AddButton("Save", func() {
 		ui.HLClient.pref.Username = settingsForm.GetFormItem(0).(*tview.InputField).GetText()
+		iconStr = settingsForm.GetFormItem(1).(*tview.InputField).GetText()
+		ui.HLClient.pref.IconID, _ = strconv.Atoi(iconStr)
+		ui.HLClient.pref.Tracker = settingsForm.GetFormItem(2).(*tview.InputField).GetText()
+
 		out, err := yaml.Marshal(&ui.HLClient.pref)
 		if err != nil {
 			// TODO: handle err
