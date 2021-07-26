@@ -504,13 +504,6 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 		return fmt.Errorf("incorrect login")
 	}
 
-	// Hotline 1.2.3 client does not send fieldVersion
-	// Nostalgia client sends ""
-	//if string(*c.Version) == "" {
-	//	*c.UserName = clientLogin.GetField(fieldUserName).Data
-	//	*c.Icon = clientLogin.GetField(fieldUserIconID).Data
-	//}
-	//
 	if clientLogin.GetField(fieldUserName).Data != nil {
 		*c.UserName = clientLogin.GetField(fieldUserName).Data
 	}
@@ -538,13 +531,6 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 
 	// Show agreement to client
 	c.Server.outbox <- *NewTransaction(tranShowAgreement, c.ID, NewField(fieldData, s.Agreement))
-
-	// The Hotline ClientConn v1.2.3 has a different login sequence than 1.9.2
-	if string(*c.Version) == "" {
-		if _, err := c.notifyNewUserHasJoined(); err != nil {
-			return err
-		}
-	}
 
 	if _, err := c.notifyNewUserHasJoined(); err != nil {
 		return err

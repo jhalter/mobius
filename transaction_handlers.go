@@ -41,6 +41,9 @@ var TransactionHandlers = map[uint16]TransactionType{
 	tranUserAccess: {
 		Name: "tranUserAccess",
 	},
+	tranNotifyDeleteUser: {
+		Name: "tranNotifyDeleteUser",
+	},
 	tranAgreed: {
 		Access:  accessAlwaysAllow,
 		Name:    "tranAgreed",
@@ -117,18 +120,26 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleGetFileNameList,
 	},
 	tranGetMsgs: {
+		Access:  accessNewsReadArt,
+		DenyMsg: "You are not allowed to read news.",
 		Name:    "tranGetMsgs",
 		Handler: HandleGetMsgs,
 	},
 	tranGetNewsArtData: {
+		Access:  accessNewsReadArt,
+		DenyMsg: "You are not allowed to read news.",
 		Name:    "tranGetNewsArtData",
 		Handler: HandleGetNewsArtData,
 	},
 	tranGetNewsArtNameList: {
+		Access:  accessNewsReadArt,
+		DenyMsg: "You are not allowed to read news.",
 		Name:    "tranGetNewsArtNameList",
 		Handler: HandleGetNewsArtNameList,
 	},
 	tranGetNewsCatNameList: {
+		Access:  accessNewsReadArt,
+		DenyMsg: "You are not allowed to read news.",
 		Name:    "tranGetNewsCatNameList",
 		Handler: HandleGetNewsCatNameList,
 	},
@@ -150,24 +161,27 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleInviteNewChat,
 	},
 	tranInviteToChat: {
+		Access:  accessOpenChat,
+		DenyMsg: "You are not allowed to request private chat.",
 		Name:    "tranInviteToChat",
 		Handler: HandleInviteToChat,
 	},
 	tranJoinChat: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranJoinChat",
 		Handler: HandleJoinChat,
 	},
 	tranKeepAlive: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranKeepAlive",
 		Handler: HandleKeepAlive,
 	},
 	tranLeaveChat: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranJoinChat",
 		Handler: HandleLeaveChat,
 	},
-	tranNotifyDeleteUser: {
-		Name: "tranNotifyDeleteUser",
-	},
+
 	tranListUsers: {
 		Access:  accessOpenUser,
 		DenyMsg: "You are not allowed to view accounts.",
@@ -181,14 +195,20 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleMoveFile,
 	},
 	tranNewFolder: {
+		Access:  accessCreateFolder,
+		DenyMsg: "You are not allow to create folders.",
 		Name:    "tranNewFolder",
 		Handler: HandleNewFolder,
 	},
 	tranNewNewsCat: {
+		Access:  accessNewsCreateCat,
+		DenyMsg: "You are not allowed to create news categories.",
 		Name:    "tranNewNewsCat",
 		Handler: HandleNewNewsCat,
 	},
 	tranNewNewsFldr: {
+		Access:  accessNewsCreateFldr,
+		DenyMsg: "You are not allowed to create news folders.",
 		Name:    "tranNewNewsFldr",
 		Handler: HandleNewNewsFldr,
 	},
@@ -199,6 +219,8 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleNewUser,
 	},
 	tranOldPostNews: {
+		Access:  accessNewsPostArt,
+		DenyMsg: "You are not allowed to post news.",
 		Name:    "tranOldPostNews",
 		Handler: HandleTranOldPostNews,
 	},
@@ -209,10 +231,12 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandlePostNewsArt,
 	},
 	tranRejectChatInvite: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranRejectChatInvite",
 		Handler: HandleRejectChatInvite,
 	},
 	tranSendInstantMsg: {
+		Access: accessAlwaysAllow,
 		//Access: accessSendPrivMsg,
 		//DenyMsg: "You are not allowed to send private messages",
 		Name:    "tranSendInstantMsg",
@@ -228,6 +252,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 		},
 	},
 	tranSetChatSubject: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranSetChatSubject",
 		Handler: HandleSetChatSubject,
 	},
@@ -237,6 +262,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleSetClientUserInfo,
 	},
 	tranSetFileInfo: {
+		Access:  accessAlwaysAllow, // granular access is in the handler
 		Name:    "tranSetFileInfo",
 		Handler: HandleSetFileInfo,
 	},
@@ -253,6 +279,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleUploadFile,
 	},
 	tranUploadFldr: {
+		Access:  accessAlwaysAllow, // TODO: what should this be?
 		Name:    "tranUploadFldr",
 		Handler: HandleUploadFolder,
 	},
