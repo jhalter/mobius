@@ -220,7 +220,11 @@ func (ui *UI) renderSettingsForm() *tview.Flex {
 	}, nil)
 	settingsForm.AddInputField("Tracker", ui.HLClient.pref.Tracker, 0, nil, nil)
 	settingsForm.AddButton("Save", func() {
-		ui.HLClient.pref.Username = settingsForm.GetFormItem(0).(*tview.InputField).GetText()
+		usernameInput := settingsForm.GetFormItem(0).(*tview.InputField).GetText()
+		if len(usernameInput) == 0 {
+			usernameInput = "unnamed"
+		}
+		ui.HLClient.pref.Username = usernameInput
 		iconStr = settingsForm.GetFormItem(1).(*tview.InputField).GetText()
 		ui.HLClient.pref.IconID, _ = strconv.Atoi(iconStr)
 		ui.HLClient.pref.Tracker = settingsForm.GetFormItem(2).(*tview.InputField).GetText()
