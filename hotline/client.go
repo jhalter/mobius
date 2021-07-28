@@ -348,8 +348,8 @@ func (ui *UI) renderJoinServerForm(server, login, password, backPage string, sav
 func randomBanner() string {
 	rand.Seed(time.Now().UnixNano())
 
-	bannerFiles, _ := bannerDir.ReadDir("client/banners")
-	file, _ := bannerDir.ReadFile("client/banners/" + bannerFiles[rand.Intn(len(bannerFiles))].Name())
+	bannerFiles, _ := bannerDir.ReadDir("banners")
+	file, _ := bannerDir.ReadFile("banners/" + bannerFiles[rand.Intn(len(bannerFiles))].Name())
 
 	return fmt.Sprintf("\n\n\nWelcome to...\n\n[red::b]%s[-:-:-]\n\n", file)
 }
