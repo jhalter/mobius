@@ -754,15 +754,16 @@ func (c *Client) GetTransactions() error {
 func handleClientGetUserNameList(c *Client, t *Transaction) (res []Transaction, err error) {
 	var users []User
 	for _, field := range t.Fields {
-		u, _ := ReadUser(field.Data)
-		//flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(u.Flags)))
-		//if flagBitmap.Bit(userFlagAdmin) == 1 {
-		//	fmt.Fprintf(UserList, "[red::b]%s[-:-:-]\n", u.Name)
-		//} else {
-		//	fmt.Fprintf(UserList, "%s\n", u.Name)
-		//}
-
-		users = append(users, *u)
+		// The Hotline protocol docs say that ClientGetUserNameList should only return fieldUsernameWithInfo (300)
+		// fields, but shxd sneaks in fieldChatSubject (115) so it's important to filter explicitly for the expected
+		// field type.  Probably a good idea to do everywhere.
+		if bytes.Equal(field.ID, []byte{0x01, 0x2c}) {
+			u, err := ReadUser(field.Data)
+			if err != nil {
+				return res, err
+			}
+			users = append(users, *u)
+		}
 	}
 	c.UserList = users
 
