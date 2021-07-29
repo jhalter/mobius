@@ -11,9 +11,9 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 )
-
 
 func main() {
 	_, cancelRoot := context.WithCancel(context.Background())
@@ -70,7 +70,9 @@ func main() {
 		cancelRoot()
 	}()
 
-	client := hotline.NewClient("", logger)
+	cfgPath := defaultConfigPath()
+
+	client := hotline.NewClient(cfgPath, logger)
 	client.DebugBuf = db
 	client.UI.Start()
 
@@ -93,4 +95,20 @@ var zapLogLevel = map[string]zapcore.Level{
 	"info":  zap.InfoLevel,
 	"warn":  zap.WarnLevel,
 	"error": zap.ErrorLevel,
+}
+
+func defaultConfigPath() (cfgPath string) {
+	os := runtime.GOOS
+	switch os {
+	case "windows":
+		cfgPath = "mobius-client-config.yaml"
+	case "darwin":
+		cfgPath = "/usr/local/etc/mobius-client-config.yaml"
+	case "linux":
+		cfgPath = "/usr/local/etc/mobius-client-config.yaml"
+	default:
+		fmt.Printf("unsupported OS")
+	}
+
+	return cfgPath
 }

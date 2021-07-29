@@ -22,7 +22,6 @@ import (
 	"time"
 )
 
-const clientConfigPath = "/usr/local/etc/mobius-client-config.yaml"
 const (
 	trackerListPage = "trackerList"
 )
@@ -66,6 +65,7 @@ func readConfig(cfgPath string) (*ClientPrefs, error) {
 }
 
 type Client struct {
+	cfgPath     string
 	DebugBuf    *DebugBuffer
 	Connection  net.Conn
 	Login       *[]byte
@@ -234,7 +234,11 @@ func (ui *UI) renderSettingsForm() *tview.Flex {
 			// TODO: handle err
 		}
 		// TODO: handle err
-		_ = ioutil.WriteFile(clientConfigPath, out, 0666)
+		err = ioutil.WriteFile(ui.HLClient.cfgPath, out, 0666)
+		if err != nil {
+			println(ui.HLClient.cfgPath)
+			panic(err)
+		}
 		ui.Pages.RemovePage("settings")
 	})
 	settingsForm.SetBorder(true)
@@ -551,17 +555,19 @@ func (ui *UI) Start() {
 	}
 }
 
-func NewClient(username string, logger *zap.SugaredLogger) *Client {
+func NewClient(cfgPath string, logger *zap.SugaredLogger) *Client {
 	c := &Client{
+		cfgPath:     cfgPath,
 		Logger:      logger,
 		activeTasks: make(map[uint32]*Transaction),
 		Handlers:    clientHandlers,
 	}
 	c.UI = NewUI(c)
 
-	prefs, err := readConfig(clientConfigPath)
+	prefs, err := readConfig(cfgPath)
 	if err != nil {
-		return c
+		fmt.Printf("unable to read config file")
+		logger.Fatal("unable to read config file", "path", cfgPath)
 	}
 	c.pref = prefs
 
