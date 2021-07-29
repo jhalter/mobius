@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	hotline "github.com/jhalter/mobius"
+	"github.com/jhalter/mobius/hotline"
 	"github.com/rivo/tview"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"syscall"
 )
+
 
 func main() {
 	_, cancelRoot := context.WithCancel(context.Background())

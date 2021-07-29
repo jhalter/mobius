@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/jhalter/mobius"
+	"github.com/jhalter/mobius/hotline"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"os"

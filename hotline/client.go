@@ -27,7 +27,7 @@ const (
 	trackerListPage = "trackerList"
 )
 
-//go:embed client/banners/*.txt
+//go:embed banners/*.txt
 var bannerDir embed.FS
 
 type Bookmark struct {
