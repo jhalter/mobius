@@ -1,0 +1,13 @@
+[Unit]
+Description=Mobius Server
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+ExecStart=/usr/local/bin/mobius-hotline-server
+
+[Install]
+WantedBy=multi-user.target
