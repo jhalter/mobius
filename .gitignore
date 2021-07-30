@@ -21,4 +21,6 @@ server/config/files/*
 **/.DS_Store
 build
 
+dist/*
+
 *log
