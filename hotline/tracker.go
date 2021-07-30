@@ -124,6 +124,7 @@ func GetListing(addr string) ([]ServerRecord, error) {
 
 	payloadSize := int(binary.BigEndian.Uint16(info.MsgDataSize[:]))
 
+	buf = buf[:readLen]
 	if totalRead < payloadSize {
 		for {
 			tmpBuf := make([]byte, 4096)
