@@ -37,38 +37,33 @@ jobs:
       - run:
           name: cross compile
           command: |
-            mkdir dist
+            make build-win-amd64-client
+
             mkdir dist/mobius_server_linux_amd64
             mkdir dist/mobius_server_darwin_amd64
             mkdir dist/mobius_server_linux_arm
-            mkdir dist/mobius_server_windows_amd64
 
             cd cmd/mobius-hotline-server
 
             cp -r mobius/config ../../dist/mobius_server_linux_amd64/config
             cp -r mobius/config ../../dist/mobius_server_darwin_amd64/config
             cp -r mobius/config ../../dist/mobius_server_linux_arm/config
-            cp -r mobius/config ../../dist/mobius_server_windows_amd64/config
 
             gox -os="linux" -arch="amd64" -output="../../dist/mobius_server_linux_amd64/mobius_server"
             gox -os="darwin" -arch="amd64" -output="../../dist/mobius_server_darwin_amd64/mobius_server"
             gox -os="linux" -arch="arm" -output="../../dist/mobius_server_linux_arm/mobius_server"
-            GOOS=windows GOARCH=amd64 go build -o ../../dist/mobius_server_windows_amd64/mobius_server"
 
             cd ../mobius-hotline-client
             gox -os="linux" -arch="amd64" -output="../../dist/mobius_client_linux_amd64/mobius_client"
             gox -os="darwin" -arch="amd64" -output="../../dist/mobius_client_darwin_amd64/mobius_client"
-            GOOS=windows GOARCH=amd64 go build -o ../../dist/mobius_client_windows_amd64/mobius_client"
 
             cd ../../dist
             tar -zcvf mobius_server_linux_amd64.tar.gz mobius_server_linux_amd64
             tar -zcvf mobius_server_darwin_amd64.tar.gz mobius_server_darwin_amd64
             tar -zcvf mobius_server_linux_arm.tar.gz mobius_server_linux_arm
-            tar -zcvf mobius_server_windows_amd64.tar.gz mobius_server_windows_amd64
 
             tar -zcvf mobius_client_linux_amd64.tar.gz mobius_client_linux_amd64
             tar -zcvf mobius_client_darwin_amd64.tar.gz mobius_client_darwin_amd64
-            tar -zcvf mobius_client_windows_amd64.tar.gz mobius_client_windows_amd64
       - add_ssh_keys
       - run:
           name: create release
