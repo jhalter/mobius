@@ -37,7 +37,7 @@ jobs:
       - run:
           name: cross compile
           command: |
-            make build-win-amd64-client
+            make build-win-amd64-server
 
             mkdir dist/mobius_server_linux_amd64
             mkdir dist/mobius_server_darwin_amd64
