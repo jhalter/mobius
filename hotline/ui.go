@@ -341,7 +341,8 @@ func (ui *UI) renderServerUI() *tview.Flex {
 
 			newsPostForm := tview.NewForm().
 				SetButtonsAlign(tview.AlignRight).
-				AddButton("Post", nil)
+				//AddButton("Cancel", nil). // TODO: implement cancel button behavior
+				AddButton("Send", nil)
 			newsPostForm.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 				switch event.Key() {
 				case tcell.KeyTab:
@@ -357,7 +358,6 @@ func (ui *UI) renderServerUI() *tview.Flex {
 						ui.HLClient.Logger.Errorw("Error posting news", "err", err)
 						// TODO: display errModal to user
 					}
-					//newsInput.SetText("") // clear the input field after chat send
 					ui.Pages.RemovePage("newsInput")
 				}
 
@@ -367,7 +367,7 @@ func (ui *UI) renderServerUI() *tview.Flex {
 			newsFlex.
 				SetDirection(tview.FlexRow).
 				SetBorder(true).
-				SetTitle("News Post")
+				SetTitle("| Post Message |")
 
 			newsPostTextArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 				ui.HLClient.Logger.Infow("key", "key", event.Key(), "rune", event.Rune())
