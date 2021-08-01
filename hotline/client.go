@@ -71,7 +71,7 @@ type Client struct {
 	ID          *[]byte
 	Version     []byte
 	UserAccess  []byte
-	Agreed      bool
+	filePath    []string
 	UserList    []User
 	Logger      *zap.SugaredLogger
 	activeTasks map[uint32]*Transaction
@@ -97,14 +97,13 @@ func NewClient(cfgPath string, logger *zap.SugaredLogger) *Client {
 
 	prefs, err := readConfig(cfgPath)
 	if err != nil {
-		fmt.Printf("unable to read config file")
-		logger.Fatal("unable to read config file", "path", cfgPath)
+		fmt.Printf("unable to read config file %s", cfgPath)
+		os.Exit(1)
 	}
 	c.pref = prefs
 
 	return c
 }
-
 
 // DebugBuffer wraps a *tview.TextView and adds a Sync() method to make it available as a Zap logger
 type DebugBuffer struct {
@@ -128,10 +127,6 @@ func randomBanner() string {
 
 	return fmt.Sprintf("\n\n\nWelcome to...\n\n[red::b]%s[-:-:-]\n\n", file)
 }
-
-
-
-
 
 type clientTransaction struct {
 	Name    string
@@ -189,6 +184,93 @@ var clientHandlers = map[uint16]clientTHandler{
 		Name:    "tranNotifyDeleteUser",
 		Handler: handleGetMsgs,
 	},
+	tranGetFileNameList: clientTransaction{
+		Name:    "tranGetFileNameList",
+		Handler: handleGetFileNameList,
+	},
+}
+
+func handleGetFileNameList(c *Client, t *Transaction) (res []Transaction, err error) {
+	fTree := tview.NewTreeView().SetTopLevel(1)
+	root := tview.NewTreeNode("Root")
+	fTree.SetRoot(root).SetCurrentNode(root)
+	fTree.SetBorder(true).SetTitle("| Files |")
+	fTree.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEscape:
+			c.UI.Pages.RemovePage("files")
+			c.filePath = []string{}
+		case tcell.KeyEnter:
+			selectedNode := fTree.GetCurrentNode()
+
+			if selectedNode.GetText() == "<- Back" {
+				c.filePath = c.filePath[:len(c.filePath)-1]
+				f := NewField(fieldFilePath, EncodeFilePath(strings.Join(c.filePath, "/")))
+
+				if err := c.UI.HLClient.Send(*NewTransaction(tranGetFileNameList, nil, f)); err != nil {
+					c.UI.HLClient.Logger.Errorw("err", "err", err)
+				}
+				return event
+			}
+
+			entry := selectedNode.GetReference().(*FileNameWithInfo)
+
+			if bytes.Equal(entry.Type, []byte("fldr")) {
+				c.Logger.Infow("get new directory listing", "name", string(entry.Name))
+
+				c.filePath = append(c.filePath, string(entry.Name))
+				f := NewField(fieldFilePath, EncodeFilePath(strings.Join(c.filePath, "/")))
+
+				if err := c.UI.HLClient.Send(*NewTransaction(tranGetFileNameList, nil, f)); err != nil {
+					c.UI.HLClient.Logger.Errorw("err", "err", err)
+				}
+			} else {
+				// TODO: initiate file download
+				c.Logger.Infow("download file", "name", string(entry.Name))
+			}
+		}
+
+		return event
+	})
+
+	if len(c.filePath) > 0 {
+		node := tview.NewTreeNode("<- Back")
+		root.AddChild(node)
+	}
+
+	var fileList []FileNameWithInfo
+	for _, f := range t.Fields {
+		var fn FileNameWithInfo
+		_, _ = fn.Read(f.Data)
+		fileList = append(fileList, fn)
+
+		if bytes.Equal(fn.Type, []byte("fldr")) {
+			node := tview.NewTreeNode(fmt.Sprintf("[blue::]📁 %s[-:-:-]", fn.Name))
+			node.SetReference(&fn)
+			root.AddChild(node)
+		} else {
+			size := binary.BigEndian.Uint32(fn.FileSize) / 1024
+
+			node := tview.NewTreeNode(fmt.Sprintf("   %-10s %10v KB", fn.Name, size))
+			node.SetReference(&fn)
+			root.AddChild(node)
+		}
+
+	}
+
+	centerFlex := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().
+			SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(fTree, 20, 1, true).
+			AddItem(nil, 0, 1, false), 40, 1, true).
+		AddItem(nil, 0, 1, false)
+
+	c.UI.Pages.AddPage("files", centerFlex, true, true)
+	c.UI.App.Draw()
+
+	return res, err
 }
 
 func handleGetMsgs(c *Client, t *Transaction) (res []Transaction, err error) {
@@ -204,8 +286,8 @@ func handleGetMsgs(c *Client, t *Transaction) (res []Transaction, err error) {
 	newsTextView.SetBorder(true).SetTitle("News")
 
 	c.UI.Pages.AddPage("news", newsTextView, true, true)
-	c.UI.Pages.SwitchToPage("news")
-	c.UI.App.SetFocus(newsTextView)
+	//c.UI.Pages.SwitchToPage("news")
+	//c.UI.App.SetFocus(newsTextView)
 	c.UI.App.Draw()
 
 	return res, err
@@ -379,7 +461,6 @@ func handleClientTranShowAgreement(c *Client, t *Transaction) (res []Transaction
 						NewField(fieldOptions, []byte{0x00, 0x00}),
 					),
 				)
-				c.Agreed = true
 				c.UI.Pages.HidePage("agreement")
 				c.UI.App.SetFocus(c.UI.chatInput)
 			} else {
@@ -556,7 +637,6 @@ func (c *Client) HandleTransaction(t *Transaction) error {
 }
 
 func (c *Client) Connected() bool {
-	fmt.Printf("Agreed: %v UserAccess: %v\n", c.Agreed, c.UserAccess)
 	// c.Agreed == true &&
 	if c.UserAccess != nil {
 		return true

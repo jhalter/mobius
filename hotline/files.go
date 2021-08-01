@@ -52,22 +52,22 @@ func getFileNameList(filePath string) ([]Field, error) {
 	}
 
 	for _, file := range files {
-		var fileType string
-		var fileCreator []byte
-		var fileSize uint32
+		var fileType []byte
+		fileCreator := make([]byte, 4)
+		fileSize := make([]byte, 4)
 		if !file.IsDir() {
-			fileType = fileTypeFromFilename(file.Name())
+			fileType = []byte(fileTypeFromFilename(file.Name()))
 			fileCreator = []byte(fileCreatorFromFilename(file.Name()))
-			fileSize = uint32(file.Size())
+
+			binary.BigEndian.PutUint32(fileSize, uint32(file.Size()))
 		} else {
-			fileType = "fldr"
-			fileCreator = make([]byte, 4)
+			fileType = []byte("fldr")
 
 			dir, err := ioutil.ReadDir(filePath + "/" + file.Name())
 			if err != nil {
 				return fields, err
 			}
-			fileSize = uint32(len(dir))
+			binary.BigEndian.PutUint32(fileSize, uint32(len(dir)))
 		}
 
 		fields = append(fields, NewField(
@@ -77,7 +77,7 @@ func getFileNameList(filePath string) ([]Field, error) {
 				Creator:    fileCreator,
 				FileSize:   fileSize,
 				NameScript: []byte{0, 0},
-				Name:       file.Name(),
+				Name:       []byte(file.Name()),
 			}.Payload(),
 		))
 	}

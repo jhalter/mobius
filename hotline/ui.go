@@ -285,7 +285,7 @@ func (ui *UI) renderServerUI() *tview.Flex {
 	commandList.
 		SetText("[yellow]^n[-::]: Read News   [yellow]^p[-::]: Post News\n[yellow]^l[-::]: View Logs\n").
 		SetBorder(true).
-		SetTitle("Keyboard Shortcuts")
+		SetTitle("| Keyboard Shortcuts| ")
 
 	modal := tview.NewModal().
 		SetText("Disconnect from the server?").
@@ -311,6 +311,13 @@ func (ui *UI) renderServerUI() *tview.Flex {
 	serverUI.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape {
 			ui.Pages.AddPage("modal", modal, false, true)
+		}
+
+		// List files
+		if event.Key() == tcell.KeyCtrlF {
+			if err := ui.HLClient.Send(*NewTransaction(tranGetFileNameList, nil)); err != nil {
+				ui.HLClient.Logger.Errorw("err", "err", err)
+			}
 		}
 
 		// Show News

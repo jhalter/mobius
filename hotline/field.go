@@ -87,34 +87,3 @@ func NewField(id uint16, data []byte) Field {
 func (f Field) Payload() []byte {
 	return concat.Slices(f.ID, f.FieldSize, f.Data)
 }
-
-type FileNameWithInfo struct {
-	Type       string // file type code
-	Creator    []byte // File creator code
-	FileSize   uint32 // File Size in bytes
-	NameScript []byte // TODO: What is this?
-	NameSize   []byte // Length of name field
-	Name       string // File name
-}
-
-func (f FileNameWithInfo) Payload() []byte {
-	name := []byte(f.Name)
-	nameSize := make([]byte, 2)
-	binary.BigEndian.PutUint16(nameSize, uint16(len(name)))
-
-	kb := f.FileSize
-
-	fSize := make([]byte, 4)
-	binary.BigEndian.PutUint32(fSize, kb)
-
-	return concat.Slices(
-		[]byte(f.Type),
-		f.Creator,
-		fSize,
-		[]byte{0, 0, 0, 0},
-		f.NameScript,
-		nameSize,
-		[]byte(f.Name),
-	)
-
-}
