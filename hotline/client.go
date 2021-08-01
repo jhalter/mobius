@@ -188,6 +188,43 @@ var clientHandlers = map[uint16]clientTHandler{
 		Name:    "tranGetFileNameList",
 		Handler: handleGetFileNameList,
 	},
+	tranServerMsg: clientTransaction{
+		Name:    "tranServerMsg",
+		Handler: handleTranServerMsg,
+	},
+}
+
+func handleTranServerMsg(c *Client, t *Transaction) (res []Transaction, err error) {
+	time := time.Now().Format(time.RFC850)
+
+	msg := strings.ReplaceAll(string(t.GetField(fieldData).Data), "\r", "\n")
+	msg +=  "\n\nAt " + time
+	title := fmt.Sprintf("| Private Message From: 	%s |", t.GetField(fieldUserName).Data)
+
+	msgBox := tview.NewTextView().SetScrollable(true)
+	msgBox.SetText(msg).SetBackgroundColor(tcell.ColorDarkSlateBlue)
+	msgBox.SetTitle(title).SetBorder(true)
+	msgBox.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEscape:
+			c.UI.Pages.RemovePage("serverMsgModal" + time)
+		}
+		return event
+	})
+
+	centeredFlex := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(msgBox, 0, 2, true).
+			AddItem(nil, 0, 1, false), 0, 2, true).
+		AddItem(nil, 0, 1, false)
+
+
+	c.UI.Pages.AddPage("serverMsgModal" + time, centeredFlex, true, true)
+	c.UI.App.Draw() // TODO: errModal doesn't render without this.  wtf?
+
+	return res, err
 }
 
 func handleGetFileNameList(c *Client, t *Transaction) (res []Transaction, err error) {
