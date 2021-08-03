@@ -288,7 +288,7 @@ func handleGetFileNameList(c *Client, t *Transaction) (res []Transaction, err er
 		} else {
 			size := binary.BigEndian.Uint32(fn.FileSize) / 1024
 
-			node := tview.NewTreeNode(fmt.Sprintf("   %-30s %15v KB", fn.Name, size))
+			node := tview.NewTreeNode(fmt.Sprintf("   %-40s %10v KB", fn.Name, size))
 			node.SetReference(&fn)
 			root.AddChild(node)
 		}
