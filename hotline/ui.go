@@ -209,18 +209,20 @@ func (ui *UI) joinServer(addr, login, password string) error {
 				msg := err.Error()
 				if err == io.EOF {
 					msg = "The server connection has unexpectedly closed."
+					loginErrModal := tview.NewModal().
+						AddButtons([]string{"Ok"}).
+						SetText(msg).
+						SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+							ui.Pages.SwitchToPage("home")
+						})
+					loginErrModal.Box.SetTitle("Server Connection Error")
+
+					ui.Pages.AddPage("loginErr", loginErrModal, false, true)
+					ui.App.Draw()
+					return
 				}
+				ui.Pages.SwitchToPage("home")
 
-				loginErrModal := tview.NewModal().
-					AddButtons([]string{"Ok"}).
-					SetText(msg).
-					SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-						ui.Pages.SwitchToPage("home")
-					})
-				loginErrModal.Box.SetTitle("Server Connection Error")
-
-				ui.Pages.AddPage("loginErr", loginErrModal, false, true)
-				ui.App.Draw()
 				return
 			}
 		}
