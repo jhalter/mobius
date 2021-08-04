@@ -95,7 +95,7 @@ func (ui *UI) showBookmarks() *tview.List {
 		list.AddItem(srv.Name, srv.Addr, rune(shortcut+i), func() {
 			ui.Pages.RemovePage("joinServer")
 
-			newJS := ui.renderJoinServerForm(addr, login, pass, "bookmarks", true, true)
+			newJS := ui.renderJoinServerForm("", addr, login, pass, "bookmarks", true, true)
 
 			ui.Pages.AddPage("joinServer", newJS, true, true)
 		})
@@ -125,7 +125,7 @@ func (ui *UI) getTrackerList() *tview.List {
 		list.AddItem(string(srv.Name), string(srv.Description), rune(shortcut+i), func() {
 			ui.Pages.RemovePage("joinServer")
 
-			newJS := ui.renderJoinServerForm(addr, GuestAccount, "", trackerListPage, false, true)
+			newJS := ui.renderJoinServerForm("", addr, GuestAccount, "", trackerListPage, false, true)
 
 			ui.Pages.AddPage("joinServer", newJS, true, true)
 			ui.Pages.ShowPage("joinServer")
@@ -220,14 +220,30 @@ func (ui *UI) joinServer(addr, login, password string) error {
 	return nil
 }
 
-func (ui *UI) renderJoinServerForm(server, login, password, backPage string, save, defaultConnect bool) *tview.Flex {
+func (ui *UI) renderJoinServerForm(name, server, login, password, backPage string, save, defaultConnect bool) *tview.Flex {
 	joinServerForm := tview.NewForm()
 	joinServerForm.
+		//	AddInputField("Name", server, 0, func(textToCheck string, lastChar rune) bool {
+		//	return false
+		//}, nil).
 		AddInputField("Server", server, 0, nil, nil).
 		AddInputField("Login", login, 0, nil, nil).
 		AddPasswordField("Password", password, 0, '*', nil).
 		AddCheckbox("Save", save, func(checked bool) {
+			ui.HLClient.Logger.Infow("saving bookmark")
 			// TODO: Implement bookmark saving
+
+			ui.HLClient.pref.AddBookmark(joinServerForm.GetFormItem(0).(*tview.InputField).GetText(), joinServerForm.GetFormItem(0).(*tview.InputField).GetText(), joinServerForm.GetFormItem(1).(*tview.InputField).GetText(), joinServerForm.GetFormItem(2).(*tview.InputField).GetText())
+			out, err := yaml.Marshal(ui.HLClient.pref)
+			if err != nil {
+				panic(err)
+			}
+
+			err = ioutil.WriteFile(ui.HLClient.cfgPath, out, 0666)
+			if err != nil {
+				panic(err)
+			}
+			// 		pref := ui.HLClient.pref
 		}).
 		AddButton("Cancel", func() {
 			ui.Pages.SwitchToPage(backPage)
@@ -439,7 +455,7 @@ func (ui *UI) Start() {
 	)
 
 	mainMenu.AddItem("Join Server", "", 'j', func() {
-		joinServerPage := ui.renderJoinServerForm("", GuestAccount, "", "home", false, false)
+		joinServerPage := ui.renderJoinServerForm("", "", GuestAccount, "", "home", false, false)
 		ui.Pages.AddPage("joinServer", joinServerPage, true, true)
 	}).
 		AddItem("Bookmarks", "", 'b', func() {

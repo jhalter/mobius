@@ -46,6 +46,12 @@ func (cp *ClientPrefs) IconBytes() []byte {
 	return iconBytes
 }
 
+func (cp *ClientPrefs) AddBookmark(name, addr, login, pass string) error {
+	cp.Bookmarks = append(cp.Bookmarks, Bookmark{Addr: addr, Login: login, Password: pass})
+
+	return nil
+}
+
 func readConfig(cfgPath string) (*ClientPrefs, error) {
 	fh, err := os.Open(cfgPath)
 	if err != nil {
