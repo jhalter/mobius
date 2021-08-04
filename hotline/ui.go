@@ -187,6 +187,10 @@ func (ui *UI) renderSettingsForm() *tview.Flex {
 }
 
 func (ui *UI) joinServer(addr, login, password string) error {
+	// append default port to address if no port supplied
+	if len(strings.Split(addr, ":")) == 1 {
+		addr += ":5500"
+	}
 	if err := ui.HLClient.JoinServer(addr, login, password); err != nil {
 		return errors.New(fmt.Sprintf("Error joining server: %v\n", err))
 	}
