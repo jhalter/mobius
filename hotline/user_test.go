@@ -1,6 +1,7 @@
 package hotline
 
 import (
+	"bytes"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -90,20 +91,27 @@ func TestNegatedUserString(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want string
+		want []byte
 	}{
 		{
-			name: "encodes bytes to string",
+			name: "encodes bytes to expected string",
 			args: args{
 				encodedString: []byte("guest"),
 			},
-			want: string([]byte{0x98, 0x8a, 0x9a, 0x8c, 0x8b}),
+			want: []byte{0x98, 0x8a, 0x9a, 0x8c, 0x8b},
+		},
+		{
+			name: "encodes bytes with numerals to expected string",
+			args: args{
+				encodedString: []byte("foo1"),
+			},
+			want: []byte{0x99, 0x90, 0x90, 0xce },
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NegatedUserString(tt.args.encodedString); got != tt.want {
-				t.Errorf("NegatedUserString() = %v, want %v", got, tt.want)
+			if got := negateString(tt.args.encodedString); !bytes.Equal(got, tt.want) {
+				t.Errorf("NegatedUserString() = %x, want %x", got, tt.want)
 			}
 		})
 	}

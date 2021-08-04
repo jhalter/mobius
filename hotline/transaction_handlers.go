@@ -625,7 +625,6 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 
 func HandleGetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	userLogin := string(t.GetField(fieldUserLogin).Data)
-	decodedUserLogin := NegatedUserString(t.GetField(fieldUserLogin).Data)
 	account := cc.Server.Accounts[userLogin]
 	if account == nil {
 		errorT := cc.NewErrReply(t, "Account does not exist.")
@@ -635,7 +634,7 @@ func HandleGetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 
 	res = append(res, cc.NewReply(t,
 		NewField(fieldUserName, []byte(account.Name)),
-		NewField(fieldUserLogin, []byte(decodedUserLogin)),
+		NewField(fieldUserLogin, negateString(t.GetField(fieldUserLogin).Data)),
 		NewField(fieldUserPassword, []byte(account.Password)),
 		NewField(fieldUserAccess, *account.Access),
 	))

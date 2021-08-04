@@ -22,7 +22,7 @@ type testCase struct {
 }
 
 func (tt *testCase) Setup(srv *Server) error {
-	if err := srv.NewUser(tt.account.Login, tt.account.Name, NegatedUserString([]byte(tt.account.Password)), *tt.account.Access); err != nil {
+	if err := srv.NewUser(tt.account.Login, tt.account.Name, string(negateString([]byte(tt.account.Password))), *tt.account.Access); err != nil {
 		return err
 	}
 

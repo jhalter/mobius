@@ -45,7 +45,7 @@ func (a *Account) Payload() (out []byte) {
 
 		[]byte{0x00, 0x69}, // fieldUserLogin
 		loginLen,
-		[]byte(NegatedUserString([]byte(a.Login))),
+		negateString([]byte(a.Login)),
 
 		[]byte{0x00, 0x6e}, // fieldUserAccess
 		[]byte{0x00, 0x08},
