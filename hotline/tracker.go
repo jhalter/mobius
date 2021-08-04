@@ -110,7 +110,7 @@ func GetListing(addr string) ([]ServerRecord, error) {
 	if readLen, err = conn.Read(buf); err != nil {
 		return nil, err
 	}
-	totalRead += readLen  // 1514
+	totalRead += readLen // 1514
 
 	var th TrackerHeader
 	if err := binary.Read(bytes.NewReader(buf[:6]), binary.BigEndian, &th); err != nil {

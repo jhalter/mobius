@@ -28,6 +28,7 @@ func NewReadTransfer(b []byte) (Transfer, error) {
 
 	return transfer, nil
 }
+
 //
 //type FolderTransfer struct {
 //	Protocol        [4]byte // "HTXF" 0x48545846

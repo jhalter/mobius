@@ -204,7 +204,7 @@ func handleTranServerMsg(c *Client, t *Transaction) (res []Transaction, err erro
 	time := time.Now().Format(time.RFC850)
 
 	msg := strings.ReplaceAll(string(t.GetField(fieldData).Data), "\r", "\n")
-	msg +=  "\n\nAt " + time
+	msg += "\n\nAt " + time
 	title := fmt.Sprintf("| Private Message From: 	%s |", t.GetField(fieldUserName).Data)
 
 	msgBox := tview.NewTextView().SetScrollable(true)
@@ -226,8 +226,7 @@ func handleTranServerMsg(c *Client, t *Transaction) (res []Transaction, err erro
 			AddItem(nil, 0, 1, false), 0, 2, true).
 		AddItem(nil, 0, 1, false)
 
-
-	c.UI.Pages.AddPage("serverMsgModal" + time, centeredFlex, true, true)
+	c.UI.Pages.AddPage("serverMsgModal"+time, centeredFlex, true, true)
 	c.UI.App.Draw() // TODO: errModal doesn't render without this.  wtf?
 
 	return res, err

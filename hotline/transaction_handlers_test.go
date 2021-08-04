@@ -167,7 +167,7 @@ func TestHandleLeaveChat(t *testing.T) {
 						},
 					},
 				},
-				t: NewTransaction(tranDeleteUser,nil, NewField(fieldChatID, []byte{0, 0, 0, 1})),
+				t: NewTransaction(tranDeleteUser, nil, NewField(fieldChatID, []byte{0, 0, 0, 1})),
 			},
 			want: []Transaction{
 				{
@@ -200,7 +200,6 @@ func TestHandleLeaveChat(t *testing.T) {
 		})
 	}
 }
-
 
 func TestHandleGetUserNameList(t *testing.T) {
 	type args struct {

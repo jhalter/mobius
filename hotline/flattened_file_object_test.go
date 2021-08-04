@@ -17,6 +17,7 @@ func TestReadFlattenedFileObject(t *testing.T) {
 		t.Errorf("ReadFlattenedFileObject() = %q, want %q", format, want)
 	}
 }
+
 //
 //func TestNewFlattenedFileObject(t *testing.T) {
 //	ffo := NewFlattenedFileObject("test/config/files", "testfile.txt")

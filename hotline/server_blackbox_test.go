@@ -122,7 +122,6 @@ func TestHandshake(t *testing.T) {
 //	}
 //}
 
-
 func TestNewUser(t *testing.T) {
 	srv, _, _ := StartTestServer()
 
@@ -309,8 +308,6 @@ func TestNewUser(t *testing.T) {
 		})
 	}
 }
-
-
 
 // equal is a utility function used only in tests that determines if transactions are equal enough
 func (t Transaction) equal(otherT Transaction) bool {

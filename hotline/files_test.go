@@ -45,7 +45,7 @@ func TestEncodeFilePath(t *testing.T) {
 
 func TestCalcTotalSize(t *testing.T) {
 	cwd, _ := os.Getwd()
-	defer func() {_ = os.Chdir(cwd)}()
+	defer func() { _ = os.Chdir(cwd) }()
 
 	_ = os.Chdir("test/config/Files")
 

@@ -151,7 +151,7 @@ func TestReadTransaction(t *testing.T) {
 		{
 			name: "when len(buf) is less than the length of the transaction",
 			args: args{
-				buf: sampleTransaction.Payload()[:len(sampleTransaction.Payload()) - 1],
+				buf: sampleTransaction.Payload()[:len(sampleTransaction.Payload())-1],
 			},
 			want:    nil,
 			want1:   0,

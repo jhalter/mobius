@@ -105,7 +105,7 @@ func TestNegatedUserString(t *testing.T) {
 			args: args{
 				encodedString: []byte("foo1"),
 			},
-			want: []byte{0x99, 0x90, 0x90, 0xce },
+			want: []byte{0x99, 0x90, 0x90, 0xce},
 		},
 	}
 	for _, tt := range tests {

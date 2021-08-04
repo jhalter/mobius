@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	accessAlwaysAllow      = -1 // Some transactions are always allowed
+	accessAlwaysAllow = -1 // Some transactions are always allowed
 
 	// File System Maintenance
 	accessDeleteFile   = 0

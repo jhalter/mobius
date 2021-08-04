@@ -15,4 +15,3 @@ func Slices(slices ...[]byte) []byte {
 
 	return tmp
 }
-
