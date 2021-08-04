@@ -26,6 +26,11 @@ type UI struct {
 	HLClient     *Client
 }
 
+// pages
+const (
+	pageServerUI = "serverUI"
+)
+
 func NewUI(c *Client) *UI {
 	app := tview.NewApplication()
 	chatBox := tview.NewTextView().
@@ -47,7 +52,7 @@ func NewUI(c *Client) *UI {
 				return
 			}
 
-			c.Send(
+			_ = c.Send(
 				*NewTransaction(tranChatSend, nil,
 					NewField(fieldData, []byte(chatInput.GetText())),
 				),
@@ -301,9 +306,10 @@ func (ui *UI) renderJoinServerForm(name, server, login, password, backPage strin
 }
 
 func (ui *UI) renderServerUI() *tview.Flex {
+	ui.chatBox.SetText("") // clear any previously existing chatbox text
 	commandList := tview.NewTextView().SetDynamicColors(true)
 	commandList.
-		SetText("[yellow]^n[-::]: Read News   [yellow]^p[-::]: Post News\n[yellow]^l[-::]: View Logs\n").
+		SetText("[yellow]^n[-::]: Read News   [yellow]^p[-::]: Post News\n[yellow]^l[-::]: View Logs   [yellow]^f[-::]: View Files\n").
 		SetBorder(true).
 		SetTitle("| Keyboard Shortcuts| ")
 
@@ -314,7 +320,7 @@ func (ui *UI) renderServerUI() *tview.Flex {
 	modal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 		if buttonIndex == 1 {
 			_ = ui.HLClient.Disconnect()
-			ui.Pages.SwitchToPage("home")
+			ui.Pages.RemovePage(pageServerUI)
 		} else {
 			ui.Pages.HidePage("modal")
 		}
@@ -351,13 +357,12 @@ func (ui *UI) renderServerUI() *tview.Flex {
 		if event.Key() == tcell.KeyCtrlP {
 
 			newsFlex := tview.NewFlex()
-
+			newsFlex.SetBorderPadding(0, 0, 1, 1)
 			newsPostTextArea := tview.NewTextView()
-			newsPostTextArea.SetBackgroundColor(tcell.ColorDimGray)
+			newsPostTextArea.SetBackgroundColor(tcell.ColorDarkSlateGrey)
 			newsPostTextArea.SetChangedFunc(func() {
 				ui.App.Draw() // TODO: docs say this is bad but it's the only way to show content during initial render??
 			})
-			//newsPostTextArea.SetBorderPadding(0, 0, 1, 1)
 
 			newsPostForm := tview.NewForm().
 				SetButtonsAlign(tview.AlignRight).
@@ -365,10 +370,15 @@ func (ui *UI) renderServerUI() *tview.Flex {
 				AddButton("Send", nil)
 			newsPostForm.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 				switch event.Key() {
+				case tcell.KeyEscape:
+					ui.Pages.RemovePage("newsInput")
 				case tcell.KeyTab:
 					ui.App.SetFocus(newsPostTextArea)
 				case tcell.KeyEnter:
 					newsText := strings.ReplaceAll(newsPostTextArea.GetText(true), "\n", "\r")
+					if len(newsText) == 0 {
+						return event
+					}
 					err := ui.HLClient.Send(
 						*NewTransaction(tranOldPostNews, nil,
 							NewField(fieldData, []byte(newsText)),
@@ -390,14 +400,13 @@ func (ui *UI) renderServerUI() *tview.Flex {
 				SetTitle("| Post Message |")
 
 			newsPostTextArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-				ui.HLClient.Logger.Infow("key", "key", event.Key(), "rune", event.Rune())
 				switch event.Key() {
 				case tcell.KeyEscape:
 					ui.Pages.RemovePage("newsInput")
 				case tcell.KeyTab:
 					ui.App.SetFocus(newsPostForm)
 				case tcell.KeyEnter:
-					fmt.Fprintf(newsPostTextArea, "\n")
+					_, _ = fmt.Fprintf(newsPostTextArea, "\n")
 				default:
 					const windowsBackspaceRune = 8
 					const macBackspaceRune = 127
@@ -409,7 +418,7 @@ func (ui *UI) renderServerUI() *tview.Flex {
 							newsPostTextArea.SetText(curTxt)
 						}
 					default:
-						fmt.Fprintf(newsPostTextArea, string(event.Rune()))
+						_, _ = fmt.Fprintf(newsPostTextArea, string(event.Rune()))
 					}
 				}
 
