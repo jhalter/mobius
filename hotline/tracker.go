@@ -141,7 +141,6 @@ func GetListing(addr string) ([]ServerRecord, error) {
 	totalSrv := int(binary.BigEndian.Uint16(info.SrvCount[:]))
 
 	srvBuf := buf[14:totalRead]
-	totalRead += readLen
 
 	var servers []ServerRecord
 
