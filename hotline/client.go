@@ -21,7 +21,7 @@ import (
 
 const (
 	trackerListPage = "trackerList"
-	serverUIPage = "serverUI"
+	serverUIPage    = "serverUI"
 )
 
 //go:embed banners/*.txt
@@ -82,6 +82,7 @@ type Client struct {
 	UserList    []User
 	Logger      *zap.SugaredLogger
 	activeTasks map[uint32]*Transaction
+	serverName  string
 
 	pref *ClientPrefs
 

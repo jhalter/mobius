@@ -15,14 +15,14 @@ import (
 )
 
 type UI struct {
-	chatBox      *tview.TextView
-	chatInput    *tview.InputField
-	App          *tview.Application
-	Pages        *tview.Pages
-	userList     *tview.TextView
-	agreeModal   *tview.Modal
-	trackerList  *tview.List
-	HLClient     *Client
+	chatBox     *tview.TextView
+	chatInput   *tview.InputField
+	App         *tview.Application
+	Pages       *tview.Pages
+	userList    *tview.TextView
+	agreeModal  *tview.Modal
+	trackerList *tview.List
+	HLClient    *Client
 }
 
 // pages
@@ -126,10 +126,11 @@ func (ui *UI) getTrackerList() *tview.List {
 	shortcut := 97 // rune for "a"
 	for i, srv := range listing {
 		addr := srv.Addr()
+		srvName := srv.Name
 		list.AddItem(string(srv.Name), string(srv.Description), rune(shortcut+i), func() {
 			ui.Pages.RemovePage("joinServer")
 
-			newJS := ui.renderJoinServerForm("", addr, GuestAccount, "", trackerListPage, false, true)
+			newJS := ui.renderJoinServerForm(string(srvName), addr, GuestAccount, "", trackerListPage, false, true)
 
 			ui.Pages.AddPage("joinServer", newJS, true, true)
 			ui.Pages.ShowPage("joinServer")
@@ -257,11 +258,18 @@ func (ui *UI) renderJoinServerForm(name, server, login, password, backPage strin
 			ui.Pages.SwitchToPage(backPage)
 		}).
 		AddButton("Connect", func() {
+			srvAddr := joinServerForm.GetFormItem(0).(*tview.InputField).GetText()
+			loginInput := joinServerForm.GetFormItem(1).(*tview.InputField).GetText()
 			err := ui.joinServer(
-				joinServerForm.GetFormItem(0).(*tview.InputField).GetText(),
-				joinServerForm.GetFormItem(1).(*tview.InputField).GetText(),
+				srvAddr,
+				loginInput,
 				joinServerForm.GetFormItem(2).(*tview.InputField).GetText(),
 			)
+			if name == "" {
+				name = fmt.Sprintf("%s@%s", loginInput, srvAddr)
+			}
+			ui.HLClient.serverName = name
+
 			if err != nil {
 				ui.HLClient.Logger.Errorw("login error", "err", err)
 				loginErrModal := tview.NewModal().
@@ -332,7 +340,7 @@ func (ui *UI) renderServerUI() *tview.Flex {
 			AddItem(ui.chatBox, 0, 8, false).
 			AddItem(ui.chatInput, 3, 0, true), 0, 1, true).
 		AddItem(ui.userList, 25, 1, false)
-	serverUI.SetBorder(true).SetTitle("| Mobius - Connected to " + "TODO" + " |").SetTitleAlign(tview.AlignLeft)
+	serverUI.SetBorder(true).SetTitle("| Mobius - Connected to " + ui.HLClient.serverName + " |").SetTitleAlign(tview.AlignLeft)
 	serverUI.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape {
 			ui.Pages.AddPage("modal", modal, false, true)
