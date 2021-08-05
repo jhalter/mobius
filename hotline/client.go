@@ -21,6 +21,7 @@ import (
 
 const (
 	trackerListPage = "trackerList"
+	serverUIPage = "serverUI"
 )
 
 //go:embed banners/*.txt
@@ -280,11 +281,9 @@ func handleGetFileNameList(c *Client, t *Transaction) (res []Transaction, err er
 		root.AddChild(node)
 	}
 
-	var fileList []FileNameWithInfo
 	for _, f := range t.Fields {
 		var fn FileNameWithInfo
 		_, _ = fn.Read(f.Data)
-		fileList = append(fileList, fn)
 
 		if bytes.Equal(fn.Type, []byte("fldr")) {
 			node := tview.NewTreeNode(fmt.Sprintf("[blue::]📁 %s[-:-:-]", fn.Name))
@@ -322,7 +321,7 @@ func handleGetMsgs(c *Client, t *Transaction) (res []Transaction, err error) {
 	newsTextView := tview.NewTextView().
 		SetText(newsText).
 		SetDoneFunc(func(key tcell.Key) {
-			c.UI.Pages.SwitchToPage("serverUI")
+			c.UI.Pages.SwitchToPage(serverUIPage)
 			c.UI.App.SetFocus(c.UI.chatInput)
 		})
 	newsTextView.SetBorder(true).SetTitle("News")
@@ -537,7 +536,7 @@ func handleClientTranLogin(c *Client, t *Transaction) (res []Transaction, err er
 		c.Logger.Error(string(t.GetField(fieldError).Data))
 		return nil, errors.New("login error: " + string(t.GetField(fieldError).Data))
 	}
-	c.UI.Pages.AddAndSwitchToPage("serverUI", c.UI.renderServerUI(), true)
+	c.UI.Pages.AddAndSwitchToPage(serverUIPage, c.UI.renderServerUI(), true)
 	c.UI.App.SetFocus(c.UI.chatInput)
 
 	if err := c.Send(*NewTransaction(tranGetUserNameList, nil)); err != nil {

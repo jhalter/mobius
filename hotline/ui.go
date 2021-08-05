@@ -22,7 +22,6 @@ type UI struct {
 	userList     *tview.TextView
 	agreeModal   *tview.Modal
 	trackerList  *tview.List
-	settingsPage *tview.Box
 	HLClient     *Client
 }
 
@@ -40,7 +39,7 @@ func NewUI(c *Client) *UI {
 		SetChangedFunc(func() {
 			app.Draw() // TODO: docs say this is bad but it's the only way to show content during initial render??
 		})
-	chatBox.Box.SetBorder(true).SetTitle("Chat")
+	chatBox.Box.SetBorder(true).SetTitle("| Chat |")
 
 	chatInput := tview.NewInputField()
 	chatInput.
@@ -206,12 +205,10 @@ func (ui *UI) joinServer(addr, login, password string) error {
 			if err != nil {
 				ui.HLClient.Logger.Errorw("read error", "err", err)
 
-				msg := err.Error()
 				if err == io.EOF {
-					msg = "The server connection has unexpectedly closed."
 					loginErrModal := tview.NewModal().
 						AddButtons([]string{"Ok"}).
-						SetText(msg).
+						SetText("The server connection has closed.").
 						SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 							ui.Pages.SwitchToPage("home")
 						})
