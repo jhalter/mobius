@@ -622,7 +622,8 @@ func (s *Server) TransferFile(conn net.Conn) error {
 		return err
 	}
 
-	t, err := NewReadTransfer(buf)
+	var t transfer
+	_, err := t.Write(buf[:16])
 	if err != nil {
 		return err
 	}
@@ -726,7 +727,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 		}
 	case FolderDownload:
 		// Folder Download flow:
-		// 1. Get filePath from the Transfer
+		// 1. Get filePath from the transfer
 		// 2. Iterate over files
 		// 3. For each file:
 		// 	 Send file header to client

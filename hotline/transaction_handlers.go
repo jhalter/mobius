@@ -1263,7 +1263,7 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 // Fields used in the request
 // 201	File name
 // 202	File path
-// 108	Transfer size	Total size of all items in the folder
+// 108	transfer size	Total size of all items in the folder
 // 220	Folder item count
 // 204	File transfer options	"Optional Currently set to 1" (TODO: ??)
 func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
