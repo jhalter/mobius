@@ -300,7 +300,7 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 	// *** Halcyon does stuff
 	// This is indicated by the presence of the optional field fieldChatOptions in the transaction payload
 	if t.GetField(fieldChatOptions).Data != nil {
-		formattedMsg = fmt.Sprintf("*** %s %s\r", *cc.UserName, t.GetField(fieldData).Data)
+		formattedMsg = fmt.Sprintf("\r*** %s %s", *cc.UserName, t.GetField(fieldData).Data)
 	}
 
 	if bytes.Equal(t.GetField(fieldData).Data, []byte("/stats")) {
