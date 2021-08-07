@@ -199,6 +199,12 @@ var clientHandlers = map[uint16]clientTHandler{
 		Name:    "tranServerMsg",
 		Handler: handleTranServerMsg,
 	},
+	tranKeepAlive: clientTransaction{
+		Name:    "tranKeepAlive",
+		Handler: func(client *Client, transaction *Transaction) (t []Transaction, err error) {
+			return t, err
+		},
+	},
 }
 
 func handleTranServerMsg(c *Client, t *Transaction) (res []Transaction, err error) {
@@ -562,7 +568,18 @@ func (c *Client) JoinServer(address, login, passwd string) error {
 		return err
 	}
 
+	// start keepalive go routine
+	go func() { _ = c.keepalive() }()
+
 	return nil
+}
+
+func (c *Client) keepalive() error {
+	for {
+		time.Sleep(300 * time.Second)
+		_ = c.Send(*NewTransaction(tranKeepAlive, nil))
+		c.Logger.Infow("Sent keepalive ping")
+	}
 }
 
 // connect establishes a connection with a Server by sending handshake sequence
