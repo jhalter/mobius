@@ -1,7 +1,6 @@
 package hotline
 
 import (
-	"errors"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gdamore/tcell/v2"
@@ -197,7 +196,7 @@ func (ui *UI) joinServer(addr, login, password string) error {
 		addr += ":5500"
 	}
 	if err := ui.HLClient.JoinServer(addr, login, password); err != nil {
-		return errors.New(fmt.Sprintf("Error joining server: %v\n", err))
+		return fmt.Errorf("Error joining server: %v\n", err)
 	}
 
 	go func() {
