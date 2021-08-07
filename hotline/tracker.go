@@ -91,6 +91,9 @@ type ServerRecord struct {
 
 func GetListing(addr string) ([]ServerRecord, error) {
 	conn, err := net.DialTimeout("tcp", addr, trackerTimeout)
+	if err != nil {
+		return []ServerRecord{}, err
+	}
 	defer func() { _ = conn.Close() }()
 
 	_, err = conn.Write(
