@@ -472,9 +472,9 @@ func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	fileName := string(t.GetField(fieldFileName).Data)
 	filePath := cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFilePath).Data)
 
-	path := "./" + filePath + "/" + fileName
+	path := filePath + fileName
 
-	cc.Server.Logger.Debugw("Delete file", "src", filePath+"/"+fileName)
+	cc.Server.Logger.Debugw("Delete file", "src", path)
 
 	fi, err := os.Stat(path)
 	if err != nil {
@@ -505,8 +505,8 @@ func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 // HandleMoveFile moves files or folders. Note: seemingly not documented
 func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	fileName := string(t.GetField(fieldFileName).Data)
-	filePath := "./" + cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFilePath).Data)
-	fileNewPath := "./" + cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFileNewPath).Data)
+	filePath :=  cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFilePath).Data)
+	fileNewPath :=  cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFileNewPath).Data)
 
 	cc.Server.Logger.Debugw("Move file", "src", filePath+"/"+fileName, "dst", fileNewPath+"/"+fileName)
 
@@ -1241,7 +1241,7 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 
 	fp := NewFilePath(t.GetField(fieldFilePath).Data)
 
-	fullFilePath := fmt.Sprintf("./%v/%v", cc.Server.Config.FileRoot+fp.String(), string(fileTransfer.FileName))
+	fullFilePath := fmt.Sprintf("%v%v", cc.Server.Config.FileRoot+fp.String(), string(fileTransfer.FileName))
 	transferSize, err := CalcTotalSize(fullFilePath)
 	if err != nil {
 		return res, err

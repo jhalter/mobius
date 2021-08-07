@@ -765,7 +765,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 		i := 0
 		_ = filepath.Walk(fullFilePath+"/", func(path string, info os.FileInfo, _ error) error {
 			i += 1
-			subPath := path[basePathLen-2:]
+			subPath := path[basePathLen:]
 			s.Logger.Infow("Sending fileheader", "i", i, "path", path, "fullFilePath", fullFilePath, "subPath", subPath, "IsDir", info.IsDir())
 
 			fileHeader := NewFileHeader(subPath, info.IsDir())
