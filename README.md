@@ -32,7 +32,7 @@ Run `mobius-hotline-client -help` for usage options.
 
 #### Server
 
-    brew install jhalter/mobius-hotline-client/mobius-hotline-client
+    brew install jhalter/mobius-hotline-server/mobius-hotline-server
 
 After installation `mobius-hotline-server` installed to `/usr/local/bin/mobius-hotline-server` and should be in your $PATH.
 
@@ -66,43 +66,3 @@ To build from source, run:
 
     make build-client
     make build-server
-
-## Usage
-
-### Precompiled binaries
-To get started quickly, download the precompiled binaries for your platform:
-
-* [Linux]()
-* [Mac OS X]()
-
-## Compatibility
-
-
-
-# TODO
-
-* Implement 1.5+ protocol account editing
-* Implement folder transfer resume
-* Implement file transfer queuing
-* Map additional file extensions to file type and creator codes
-* Implement file comment read/write
-* Implement user banning
-* Implement Maximum Simultaneous Downloads
-* Maximum simultaneous downloads/client
-* Maximum simultaneous connections/IP
-* Implement server broadcast
-* Implement statistics:
-    * Currently Connected
-    * Downloads in progress
-    * Uploads in progress
-    * Waiting Downloads
-    * Connection Peak
-    * Connection Counter
-    * Download Counter
-    * Upload Counter
-    * Since
-
-
-# TODO - Someday Maybe
-
-* Implement Pitbull protocol extensions
