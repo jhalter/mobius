@@ -1,11 +1,5 @@
 package hotline
 
-const (
-	defaultAgreement    = "This is an agreement.  Say you agree.\r"
-	defaultMessageBoard = "Welcome to Hotline\r"
-	defaultThreadedNews = "Categories:\n"
-)
-
 type Config struct {
 	Name                      string   `yaml:"Name"`                      // Name used for Tracker registration
 	Description               string   `yaml:"Description"`               // Description used for Tracker registration

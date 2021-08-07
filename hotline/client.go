@@ -90,7 +90,6 @@ type Client struct {
 
 	UI *UI
 
-	outbox chan *Transaction
 	Inbox  chan *Transaction
 }
 
