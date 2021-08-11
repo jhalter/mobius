@@ -53,13 +53,16 @@ func getFileNameList(filePath string) ([]Field, error) {
 
 	for _, file := range files {
 		var fileType []byte
+		var fnwi FileNameWithInfo
 		fileCreator := make([]byte, 4)
-		fileSize := make([]byte, 4)
+		//fileSize := make([]byte, 4)
 		if !file.IsDir() {
 			fileType = []byte(fileTypeFromFilename(file.Name()))
 			fileCreator = []byte(fileCreatorFromFilename(file.Name()))
 
-			binary.BigEndian.PutUint32(fileSize, uint32(file.Size()))
+			binary.BigEndian.PutUint32(fnwi.FileSize[:], uint32(file.Size()))
+			copy(fnwi.Type[:], fileType[:])
+			copy(fnwi.Creator[:], fileCreator[:])
 		} else {
 			fileType = []byte("fldr")
 
@@ -67,19 +70,22 @@ func getFileNameList(filePath string) ([]Field, error) {
 			if err != nil {
 				return fields, err
 			}
-			binary.BigEndian.PutUint32(fileSize, uint32(len(dir)))
+			binary.BigEndian.PutUint32(fnwi.FileSize[:], uint32(len(dir)))
+			copy(fnwi.Type[:], fileType[:])
+			copy(fnwi.Creator[:], fileCreator[:])
 		}
 
-		fields = append(fields, NewField(
-			fieldFileNameWithInfo,
-			FileNameWithInfo{
-				Type:       fileType,
-				Creator:    fileCreator,
-				FileSize:   fileSize,
-				NameScript: []byte{0, 0},
-				Name:       []byte(file.Name()),
-			}.Payload(),
-		))
+		nameSize := make([]byte, 2)
+		binary.BigEndian.PutUint16(nameSize, uint16(len(file.Name())))
+		copy(fnwi.NameSize[:], nameSize[:])
+
+		fnwi.name = []byte(file.Name())
+
+		b, err := fnwi.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		fields = append(fields, NewField(fieldFileNameWithInfo, b))
 	}
 
 	return fields, nil
@@ -150,6 +156,10 @@ func EncodeFilePath(filePath string) []byte {
 }
 
 func ReadFilePath(filePathFieldData []byte) string {
-	fp := NewFilePath(filePathFieldData)
+	var fp FilePath
+	err := fp.UnmarshalBinary(filePathFieldData)
+	if err != nil {
+		// TODO
+	}
 	return fp.String()
 }

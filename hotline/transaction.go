@@ -214,7 +214,7 @@ func ReadFields(paramCount []byte, buf []byte) ([]Field, error) {
 	return fields, nil
 }
 
-func (t Transaction) Payload() []byte {
+func (t Transaction) MarshalBinary() (data []byte, err error) {
 	payloadSize := t.Size()
 
 	fieldCount := make([]byte, 2)
@@ -234,7 +234,7 @@ func (t Transaction) Payload() []byte {
 		payloadSize, // this is the dataSize field, but seeming the same as totalSize
 		fieldCount,
 		fieldPayload,
-	)
+	), err
 }
 
 // Size returns the total size of the transaction payload

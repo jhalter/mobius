@@ -24,32 +24,30 @@ func NewFilePathItem(b []byte) FilePathItem {
 }
 
 type FilePath struct {
-	PathItemCount []byte
-	PathItems     []FilePathItem
+	ItemCount []byte
+	Items     []FilePathItem
 }
 
-func NewFilePath(b []byte) FilePath {
-	if b == nil {
-		return FilePath{}
-	}
+func (fp *FilePath) UnmarshalBinary(b []byte) error {
+	fp.ItemCount = b[0:2]
 
-	fp := FilePath{PathItemCount: b[0:2]}
-
-	// number of items in the path
-	pathItemLen := binary.BigEndian.Uint16(b[0:2])
 	pathData := b[2:]
-	for i := uint16(0); i < pathItemLen; i++ {
+	for i := uint16(0); i < fp.Len(); i++ {
 		segLen := pathData[2]
-		fp.PathItems = append(fp.PathItems, NewFilePathItem(pathData[:segLen+3]))
+		fp.Items = append(fp.Items, NewFilePathItem(pathData[:segLen+3]))
 		pathData = pathData[3+segLen:]
 	}
 
-	return fp
+	return nil
+}
+
+func (fp *FilePath) Len() uint16 {
+	return binary.BigEndian.Uint16(fp.ItemCount)
 }
 
 func (fp *FilePath) String() string {
 	var out []string
-	for _, i := range fp.PathItems {
+	for _, i := range fp.Items {
 		out = append(out, string(i.Name))
 	}
 	return strings.Join(out, pathSeparator)

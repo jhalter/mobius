@@ -3,6 +3,8 @@ package hotline
 import (
 	"bytes"
 	"encoding/hex"
+	"github.com/davecgh/go-spew/spew"
+	"reflect"
 	"testing"
 )
 
@@ -11,7 +13,7 @@ func TestReadFlattenedFileObject(t *testing.T) {
 
 	ffo := ReadFlattenedFileObject(testData)
 
-	format := ffo.FlatFileHeader.Format
+	format := ffo.FlatFileHeader.Format[:]
 	want := []byte("FILP")
 	if !bytes.Equal(format, want) {
 		t.Errorf("ReadFlattenedFileObject() = %q, want %q", format, want)
@@ -34,3 +36,59 @@ func TestReadFlattenedFileObject(t *testing.T) {
 //		t.Errorf("%q, want %q", comment, want)
 //	}
 //}
+
+func TestNewFlattenedFileObject(t *testing.T) {
+	type args struct {
+		filePath string
+		fileName string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *flattenedFileObject
+		wantErr bool
+	}{
+		{
+			name: "when file path is valid",
+			args: args{
+				filePath: "./test/config/Files/",
+				fileName: "testfile.txt",
+			},
+			want: &flattenedFileObject{
+				FlatFileHeader:                NewFlatFileHeader(),
+				FlatFileInformationForkHeader: FlatFileInformationForkHeader{},
+				FlatFileInformationFork:       NewFlatFileInformationFork("testfile.txt"),
+				FlatFileDataForkHeader:        FlatFileDataForkHeader{
+					ForkType:        []byte("DATA"),
+					CompressionType: []byte{0, 0, 0, 0},
+					RSVD:            []byte{0, 0, 0, 0},
+					DataSize:        []byte{0x00, 0x00, 0x00, 0x17},
+				},
+				FileData:                      nil,
+			},
+			wantErr: false,
+		},
+		{
+			name: "when file path is invalid",
+			args: args{
+				filePath: "./nope/",
+				fileName: "also-nope.txt",
+			},
+			want: nil,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewFlattenedFileObject(tt.args.filePath, tt.args.fileName)
+			spew.Dump(got)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NewFlattenedFileObject() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewFlattenedFileObject() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

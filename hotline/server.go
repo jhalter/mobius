@@ -33,7 +33,6 @@ const (
 )
 
 type Server struct {
-	Interface     string
 	Port          int
 	Accounts      map[string]*Account
 	Agreement     []byte
@@ -115,13 +114,17 @@ func (s *Server) sendTransaction(t Transaction) error {
 	if client == nil {
 		return errors.New("invalid client")
 	}
-	userName := string(*client.UserName)
+	userName := string(client.UserName)
 	login := client.Account.Login
 
 	handler := TransactionHandlers[requestNum]
 
+	b, err := t.MarshalBinary()
+	if err != nil {
+		return err
+	}
 	var n int
-	if n, err = client.Connection.Write(t.Payload()); err != nil {
+	if n, err = client.Connection.Write(b); err != nil {
 		return err
 	}
 	s.Logger.Debugw("Sent Transaction",
@@ -168,8 +171,6 @@ func (s *Server) Serve(ctx context.Context, cancelRoot context.CancelFunc, ln ne
 
 const (
 	agreementFile    = "Agreement.txt"
-	messageBoardFile = "MessageBoard.txt"
-	threadedNewsFile = "ThreadedNews.yaml"
 )
 
 // NewServer constructs a new Server from a config dir
@@ -290,7 +291,7 @@ func (s *Server) keepaliveHandler() {
 					tranNotifyChangeUser,
 					NewField(fieldUserID, *c.ID),
 					NewField(fieldUserFlags, *c.Flags),
-					NewField(fieldUserName, *c.UserName),
+					NewField(fieldUserName, c.UserName),
 					NewField(fieldUserIconID, *c.Icon),
 				)
 			}
@@ -323,7 +324,7 @@ func (s *Server) NewClientConn(conn net.Conn) *ClientConn {
 		ID:         &[]byte{0, 0},
 		Icon:       &[]byte{0, 0},
 		Flags:      &[]byte{0, 0},
-		UserName:   &[]byte{},
+		UserName:   []byte{},
 		Connection: conn,
 		Server:     s,
 		Version:    &[]byte{},
@@ -382,7 +383,7 @@ func (s *Server) connectedUsers() []Field {
 			ID:    *c.ID,
 			Icon:  *c.Icon,
 			Flags: *c.Flags,
-			Name:  string(*c.UserName),
+			Name:  string(c.UserName),
 		}
 		connectedUsers = append(connectedUsers, NewField(fieldUsernameWithInfo, user.Payload()))
 	}
@@ -497,15 +498,19 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 
 	// If authentication fails, send error reply and close connection
 	if !c.Authenticate(login, encodedPassword) {
-		rep := c.NewErrReply(clientLogin, "Incorrect login.")
-		if _, err := conn.Write(rep.Payload()); err != nil {
+		t := c.NewErrReply(clientLogin, "Incorrect login.")
+		b, err := t.MarshalBinary()
+		if err != nil {
+			return err
+		}
+		if _, err := conn.Write(b); err != nil {
 			return err
 		}
 		return fmt.Errorf("incorrect login")
 	}
 
 	if clientLogin.GetField(fieldUserName).Data != nil {
-		*c.UserName = clientLogin.GetField(fieldUserName).Data
+		c.UserName = clientLogin.GetField(fieldUserName).Data
 	}
 
 	if clientLogin.GetField(fieldUserIconID).Data != nil {
@@ -753,7 +758,8 @@ func (s *Server) TransferFile(conn net.Conn) error {
 		//
 		// This notifies the server to send the next item header
 
-		fh := NewFilePath(fileTransfer.FilePath)
+		var fh FilePath
+		_ = fh.UnmarshalBinary(fileTransfer.FilePath)
 		fullFilePath := fmt.Sprintf("%v/%v", s.Config.FileRoot+fh.String(), string(fileTransfer.FileName))
 
 		basePathLen := len(fullFilePath)

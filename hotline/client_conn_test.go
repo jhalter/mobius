@@ -11,7 +11,7 @@ func TestClientConn_handleTransaction(t *testing.T) {
 		ID         *[]byte
 		Icon       *[]byte
 		Flags      *[]byte
-		UserName   *[]byte
+		UserName   []byte
 		Account    *Account
 		IdleTime   *int
 		Server     *Server

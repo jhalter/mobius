@@ -16,19 +16,19 @@ type flattenedFileObject struct {
 
 // FlatFileHeader is the first section of a "Flattened File Object".  All fields have static values.
 type FlatFileHeader struct {
-	Format    []byte // Always "FILP"
-	Version   []byte // Always 1
-	RSVD      []byte // Always empty zeros
-	ForkCount []byte // Always 2
+	Format    [4]byte  // Always "FILP"
+	Version   [2]byte  // Always 1
+	RSVD      [16]byte // Always empty zeros
+	ForkCount [2]byte  // Always 2
 }
 
 // NewFlatFileHeader returns a FlatFileHeader struct
 func NewFlatFileHeader() FlatFileHeader {
 	return FlatFileHeader{
-		Format:    []byte("FILP"),
-		Version:   []byte{0, 1},
-		RSVD:      make([]byte, 16),
-		ForkCount: []byte{0, 2},
+		Format:    [4]byte{0x46, 0x49, 0x4c, 0x50}, // FILP
+		Version:   [2]byte{0, 1},
+		RSVD:      [16]byte{},
+		ForkCount: [2]byte{0, 2},
 	}
 }
 
@@ -138,12 +138,7 @@ func ReadFlattenedFileObject(bytes []byte) flattenedFileObject {
 	//dataSize := binary.BigEndian.Uint32(dataSizeField)
 
 	ffo := flattenedFileObject{
-		FlatFileHeader: FlatFileHeader{
-			Format:    bytes[0:4],
-			Version:   bytes[4:6],
-			RSVD:      bytes[6:22],
-			ForkCount: bytes[22:24],
-		},
+		FlatFileHeader: NewFlatFileHeader(),
 		FlatFileInformationForkHeader: FlatFileInformationForkHeader{
 			ForkType:        bytes[24:28],
 			CompressionType: bytes[28:32],
@@ -178,10 +173,10 @@ func ReadFlattenedFileObject(bytes []byte) flattenedFileObject {
 
 func (f flattenedFileObject) Payload() []byte {
 	var out []byte
-	out = append(out, f.FlatFileHeader.Format...)
-	out = append(out, f.FlatFileHeader.Version...)
-	out = append(out, f.FlatFileHeader.RSVD...)
-	out = append(out, f.FlatFileHeader.ForkCount...)
+	out = append(out, f.FlatFileHeader.Format[:]...)
+	out = append(out, f.FlatFileHeader.Version[:]...)
+	out = append(out, f.FlatFileHeader.RSVD[:]...)
+	out = append(out, f.FlatFileHeader.ForkCount[:]...)
 
 	out = append(out, []byte("INFO")...)
 	out = append(out, []byte{0, 0, 0, 0}...)
@@ -211,22 +206,22 @@ func (f flattenedFileObject) Payload() []byte {
 	return out
 }
 
-func NewFlattenedFileObject(filePath string, fileName string) (flattenedFileObject, error) {
+func NewFlattenedFileObject(filePath, fileName string) (*flattenedFileObject, error) {
 	file, err := os.Open(fmt.Sprintf("%v/%v", filePath, fileName))
 	if err != nil {
-		return flattenedFileObject{}, err
+		return nil, err
 	}
 	defer file.Close()
 
 	fileInfo, err := file.Stat()
 	if err != nil {
-		return flattenedFileObject{}, err
+		return nil, err
 	}
 
 	dataSize := make([]byte, 4)
 	binary.BigEndian.PutUint32(dataSize, uint32(fileInfo.Size()))
 
-	return flattenedFileObject{
+	return &flattenedFileObject{
 		FlatFileHeader:          NewFlatFileHeader(),
 		FlatFileInformationFork: NewFlatFileInformationFork(fileName),
 		FlatFileDataForkHeader: FlatFileDataForkHeader{

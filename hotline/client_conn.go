@@ -29,7 +29,7 @@ type ClientConn struct {
 	ID         *[]byte
 	Icon       *[]byte
 	Flags      *[]byte
-	UserName   *[]byte
+	UserName   []byte
 	Account    *Account
 	IdleTime   *int
 	Server     *Server
@@ -55,7 +55,7 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 			if field.ID == nil {
 				cc.Server.Logger.Infow(
 					"Missing required field",
-					"Account", cc.Account.Login, "UserName", string(*cc.UserName), "RequestType", handler.Name, "FieldID", reqField.ID,
+					"Account", cc.Account.Login, "UserName", string(cc.UserName), "RequestType", handler.Name, "FieldID", reqField.ID,
 				)
 				return nil
 			}
@@ -63,7 +63,7 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 			if len(field.Data) < reqField.minLen {
 				cc.Server.Logger.Infow(
 					"Field does not meet minLen",
-					"Account", cc.Account.Login, "UserName", string(*cc.UserName), "RequestType", handler.Name, "FieldID", reqField.ID,
+					"Account", cc.Account.Login, "UserName", string(cc.UserName), "RequestType", handler.Name, "FieldID", reqField.ID,
 				)
 				return nil
 			}
@@ -71,7 +71,7 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 		if !authorize(cc.Account.Access, handler.Access) {
 			cc.Server.Logger.Infow(
 				"Unauthorized Action",
-				"Account", cc.Account.Login, "UserName", string(*cc.UserName), "RequestType", handler.Name,
+				"Account", cc.Account.Login, "UserName", string(cc.UserName), "RequestType", handler.Name,
 			)
 			cc.Server.outbox <- cc.NewErrReply(transaction, handler.DenyMsg)
 
@@ -81,7 +81,7 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 		cc.Server.Logger.Infow(
 			"Received Transaction",
 			"login", cc.Account.Login,
-			"name", string(*cc.UserName),
+			"name", string(cc.UserName),
 			"RequestType", handler.Name,
 		)
 
@@ -95,7 +95,7 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 	} else {
 		cc.Server.Logger.Errorw(
 			"Unimplemented transaction type received",
-			"UserName", string(*cc.UserName), "RequestID", requestNum,
+			"UserName", string(cc.UserName), "RequestID", requestNum,
 		)
 	}
 
@@ -114,7 +114,7 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 			tranNotifyChangeUser,
 			NewField(fieldUserID, *cc.ID),
 			NewField(fieldUserFlags, *cc.Flags),
-			NewField(fieldUserName, *cc.UserName),
+			NewField(fieldUserName, cc.UserName),
 			NewField(fieldUserIconID, *cc.Icon),
 		)
 

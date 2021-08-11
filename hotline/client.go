@@ -90,7 +90,7 @@ type Client struct {
 
 	UI *UI
 
-	Inbox  chan *Transaction
+	Inbox chan *Transaction
 }
 
 func NewClient(cfgPath string, logger *zap.SugaredLogger) *Client {
@@ -264,10 +264,10 @@ func handleGetFileNameList(c *Client, t *Transaction) (res []Transaction, err er
 
 			entry := selectedNode.GetReference().(*FileNameWithInfo)
 
-			if bytes.Equal(entry.Type, []byte("fldr")) {
-				c.Logger.Infow("get new directory listing", "name", string(entry.Name))
+			if bytes.Equal(entry.Type[:], []byte("fldr")) {
+				c.Logger.Infow("get new directory listing", "name", string(entry.name))
 
-				c.filePath = append(c.filePath, string(entry.Name))
+				c.filePath = append(c.filePath, string(entry.name))
 				f := NewField(fieldFilePath, EncodeFilePath(strings.Join(c.filePath, "/")))
 
 				if err := c.UI.HLClient.Send(*NewTransaction(tranGetFileNameList, nil, f)); err != nil {
@@ -275,7 +275,7 @@ func handleGetFileNameList(c *Client, t *Transaction) (res []Transaction, err er
 				}
 			} else {
 				// TODO: initiate file download
-				c.Logger.Infow("download file", "name", string(entry.Name))
+				c.Logger.Infow("download file", "name", string(entry.name))
 			}
 		}
 
@@ -289,16 +289,19 @@ func handleGetFileNameList(c *Client, t *Transaction) (res []Transaction, err er
 
 	for _, f := range t.Fields {
 		var fn FileNameWithInfo
-		_, _ = fn.Read(f.Data)
+		err = fn.UnmarshalBinary(f.Data)
+		if err != nil {
+			return nil, nil
+		}
 
-		if bytes.Equal(fn.Type, []byte("fldr")) {
-			node := tview.NewTreeNode(fmt.Sprintf("[blue::]📁 %s[-:-:-]", fn.Name))
+		if bytes.Equal(fn.Type[:], []byte("fldr")) {
+			node := tview.NewTreeNode(fmt.Sprintf("[blue::]📁 %s[-:-:-]", fn.name))
 			node.SetReference(&fn)
 			root.AddChild(node)
 		} else {
-			size := binary.BigEndian.Uint32(fn.FileSize) / 1024
+			size := binary.BigEndian.Uint32(fn.FileSize[:]) / 1024
 
-			node := tview.NewTreeNode(fmt.Sprintf("   %-40s %10v KB", fn.Name, size))
+			node := tview.NewTreeNode(fmt.Sprintf("   %-40s %10v KB", fn.name, size))
 			node.SetReference(&fn)
 			root.AddChild(node)
 		}
@@ -494,7 +497,7 @@ func handleClientTranShowAgreement(c *Client, t *Transaction) (res []Transaction
 	agreement := string(t.GetField(fieldData).Data)
 	agreement = strings.ReplaceAll(agreement, "\r", "\n")
 
-	c.UI.agreeModal = tview.NewModal().
+	agreeModal := tview.NewModal().
 		SetText(agreement).
 		AddButtons([]string{"Agree", "Disagree"}).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
@@ -517,10 +520,7 @@ func handleClientTranShowAgreement(c *Client, t *Transaction) (res []Transaction
 		},
 		)
 
-	c.Logger.Debug("show agreement page")
-	c.UI.Pages.AddPage("agreement", c.UI.agreeModal, false, true)
-	c.UI.Pages.ShowPage("agreement ")
-	c.UI.App.Draw()
+	c.UI.Pages.AddPage("agreement", agreeModal, false, true)
 
 	return res, err
 }
@@ -619,7 +619,7 @@ func (c *Client) Handshake() error {
 		return err
 	}
 
-	if bytes.Compare(replyBuf, ServerHandshake) == 0 {
+	if bytes.Equal(replyBuf, ServerHandshake) {
 		return nil
 	}
 
@@ -653,7 +653,11 @@ func (c *Client) Send(t Transaction) error {
 
 	var n int
 	var err error
-	if n, err = c.Connection.Write(t.Payload()); err != nil {
+	b, err := t.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	if n, err = c.Connection.Write(b); err != nil {
 		return err
 	}
 	c.Logger.Debugw("Sent Transaction",

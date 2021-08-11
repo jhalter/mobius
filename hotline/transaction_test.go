@@ -142,16 +142,25 @@ func TestReadTransaction(t *testing.T) {
 		{
 			name: "when buf contains all bytes for a single transaction",
 			args: args{
-				buf: sampleTransaction.Payload(),
+				buf: func() []byte {
+					b, _ := sampleTransaction.MarshalBinary()
+					return b
+				}(),
 			},
 			want:    sampleTransaction,
-			want1:   len(sampleTransaction.Payload()),
+			want1:   func() int {
+				b, _ := sampleTransaction.MarshalBinary()
+				return len(b)
+			}(),
 			wantErr: false,
 		},
 		{
 			name: "when len(buf) is less than the length of the transaction",
 			args: args{
-				buf: sampleTransaction.Payload()[:len(sampleTransaction.Payload())-1],
+				buf: func() []byte {
+					b, _ := sampleTransaction.MarshalBinary()
+					return b[:len(b)-1]
+				}(),
 			},
 			want:    nil,
 			want1:   0,

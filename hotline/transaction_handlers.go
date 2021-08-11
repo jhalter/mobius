@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"math/big"
@@ -293,14 +292,14 @@ var TransactionHandlers = map[uint16]TransactionType{
 
 func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	// Truncate long usernames
-	trunc := fmt.Sprintf("%13s", *cc.UserName)
+	trunc := fmt.Sprintf("%13s", cc.UserName)
 	formattedMsg := fmt.Sprintf("\r%.14s:  %s", trunc, t.GetField(fieldData).Data)
 
 	// By holding the option key, Hotline chat allows users to send /me formatted messages like:
 	// *** Halcyon does stuff
 	// This is indicated by the presence of the optional field fieldChatOptions in the transaction payload
 	if t.GetField(fieldChatOptions).Data != nil {
-		formattedMsg = fmt.Sprintf("\r*** %s %s", *cc.UserName, t.GetField(fieldData).Data)
+		formattedMsg = fmt.Sprintf("\r*** %s %s", cc.UserName, t.GetField(fieldData).Data)
 	}
 
 	if bytes.Equal(t.GetField(fieldData).Data, []byte("/stats")) {
@@ -360,7 +359,7 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 			tranServerMsg,
 			&ID.Data,
 			NewField(fieldData, msg.Data),
-			NewField(fieldUserName, *cc.UserName),
+			NewField(fieldUserName, cc.UserName),
 			NewField(fieldUserID, *cc.ID),
 			NewField(fieldOptions, []byte{0, 1}),
 		),
@@ -384,7 +383,7 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 				tranServerMsg,
 				cc.ID,
 				NewField(fieldData, *otherClient.AutoReply),
-				NewField(fieldUserName, *otherClient.UserName),
+				NewField(fieldUserName, otherClient.UserName),
 				NewField(fieldUserID, *otherClient.ID),
 				NewField(fieldOptions, []byte{0, 1}),
 			),
@@ -399,7 +398,6 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	fileName := string(t.GetField(fieldFileName).Data)
 	filePath := cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFilePath).Data)
-	spew.Dump(cc.Server.Config.FileRoot)
 
 	ffo, err := NewFlattenedFileObject(filePath, fileName)
 	if err != nil {
@@ -547,7 +545,8 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err err
 
 	// fieldFilePath is only present for nested paths
 	if t.GetField(fieldFilePath).Data != nil {
-		newFp := NewFilePath(t.GetField(fieldFilePath).Data)
+		var newFp FilePath
+		newFp.UnmarshalBinary(t.GetField(fieldFilePath).Data)
 		newFolderPath += newFp.String()
 	}
 	newFolderPath += "/" + string(t.GetField(fieldFileName).Data)
@@ -610,7 +609,7 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 				tranNotifyChangeUser,
 				NewField(fieldUserID, *c.ID),
 				NewField(fieldUserFlags, *c.Flags),
-				NewField(fieldUserName, *c.UserName),
+				NewField(fieldUserName, c.UserName),
 				NewField(fieldUserIconID, *c.Icon),
 			)
 		}
@@ -756,7 +755,7 @@ None.
 
 	template = fmt.Sprintf(
 		template,
-		*clientConn.UserName,
+		clientConn.UserName,
 		clientConn.Account.Name,
 		clientConn.Account.Login,
 		clientConn.Connection.RemoteAddr().String(),
@@ -766,7 +765,7 @@ None.
 
 	res = append(res, cc.NewReply(t,
 		NewField(fieldData, []byte(template)),
-		NewField(fieldUserName, *clientConn.UserName),
+		NewField(fieldUserName, clientConn.UserName),
 	))
 	return res, err
 }
@@ -782,7 +781,7 @@ func (cc *ClientConn) notifyNewUserHasJoined() (res []Transaction, err error) {
 	cc.NotifyOthers(
 		*NewTransaction(
 			tranNotifyChangeUser, nil,
-			NewField(fieldUserName, *cc.UserName),
+			NewField(fieldUserName, cc.UserName),
 			NewField(fieldUserID, *cc.ID),
 			NewField(fieldUserIconID, *cc.Icon),
 			NewField(fieldUserFlags, *cc.Flags),
@@ -796,7 +795,7 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	bs := make([]byte, 2)
 	binary.BigEndian.PutUint16(bs, *cc.Server.NextGuestID)
 
-	*cc.UserName = t.GetField(fieldUserName).Data
+	cc.UserName = t.GetField(fieldUserName).Data
 	*cc.ID = bs
 	*cc.Icon = t.GetField(fieldUserIconID).Data
 
@@ -857,7 +856,7 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 		newsTemplate = cc.Server.Config.NewsDelimiter
 	}
 
-	newsPost := fmt.Sprintf(newsTemplate+"\r", *cc.UserName, time.Now().Format(newsDateTemplate), t.GetField(fieldData).Data)
+	newsPost := fmt.Sprintf(newsTemplate+"\r", cc.UserName, time.Now().Format(newsDateTemplate), t.GetField(fieldData).Data)
 	newsPost = strings.Replace(newsPost, "\n", "\r", -1)
 
 	// update news in memory
@@ -916,9 +915,10 @@ func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) (res []Transaction
 	var fieldData []Field
 	for _, k := range keys {
 		cat := cats[k]
+		b, _ := cat.MarshalBinary()
 		fieldData = append(fieldData, NewField(
 			fieldNewsCatListData15,
-			cat.Payload(),
+			b,
 		))
 	}
 
@@ -1113,7 +1113,7 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 
 	newArt := NewsArtData{
 		Title:         string(t.GetField(fieldNewsArtTitle).Data),
-		Poster:        string(*cc.UserName),
+		Poster:        string(cc.UserName),
 		Date:          NewsDate(),
 		PrevArt:       []byte{0, 0, 0, 0},
 		NextArt:       []byte{0, 0, 0, 0},
@@ -1239,7 +1239,8 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 	cc.Server.FileTransfers[data] = fileTransfer
 	cc.Transfers[FolderDownload] = append(cc.Transfers[FolderDownload], fileTransfer)
 
-	fp := NewFilePath(t.GetField(fieldFilePath).Data)
+	var fp FilePath
+	fp.UnmarshalBinary(t.GetField(fieldFilePath).Data)
 
 	fullFilePath := fmt.Sprintf("%v%v", cc.Server.Config.FileRoot+fp.String(), string(fileTransfer.FileName))
 	transferSize, err := CalcTotalSize(fullFilePath)
@@ -1319,7 +1320,7 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction,
 		icon = t.GetField(fieldUserIconID).Data
 	}
 	*cc.Icon = icon
-	*cc.UserName = t.GetField(fieldUserName).Data
+	cc.UserName = t.GetField(fieldUserName).Data
 
 	// the options field is only passed by the client versions > 1.2.3.
 	options := t.GetField(fieldOptions).Data
@@ -1354,7 +1355,7 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction,
 		NewField(fieldUserID, *cc.ID),
 		NewField(fieldUserIconID, *cc.Icon),
 		NewField(fieldUserFlags, *cc.Flags),
-		NewField(fieldUserName, *cc.UserName),
+		NewField(fieldUserName, cc.UserName),
 	)
 
 	return res, err
@@ -1410,7 +1411,7 @@ func HandleInviteNewChat(cc *ClientConn, t *Transaction) (res []Transaction, err
 			tranInviteToChat,
 			&targetID,
 			NewField(fieldChatID, newChatID),
-			NewField(fieldUserName, *cc.UserName),
+			NewField(fieldUserName, cc.UserName),
 			NewField(fieldUserID, *cc.ID),
 		),
 	)
@@ -1418,7 +1419,7 @@ func HandleInviteNewChat(cc *ClientConn, t *Transaction) (res []Transaction, err
 	res = append(res,
 		cc.NewReply(t,
 			NewField(fieldChatID, newChatID),
-			NewField(fieldUserName, *cc.UserName),
+			NewField(fieldUserName, cc.UserName),
 			NewField(fieldUserID, *cc.ID),
 			NewField(fieldUserIconID, *cc.Icon),
 			NewField(fieldUserFlags, *cc.Flags),
@@ -1438,7 +1439,7 @@ func HandleInviteToChat(cc *ClientConn, t *Transaction) (res []Transaction, err 
 			tranInviteToChat,
 			&targetID,
 			NewField(fieldChatID, chatID),
-			NewField(fieldUserName, *cc.UserName),
+			NewField(fieldUserName, cc.UserName),
 			NewField(fieldUserID, *cc.ID),
 		),
 	)
@@ -1446,7 +1447,7 @@ func HandleInviteToChat(cc *ClientConn, t *Transaction) (res []Transaction, err 
 		cc.NewReply(
 			t,
 			NewField(fieldChatID, chatID),
-			NewField(fieldUserName, *cc.UserName),
+			NewField(fieldUserName, cc.UserName),
 			NewField(fieldUserID, *cc.ID),
 			NewField(fieldUserIconID, *cc.Icon),
 			NewField(fieldUserFlags, *cc.Flags),
@@ -1462,7 +1463,7 @@ func HandleRejectChatInvite(cc *ClientConn, t *Transaction) (res []Transaction, 
 
 	privChat := cc.Server.PrivateChats[chatInt]
 
-	resMsg := append(*cc.UserName, []byte(" declined invitation to chat")...)
+	resMsg := append(cc.UserName, []byte(" declined invitation to chat")...)
 
 	for _, c := range sortedClients(privChat.ClientConn) {
 		res = append(res,
@@ -1496,7 +1497,7 @@ func HandleJoinChat(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 				tranNotifyChatChangeUser,
 				c.ID,
 				NewField(fieldChatID, chatID),
-				NewField(fieldUserName, *cc.UserName),
+				NewField(fieldUserName, cc.UserName),
 				NewField(fieldUserID, *cc.ID),
 				NewField(fieldUserIconID, *cc.Icon),
 				NewField(fieldUserFlags, *cc.Flags),
@@ -1512,7 +1513,7 @@ func HandleJoinChat(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 			ID:    *c.ID,
 			Icon:  *c.Icon,
 			Flags: *c.Flags,
-			Name:  string(*c.UserName),
+			Name:  string(c.UserName),
 		}
 
 		replyFields = append(replyFields, NewField(fieldUsernameWithInfo, user.Payload()))

@@ -1,53 +1,52 @@
 package hotline
 
 import (
+	"bytes"
 	"encoding/binary"
-	"github.com/jhalter/mobius/concat"
 )
 
-// FileNameWithInfo field content is presented in this structure:
-// Type	4		Folder (‘fldr’) or other
-// Creator	4
-// File size	4
-// 4		Reserved?
-// Name script	2
-// Name size	2
-// Name data	size
 type FileNameWithInfo struct {
-	Type       []byte // file type code
-	Creator    []byte // File creator code
-	FileSize   []byte // File Size in bytes
-	RSVD       []byte
-	NameScript []byte // TODO: What is this?
-	NameSize   []byte // Length of name field
-	Name       []byte // File name
+	fileNameWithInfoHeader
+	name []byte // File name
 }
 
-func (f FileNameWithInfo) Payload() []byte {
-	name := f.Name
-	nameSize := make([]byte, 2)
-	binary.BigEndian.PutUint16(nameSize, uint16(len(name)))
-
-	return concat.Slices(
-		f.Type,
-		f.Creator,
-		f.FileSize,
-		[]byte{0, 0, 0, 0},
-		f.NameScript,
-		nameSize,
-		f.Name,
-	)
+// fileNameWithInfoHeader contains the fixed length fields of FileNameWithInfo
+type fileNameWithInfoHeader struct {
+	Type       [4]byte // file type code
+	Creator    [4]byte // File creator code
+	FileSize   [4]byte // File Size in bytes
+	RSVD       [4]byte
+	NameScript [2]byte // ??
+	NameSize   [2]byte // Length of name field
 }
 
-func (f *FileNameWithInfo) Read(p []byte) (n int, err error) {
-	// TODO: check p for expected len
-	f.Type = p[0:4]
-	f.Creator = p[4:8]
-	f.FileSize = p[8:12]
-	f.RSVD = p[12:16]
-	f.NameScript = p[16:18]
-	f.NameSize = p[18:20]
-	f.Name = p[20:]
-
-	return len(p), err
+func (f *fileNameWithInfoHeader) nameLen() int {
+	return int(binary.BigEndian.Uint16(f.NameSize[:]))
 }
+
+func (f *FileNameWithInfo) MarshalBinary() (data []byte, err error) {
+	var buf bytes.Buffer
+	err = binary.Write(&buf, binary.LittleEndian, f.fileNameWithInfoHeader)
+	if err != nil {
+		return data, err
+	}
+
+	_, err = buf.Write(f.name)
+	if err != nil {
+		return data, err
+	}
+
+	return buf.Bytes(), err
+}
+
+func (f *FileNameWithInfo) UnmarshalBinary(data []byte) error {
+	err := binary.Read(bytes.NewReader(data), binary.BigEndian, &f.fileNameWithInfoHeader)
+	if err != nil {
+		return err
+	}
+	headerLen := binary.Size(f.fileNameWithInfoHeader)
+	f.name = data[headerLen : headerLen+f.nameLen()]
+
+	return err
+}
+

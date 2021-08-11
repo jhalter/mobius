@@ -19,7 +19,6 @@ type UI struct {
 	App         *tview.Application
 	Pages       *tview.Pages
 	userList    *tview.TextView
-	agreeModal  *tview.Modal
 	trackerList *tview.List
 	HLClient    *Client
 }
@@ -75,7 +74,6 @@ func NewUI(c *Client) *UI {
 		chatInput:   chatInput,
 		userList:    userList,
 		trackerList: tview.NewList(),
-		agreeModal:  tview.NewModal(),
 		HLClient:    c,
 	}
 }
