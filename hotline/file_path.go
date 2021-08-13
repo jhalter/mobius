@@ -52,3 +52,12 @@ func (fp *FilePath) String() string {
 	}
 	return strings.Join(out, pathSeparator)
 }
+
+func ReadFilePath(filePathFieldData []byte) string {
+	var fp FilePath
+	err := fp.UnmarshalBinary(filePathFieldData)
+	if err != nil {
+		// TODO
+	}
+	return fp.String()
+}

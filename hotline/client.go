@@ -698,14 +698,6 @@ func (c *Client) HandleTransaction(t *Transaction) error {
 	return nil
 }
 
-func (c *Client) Connected() bool {
-	// c.Agreed == true &&
-	if c.UserAccess != nil {
-		return true
-	}
-	return false
-}
-
 func (c *Client) Disconnect() error {
 	err := c.Connection.Close()
 	if err != nil {

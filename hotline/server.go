@@ -1,7 +1,6 @@
 package hotline
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -543,7 +542,6 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 	c.Server.Stats.LoginCount += 1
 
 	const readBuffSize = 1024000 // 1KB - TODO: what should this be?
-	const maxTranSize = 1024000
 	tranBuff := make([]byte, 0)
 	tReadlen := 0
 	// Infinite loop where take action on incoming client requests until the connection is closed
@@ -651,7 +649,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 		s.Logger.Infow("File download started", "filePath", fullFilePath, "transactionRef", fileTransfer.ReferenceNumber, "RemoteAddr", conn.RemoteAddr().String())
 
 		// Start by sending flat file object to client
-		if _, err := conn.Write(ffo.Payload()); err != nil {
+		if _, err := conn.Write(ffo.BinaryMarshal()); err != nil {
 			return err
 		}
 
@@ -681,7 +679,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 		}
 
 		ffo := ReadFlattenedFileObject(buf)
-		payloadLen := len(ffo.Payload())
+		payloadLen := len(ffo.BinaryMarshal())
 		fileSize := int(binary.BigEndian.Uint32(ffo.FlatFileDataForkHeader.DataSize))
 
 		destinationFile := s.Config.FileRoot + ReadFilePath(fileTransfer.FilePath) + "/" + string(fileTransfer.FileName)
@@ -789,7 +787,6 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			// Read the client's Next Action request
 			//TODO: Remove hardcoded behavior and switch behaviors based on the next action send
 			if _, err := conn.Read(readBuffer); err != nil {
-				s.Logger.Errorf("error reading next action: %v", err)
 				return err
 			}
 
@@ -800,7 +797,6 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			}
 
 			splitPath := strings.Split(path, "/")
-			//strings.Join(splitPath[:len(splitPath)-1], "/")
 
 			ffo, err := NewFlattenedFileObject(strings.Join(splitPath[:len(splitPath)-1], "/"), info.Name())
 			if err != nil {
@@ -820,7 +816,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			}
 
 			// Send file bytes to client
-			if _, err := conn.Write(ffo.Payload()); err != nil {
+			if _, err := conn.Write(ffo.BinaryMarshal()); err != nil {
 				s.Logger.Error(err)
 				return err
 			}
@@ -831,7 +827,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			}
 
 			sendBuffer := make([]byte, 1048576)
-			totalBytesSent := len(ffo.Payload())
+			totalBytesSent := len(ffo.BinaryMarshal())
 
 			for {
 				bytesRead, err := file.Read(sendBuffer)
@@ -895,10 +891,10 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				"RemoteAddr", conn.RemoteAddr().String(),
 				"FormattedPath", fu.FormattedPath(),
 				"IsFolder", fmt.Sprintf("%x", fu.IsFolder),
-				"PathItemCount", binary.BigEndian.Uint16(fu.PathItemCount),
+				"PathItemCount", binary.BigEndian.Uint16(fu.PathItemCount[:]),
 			)
 
-			if bytes.Equal(fu.IsFolder, []byte{0, 1}) {
+			if fu.IsFolder == [2]byte{0, 1} {
 				if _, err := os.Stat(dstPath + "/" + fu.FormattedPath()); os.IsNotExist(err) {
 					s.Logger.Infow("Target path does not exist; Creating...", "dstPath", dstPath)
 					if err := os.Mkdir(dstPath+"/"+fu.FormattedPath(), 0777); err != nil {
@@ -957,7 +953,7 @@ func transferFile(conn net.Conn, dst string) error {
 		return err
 	}
 	ffo := ReadFlattenedFileObject(buf)
-	payloadLen := len(ffo.Payload())
+	payloadLen := len(ffo.BinaryMarshal())
 	fileSize := int(binary.BigEndian.Uint32(ffo.FlatFileDataForkHeader.DataSize))
 
 	newFile, err := os.Create(dst)
@@ -985,51 +981,6 @@ func transferFile(conn net.Conn, dst string) error {
 	}
 }
 
-// 00 28 // DataSize
-// 00 00 // IsFolder
-// 00 02 // PathItemCount
-//
-// 00 00
-// 09
-// 73 75 62 66 6f 6c 64 65 72 // "subfolder"
-//
-// 00 00
-// 15
-// 73 75 62 66 6f 6c 64 65 72 2d 74 65 73 74 66 69 6c 65 2d 35 6b // "subfolder-testfile-5k"
-func readFolderUpload(buf []byte) folderUpload {
-	dataLen := binary.BigEndian.Uint16(buf[0:2])
-
-	fu := folderUpload{
-		DataSize:      buf[0:2], // Size of this structure (not including data size element itself)
-		IsFolder:      buf[2:4],
-		PathItemCount: buf[4:6],
-		FileNamePath:  buf[6 : dataLen+2],
-	}
-
-	return fu
-}
-
-type folderUpload struct {
-	DataSize      []byte
-	IsFolder      []byte
-	PathItemCount []byte
-	FileNamePath  []byte
-}
-
-func (fu *folderUpload) FormattedPath() string {
-	pathItemLen := binary.BigEndian.Uint16(fu.PathItemCount)
-
-	var pathSegments []string
-	pathData := fu.FileNamePath
-
-	for i := uint16(0); i < pathItemLen; i++ {
-		segLen := pathData[2]
-		pathSegments = append(pathSegments, string(pathData[3:3+segLen]))
-		pathData = pathData[3+segLen:]
-	}
-
-	return strings.Join(pathSegments, pathSeparator)
-}
 
 // sortedClients is a utility function that takes a map of *ClientConn and returns a sorted slice of the values.
 // The purpose of this is to ensure that the ordering of client connections is deterministic so that test assertions work.

@@ -79,12 +79,12 @@ type ServerInfoHeader struct {
 }
 
 type ServerRecord struct {
-	IPAddr          []byte
-	Port            []byte
-	NumUsers        []byte // Number of users connected to this particular server
-	Unused          []byte
+	IPAddr          [4]byte
+	Port            [2]byte
+	NumUsers        [2]byte // Number of users connected to this particular server
+	Unused          [2]byte
 	NameSize        byte   // Length of name string
-	Name            []byte // Server’s name
+	Name            []byte // Server name
 	DescriptionSize byte
 	Description     []byte
 }
@@ -165,11 +165,11 @@ func GetListing(addr string) ([]ServerRecord, error) {
 }
 
 func (s *ServerRecord) Read(b []byte) (n int, err error) {
-	s.IPAddr = b[0:4]
-	s.Port = b[4:6]
-	s.NumUsers = b[6:8]
-	s.NameSize = b[10]
+	copy(s.IPAddr[:], b[0:4])
+	copy(s.Port[:], b[4:6])
+	copy(s.NumUsers[:], b[6:8])
 	nameLen := int(b[10])
+
 	s.Name = b[11 : 11+nameLen]
 	s.DescriptionSize = b[11+nameLen]
 	s.Description = b[12+nameLen : 12+nameLen+int(s.DescriptionSize)]
@@ -177,14 +177,33 @@ func (s *ServerRecord) Read(b []byte) (n int, err error) {
 	return 12 + nameLen + int(s.DescriptionSize), nil
 }
 
+//
+//func (s *ServerRecord) UnmarshalBinary(b []byte) (err error) {
+//	r := bytes.NewReader(b[:10])
+//	if err := binary.Read(r, binary.BigEndian, s); err != nil {
+//		return err
+//	}
+//
+//	copy(s.IPAddr[:], b[0:4])
+//	s.Port = b[4:6]
+//	s.NumUsers = b[6:8]
+//	s.NameSize = b[10]
+//	nameLen := int(b[10])
+//	s.Name = b[11 : 11+nameLen]
+//	s.DescriptionSize = b[11+nameLen]
+//	s.Description = b[12+nameLen : 12+nameLen+int(s.DescriptionSize)]
+//
+//	return nil
+//}
+
 func (s *ServerRecord) PortInt() int {
-	data := binary.BigEndian.Uint16(s.Port)
+	data := binary.BigEndian.Uint16(s.Port[:])
 	return int(data)
 }
 
 func (s *ServerRecord) Addr() string {
 	return fmt.Sprintf("%s:%s",
-		net.IP(s.IPAddr),
-		strconv.Itoa(int(binary.BigEndian.Uint16(s.Port))),
+		net.IP(s.IPAddr[:]),
+		strconv.Itoa(int(binary.BigEndian.Uint16(s.Port[:]))),
 	)
 }

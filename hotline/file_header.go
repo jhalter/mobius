@@ -27,15 +27,6 @@ func NewFileHeader(fileName string, isDir bool) FileHeader {
 	return fh
 }
 
-func (fh *FileHeader) Read(p []byte) (n int, err error) {
-	p = concat.Slices(
-		fh.Size,
-		fh.Type,
-		fh.FilePath,
-	)
-	return len(p), nil
-}
-
 func (fh *FileHeader) Payload() []byte {
 	return concat.Slices(
 		fh.Size,

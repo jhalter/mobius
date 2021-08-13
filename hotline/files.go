@@ -43,9 +43,7 @@ func fileCreatorFromFilename(fn string) string {
 	return code
 }
 
-func getFileNameList(filePath string) ([]Field, error) {
-	var fields []Field
-
+func getFileNameList(filePath string) (fields []Field, err error) {
 	files, err := ioutil.ReadDir(filePath)
 	if err != nil {
 		return fields, nil
@@ -153,13 +151,4 @@ func EncodeFilePath(filePath string) []byte {
 	}
 
 	return bytes
-}
-
-func ReadFilePath(filePathFieldData []byte) string {
-	var fp FilePath
-	err := fp.UnmarshalBinary(filePathFieldData)
-	if err != nil {
-		// TODO
-	}
-	return fp.String()
 }

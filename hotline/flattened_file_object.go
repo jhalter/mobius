@@ -87,7 +87,7 @@ func (ffif FlatFileInformationFork) DataSize() []byte {
 }
 
 func (ffo flattenedFileObject) TransferSize() []byte {
-	payloadSize := len(ffo.Payload())
+	payloadSize := len(ffo.BinaryMarshal())
 	dataSize := binary.BigEndian.Uint32(ffo.FlatFileDataForkHeader.DataSize)
 
 	transferSize := make([]byte, 4)
@@ -108,15 +108,6 @@ type FlatFileDataForkHeader struct {
 	CompressionType []byte
 	RSVD            []byte
 	DataSize        []byte
-}
-
-func NewFlatFileDataForkHeader() FlatFileDataForkHeader {
-	return FlatFileDataForkHeader{
-		ForkType:        []byte("DATA"),
-		CompressionType: []byte{0, 0, 0, 0},
-		RSVD:            []byte{0, 0, 0, 0},
-		//	DataSize:        []byte{0, 0, 0x03, 0xc3},
-	}
 }
 
 // ReadFlattenedFileObject parses a byte slice into a flattenedFileObject
@@ -171,7 +162,7 @@ func ReadFlattenedFileObject(bytes []byte) flattenedFileObject {
 	return ffo
 }
 
-func (f flattenedFileObject) Payload() []byte {
+func (f flattenedFileObject) BinaryMarshal() []byte {
 	var out []byte
 	out = append(out, f.FlatFileHeader.Format[:]...)
 	out = append(out, f.FlatFileHeader.Version[:]...)

@@ -644,7 +644,7 @@ func HandleListUsers(cc *ClientConn, t *Transaction) (res []Transaction, err err
 	var userFields []Field
 	// TODO: make order deterministic
 	for _, acc := range cc.Server.Accounts {
-		userField := acc.Payload()
+		userField := acc.MarshalBinary()
 		userFields = append(userFields, NewField(fieldData, userField))
 	}
 
@@ -1240,7 +1240,10 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 	cc.Transfers[FolderDownload] = append(cc.Transfers[FolderDownload], fileTransfer)
 
 	var fp FilePath
-	fp.UnmarshalBinary(t.GetField(fieldFilePath).Data)
+	err = fp.UnmarshalBinary(t.GetField(fieldFilePath).Data)
+	if err != nil {
+		return res, err
+	}
 
 	fullFilePath := fmt.Sprintf("%v%v", cc.Server.Config.FileRoot+fp.String(), string(fileTransfer.FileName))
 	transferSize, err := CalcTotalSize(fullFilePath)
