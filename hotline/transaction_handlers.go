@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -503,8 +504,8 @@ func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 // HandleMoveFile moves files or folders. Note: seemingly not documented
 func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	fileName := string(t.GetField(fieldFileName).Data)
-	filePath :=  cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFilePath).Data)
-	fileNewPath :=  cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFileNewPath).Data)
+	filePath := cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFilePath).Data)
+	fileNewPath := cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFileNewPath).Data)
 
 	cc.Server.Logger.Debugw("Move file", "src", filePath+"/"+fileName, "dst", fileNewPath+"/"+fileName)
 
@@ -542,18 +543,33 @@ func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 
 func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	newFolderPath := cc.Server.Config.FileRoot
+	folderName := string(t.GetField(fieldFileName).Data)
+
+	folderName = path.Join("/", folderName)
 
 	// fieldFilePath is only present for nested paths
 	if t.GetField(fieldFilePath).Data != nil {
 		var newFp FilePath
-		newFp.UnmarshalBinary(t.GetField(fieldFilePath).Data)
+		err := newFp.UnmarshalBinary(t.GetField(fieldFilePath).Data)
+		if err != nil {
+			return nil, err
+		}
 		newFolderPath += newFp.String()
 	}
-	newFolderPath += "/" + string(t.GetField(fieldFileName).Data)
+	newFolderPath = path.Join(newFolderPath, folderName)
 
-	if err := os.Mkdir(newFolderPath, 0777); err != nil {
-		// TODO: Send error response to client
-		return []Transaction{}, err
+	// TODO: check path and folder name lengths
+
+	if _, err := FS.Stat(newFolderPath); !os.IsNotExist(err) {
+		msg := fmt.Sprintf("Cannot create folder \"%s\" because there is already a file or folder with that name.", folderName)
+		return []Transaction{cc.NewErrReply(t, msg)}, nil
+	}
+
+	// TODO: check for disallowed characters to maintain compatibility for original client
+
+	if err := FS.Mkdir(newFolderPath, 0777); err != nil {
+		msg := fmt.Sprintf("Cannot create folder \"%s\" because an error occurred.", folderName)
+		return []Transaction{cc.NewErrReply(t, msg)}, nil
 	}
 
 	res = append(res, cc.NewReply(t))

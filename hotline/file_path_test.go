@@ -31,7 +31,7 @@ func TestFilePath_UnmarshalBinary(t *testing.T) {
 				0x41, 0x20, 0x53, 0x75, 0x62, 0x44, 0x69, 0x72,
 			}},
 			want: FilePath{
-				ItemCount: []byte{0x00, 0x02},
+				ItemCount: [2]byte{0x00, 0x02},
 				Items: []FilePathItem{
 					{
 						Len:  0x0f,

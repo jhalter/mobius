@@ -2,7 +2,9 @@ package hotline
 
 import (
 	"github.com/stretchr/testify/assert"
+	"io/fs"
 	"math/rand"
+	"os"
 	"reflect"
 	"testing"
 )
@@ -522,9 +524,217 @@ func TestHandleGetFileInfo(t *testing.T) {
 				t.Errorf("HandleGetFileInfo() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !assert.Equal(t, tt.wantRes,  gotRes) {
+			if !assert.Equal(t, tt.wantRes, gotRes) {
 				t.Errorf("HandleGetFileInfo() gotRes = %v, want %v", gotRes, tt.wantRes)
 			}
 		})
 	}
 }
+
+func TestHandleNewFolder(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		setup   func()
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr bool
+	}{
+		{
+			name: "when path is nested",
+			args: args{
+				cc: &ClientConn{
+					ID: &[]byte{0, 1},
+					Server: &Server{
+						Config: &Config{
+							FileRoot: "/Files/",
+						},
+					},
+				},
+				t: NewTransaction(
+					tranNewFolder, &[]byte{0, 1},
+					NewField(fieldFileName, []byte("testFolder")),
+					NewField(fieldFilePath, []byte{
+						0x00, 0x01,
+						0x00, 0x00,
+						0x03,
+						0x61, 0x61, 0x61,
+					}),
+				),
+			},
+			setup: func() {
+				mfs := MockFileStore{}
+				mfs.On("Mkdir", "/Files/aaa/testFolder", fs.FileMode(0777)).Return(nil)
+				mfs.On("Stat", "/Files/aaa/testFolder").Return(nil, os.ErrNotExist)
+				FS = mfs
+			},
+			wantRes: []Transaction{
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0xcd},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
+					ErrorCode: []byte{0, 0, 0, 0},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "when path is not nested",
+			args: args{
+				cc: &ClientConn{
+					ID: &[]byte{0, 1},
+					Server: &Server{
+						Config: &Config{
+							FileRoot: "/Files",
+						},
+					},
+				},
+				t: NewTransaction(
+					tranNewFolder, &[]byte{0, 1},
+					NewField(fieldFileName, []byte("testFolder")),
+				),
+			},
+			setup: func() {
+				mfs := MockFileStore{}
+				mfs.On("Mkdir", "/Files/testFolder", fs.FileMode(0777)).Return(nil)
+				mfs.On("Stat", "/Files/testFolder").Return(nil, os.ErrNotExist)
+				FS = mfs
+			},
+			wantRes: []Transaction{
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0xcd},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
+					ErrorCode: []byte{0, 0, 0, 0},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "when UnmarshalBinary returns an err",
+			args: args{
+				cc: &ClientConn{
+					ID: &[]byte{0, 1},
+					Server: &Server{
+						Config: &Config{
+							FileRoot: "/Files/",
+						},
+					},
+				},
+				t: NewTransaction(
+					tranNewFolder, &[]byte{0, 1},
+					NewField(fieldFileName, []byte("testFolder")),
+					NewField(fieldFilePath, []byte{
+						0x00,
+					}),
+				),
+			},
+			setup: func() {
+				mfs := MockFileStore{}
+				mfs.On("Mkdir", "/Files/aaa/testFolder", fs.FileMode(0777)).Return(nil)
+				mfs.On("Stat", "/Files/aaa/testFolder").Return(nil, os.ErrNotExist)
+				FS = mfs
+			},
+			wantRes: []Transaction{},
+			wantErr: true,
+		},
+		{
+			name: "fieldFileName does not allow directory traversal",
+			args: args{
+				cc: &ClientConn{
+					ID: &[]byte{0, 1},
+					Server: &Server{
+						Config: &Config{
+							FileRoot: "/Files/",
+						},
+					},
+				},
+				t: NewTransaction(
+					tranNewFolder, &[]byte{0, 1},
+					NewField(fieldFileName, []byte("../../testFolder")),
+
+				),
+			},
+			setup: func() {
+				mfs := MockFileStore{}
+				mfs.On("Mkdir", "/Files/testFolder", fs.FileMode(0777)).Return(nil)
+				mfs.On("Stat", "/Files/testFolder").Return(nil, os.ErrNotExist)
+				FS = mfs
+			},
+			wantRes: []Transaction{
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0xcd},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
+					ErrorCode: []byte{0, 0, 0, 0},
+				},
+			},			wantErr: false,
+		},
+		{
+			name: "fieldFilePath does not allow directory traversal",
+			args: args{
+				cc: &ClientConn{
+					ID: &[]byte{0, 1},
+					Server: &Server{
+						Config: &Config{
+							FileRoot: "/Files/",
+						},
+					},
+				},
+				t: NewTransaction(
+					tranNewFolder, &[]byte{0, 1},
+					NewField(fieldFileName, []byte("testFolder")),
+					NewField(fieldFilePath, []byte{
+						0x00, 0x02,
+						0x00, 0x00,
+						0x03,
+						0x2e, 0x2e, 0x2f,
+						0x00, 0x00,
+						0x03,
+						0x66, 0x6f, 0x6f,
+					}),
+				),
+			},
+			setup: func() {
+				mfs := MockFileStore{}
+				mfs.On("Mkdir", "/Files/foo/testFolder", fs.FileMode(0777)).Return(nil)
+				mfs.On("Stat", "/Files/foo/testFolder").Return(nil, os.ErrNotExist)
+				FS = mfs
+			},
+			wantRes: []Transaction{
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0xcd},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
+					ErrorCode: []byte{0, 0, 0, 0},
+				},
+			},			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setup()
+
+			gotRes, err := HandleNewFolder(tt.args.cc, tt.args.t)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("HandleNewFolder() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tranAssertEqual(t, tt.wantRes, gotRes) {
+				t.Errorf("HandleNewFolder() gotRes = %v, want %v", gotRes, tt.wantRes)
+			}
+		})
+	}
+}
+

@@ -1,8 +1,10 @@
 package hotline
 
 import (
+	"bytes"
 	"encoding/binary"
-	"strings"
+	"errors"
+	"path"
 )
 
 const pathSeparator = "/" // File path separator TODO: make configurable to support Windows
@@ -24,12 +26,19 @@ func NewFilePathItem(b []byte) FilePathItem {
 }
 
 type FilePath struct {
-	ItemCount []byte
+	ItemCount [2]byte
 	Items     []FilePathItem
 }
 
+const minFilePathLen = 2
 func (fp *FilePath) UnmarshalBinary(b []byte) error {
-	fp.ItemCount = b[0:2]
+	if len(b) < minFilePathLen {
+		return errors.New("insufficient bytes")
+	}
+	err := binary.Read(bytes.NewReader(b[0:2]), binary.BigEndian, &fp.ItemCount)
+	if err != nil {
+		return err
+	}
 
 	pathData := b[2:]
 	for i := uint16(0); i < fp.Len(); i++ {
@@ -42,15 +51,16 @@ func (fp *FilePath) UnmarshalBinary(b []byte) error {
 }
 
 func (fp *FilePath) Len() uint16 {
-	return binary.BigEndian.Uint16(fp.ItemCount)
+	return binary.BigEndian.Uint16(fp.ItemCount[:])
 }
 
 func (fp *FilePath) String() string {
-	var out []string
+	out := []string{"/"}
 	for _, i := range fp.Items {
 		out = append(out, string(i.Name))
 	}
-	return strings.Join(out, pathSeparator)
+
+	return path.Join(out...)
 }
 
 func ReadFilePath(filePathFieldData []byte) string {

@@ -200,7 +200,7 @@ var clientHandlers = map[uint16]clientTHandler{
 		Handler: handleTranServerMsg,
 	},
 	tranKeepAlive: clientTransaction{
-		Name:    "tranKeepAlive",
+		Name: "tranKeepAlive",
 		Handler: func(client *Client, transaction *Transaction) (t []Transaction, err error) {
 			return t, err
 		},
@@ -699,9 +699,5 @@ func (c *Client) HandleTransaction(t *Transaction) error {
 }
 
 func (c *Client) Disconnect() error {
-	err := c.Connection.Close()
-	if err != nil {
-		return err
-	}
-	return nil
+	return c.Connection.Close()
 }

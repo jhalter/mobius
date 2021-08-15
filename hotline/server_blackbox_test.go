@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"net"
 	"os"
-	"reflect"
 	"testing"
 )
 
@@ -309,22 +310,21 @@ func TestNewUser(t *testing.T) {
 	}
 }
 
-// equal is a utility function used only in tests that determines if transactions are equal enough
-func (t Transaction) equal(otherT Transaction) bool {
-	t.ID = []byte{0, 0, 0, 0}
-	otherT.ID = []byte{0, 0, 0, 0}
+func tranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
+	var newT1 []Transaction
+	var newT2 []Transaction
+	for _, trans := range tran1{
+		trans.ID = []byte{0,0,0,0}
+		newT1 = append(newT1, trans)
+	}
 
-	t.TotalSize = []byte{0, 0, 0, 0}
-	otherT.TotalSize = []byte{0, 0, 0, 0}
+	for _, trans := range tran2{
+		trans.ID = []byte{0,0,0,0}
+		newT2 = append(newT2, trans)
 
-	t.DataSize = []byte{0, 0, 0, 0}
-	otherT.DataSize = []byte{0, 0, 0, 0}
+	}
 
-	t.ParamCount = []byte{0, 0}
-	otherT.ParamCount = []byte{0, 0}
+	spew.Dump(newT1, newT2)
 
-	//spew.Dump(t)
-	//spew.Dump(otherT)
-
-	return reflect.DeepEqual(t, otherT)
+	return assert.Equal(t, newT1, newT2)
 }
