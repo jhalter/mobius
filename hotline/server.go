@@ -413,7 +413,7 @@ func (s *Server) loadAccounts(userDir string) error {
 	}
 
 	for _, file := range matches {
-		fh, err := os.Open(file)
+		fh, err := FS.Open(file)
 		if err != nil {
 			return err
 		}
@@ -431,7 +431,7 @@ func (s *Server) loadAccounts(userDir string) error {
 }
 
 func (s *Server) loadConfig(path string) error {
-	fh, err := os.Open(path)
+	fh, err := FS.Open(path)
 	if err != nil {
 		return err
 	}
@@ -830,7 +830,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				return err
 			}
 
-			file, err := os.Open(path)
+			file, err := FS.Open(path)
 			if err != nil {
 				return err
 			}

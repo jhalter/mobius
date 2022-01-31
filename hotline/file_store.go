@@ -9,10 +9,9 @@ var FS FileStore
 
 type FileStore interface {
 	Mkdir(name string, perm os.FileMode) error
-
 	Stat(name string) (os.FileInfo, error)
-	// TODO: implement
-
+	Open(name string) (*os.File, error)
+	// TODO: implement these
 	//Rename(oldpath string, newpath string) error
 	//RemoveAll(path string) error
 }
@@ -27,6 +26,10 @@ func (fs OSFileStore) Stat(name string) (os.FileInfo, error) {
 	return os.Stat(name)
 }
 
+func (fs OSFileStore) Open(name string) (*os.File, error) {
+	return os.Open(name)
+}
+
 type MockFileStore struct {
 	mock.Mock
 }
@@ -38,9 +41,14 @@ func (mfs MockFileStore) Mkdir(name string, perm os.FileMode) error {
 
 func (mfs MockFileStore) Stat(name string) (os.FileInfo, error) {
 	args := mfs.Called(name)
-	if  args.Get(0) == nil {
+	if args.Get(0) == nil {
 		return nil, args.Error(1)
 
 	}
 	return args.Get(0).(os.FileInfo), args.Error(1)
+}
+
+func (mfs MockFileStore) Open(name string) (*os.File, error) {
+	args := mfs.Called(name)
+	return args.Get(0).(*os.File), args.Error(1)
 }
