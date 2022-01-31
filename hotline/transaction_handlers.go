@@ -273,7 +273,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleSetUser,
 	},
 	tranUploadFile: {
-		Access:  accessUploadFile,
+		Access:  accessAlwaysAllow,
 		DenyMsg: "You are not allowed to upload files.",
 		Name:    "tranUploadFile",
 		Handler: HandleUploadFile,
@@ -1323,20 +1323,24 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err 
 }
 
 func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	// TODO: add permission handing for upload folders and drop boxes
+	if !authorize(cc.Account.Access, accessUploadFile) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to upload files."))
+		return res, err
+	}
+
 	fileName := t.GetField(fieldFileName).Data
 	filePath := t.GetField(fieldFilePath).Data
 
 	transactionRef := cc.Server.NewTransactionRef()
 	data := binary.BigEndian.Uint32(transactionRef)
 
-	fileTransfer := &FileTransfer{
+	cc.Server.FileTransfers[data] = &FileTransfer{
 		FileName:        fileName,
 		FilePath:        filePath,
 		ReferenceNumber: transactionRef,
 		Type:            FileUpload,
 	}
-
-	cc.Server.FileTransfers[data] = fileTransfer
 
 	res = append(res, cc.NewReply(t, NewField(fieldRefNum, transactionRef)))
 	return res, err
