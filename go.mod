@@ -4,18 +4,17 @@ go 1.16
 
 require (
 	github.com/davecgh/go-spew v1.1.1
-	github.com/gdamore/tcell/v2 v2.3.3
-	github.com/mbndr/figlet4go v0.0.0-20190224160619-d6cef5b186ea // indirect
+	github.com/gdamore/tcell/v2 v2.4.1-0.20210905002822-f057f0a857a1
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/rivo/tview v0.0.0-20210624165335-29d673af0ce2
-	github.com/stretchr/testify v1.4.0
-	go.uber.org/zap v1.15.0
-	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
-	golang.org/x/sys v0.0.0-20210616094352-59db8d763f22 // indirect
-	golang.org/x/text v0.3.6 // indirect
-	golang.org/x/tools v0.0.0-20200825202427-b303f430e36d // indirect
-	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
-	gopkg.in/yaml.v2 v2.2.4
-	honnef.co/go/tools v0.0.1-2020.1.4 // indirect
+	github.com/rivo/tview v0.0.0-20220129131435-1f7581b67bd1
+	github.com/stretchr/objx v0.3.0 // indirect
+	github.com/stretchr/testify v1.7.0
+	go.uber.org/atomic v1.9.0 // indirect
+	go.uber.org/multierr v1.7.0 // indirect
+	go.uber.org/zap v1.20.0
+	golang.org/x/crypto v0.0.0-20220128200615-198e4374d7ed
+	golang.org/x/sys v0.0.0-20220128215802-99c3d69c2c27 // indirect
+	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
+	golang.org/x/text v0.3.7 // indirect
+	gopkg.in/yaml.v2 v2.4.0
 )
