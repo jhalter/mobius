@@ -3,8 +3,9 @@ package hotline
 import (
 	"bytes"
 	"encoding/hex"
-	"github.com/davecgh/go-spew/spew"
-	"reflect"
+	"fmt"
+	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 )
 
@@ -20,75 +21,56 @@ func TestReadFlattenedFileObject(t *testing.T) {
 	}
 }
 
-//
-//func TestNewFlattenedFileObject(t *testing.T) {
-//	ffo := NewFlattenedFileObject("test/config/files", "testfile.txt")
-//
-//	dataSize := ffo.FlatFileDataForkHeader.DataSize
-//	want := []byte{0, 0, 0, 0x17}
-//	if bytes.Compare(dataSize, want) != 0 {
-//		t.Errorf("%q, want %q", dataSize, want)
-//	}
-//
-//	comment := ffo.FlatFileInformationFork.Comment
-//	want = []byte("Test Comment")
-//	if bytes.Compare(ffo.FlatFileInformationFork.Comment, want) != 0 {
-//		t.Errorf("%q, want %q", comment, want)
-//	}
-//}
-
 func TestNewFlattenedFileObject(t *testing.T) {
 	type args struct {
-		filePath string
-		fileName string
+		fileRoot string
+		filePath []byte
+		fileName []byte
 	}
 	tests := []struct {
 		name    string
 		args    args
 		want    *flattenedFileObject
-		wantErr bool
+		wantErr assert.ErrorAssertionFunc
 	}{
 		{
-			name: "when file path is valid",
+			name: "with valid file",
 			args: args{
-				filePath: "./test/config/Files/",
-				fileName: "testfile.txt",
+				fileRoot: func() string { path, _ := os.Getwd(); return path + "/test/config/Files" }(),
+				fileName: []byte("testfile.txt"),
+				filePath: []byte{0, 0},
 			},
 			want: &flattenedFileObject{
 				FlatFileHeader:                NewFlatFileHeader(),
 				FlatFileInformationForkHeader: FlatFileInformationForkHeader{},
 				FlatFileInformationFork:       NewFlatFileInformationFork("testfile.txt"),
-				FlatFileDataForkHeader:        FlatFileDataForkHeader{
+				FlatFileDataForkHeader: FlatFileDataForkHeader{
 					ForkType:        []byte("DATA"),
 					CompressionType: []byte{0, 0, 0, 0},
 					RSVD:            []byte{0, 0, 0, 0},
 					DataSize:        []byte{0x00, 0x00, 0x00, 0x17},
 				},
-				FileData:                      nil,
+				FileData: nil,
 			},
-			wantErr: false,
+			wantErr: assert.NoError,
 		},
 		{
 			name: "when file path is invalid",
 			args: args{
-				filePath: "./nope/",
-				fileName: "also-nope.txt",
+				fileRoot: func() string { path, _ := os.Getwd(); return path + "/test/config/Files" }(),
+				fileName: []byte("nope.txt"),
 			},
-			want: nil,
-			wantErr: true,
+			want:    nil,
+			wantErr: assert.Error,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewFlattenedFileObject(tt.args.filePath, tt.args.fileName)
-			spew.Dump(got)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewFlattenedFileObject() error = %v, wantErr %v", err, tt.wantErr)
+			got, err := NewFlattenedFileObject(tt.args.fileRoot, tt.args.filePath, tt.args.fileName)
+			if !tt.wantErr(t, err, fmt.Sprintf("NewFlattenedFileObject(%v, %v, %v)", tt.args.fileRoot, tt.args.filePath, tt.args.fileName)) {
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewFlattenedFileObject() got = %v, want %v", got, tt.want)
-			}
+			assert.Equalf(t, tt.want, got, "NewFlattenedFileObject(%v, %v, %v)", tt.args.fileRoot, tt.args.filePath, tt.args.fileName)
 		})
 	}
 }

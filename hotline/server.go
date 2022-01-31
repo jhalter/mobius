@@ -636,11 +636,15 @@ func (s *Server) TransferFile(conn net.Conn) error {
 
 	switch fileTransfer.Type {
 	case FileDownload:
-		fullFilePath := fmt.Sprintf("%v/%v", s.Config.FileRoot+string(fileTransfer.FilePath), string(fileTransfer.FileName))
+		fullFilePath, err := readPath(s.Config.FileRoot, fileTransfer.FilePath, fileTransfer.FileName)
+		if err != nil {
+			return err
+		}
 
 		ffo, err := NewFlattenedFileObject(
-			s.Config.FileRoot+string(fileTransfer.FilePath),
-			string(fileTransfer.FileName),
+			s.Config.FileRoot,
+			fileTransfer.FilePath,
+			fileTransfer.FileName,
 		)
 		if err != nil {
 			return err
@@ -653,7 +657,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			return err
 		}
 
-		file, err := os.Open(fullFilePath)
+		file, err := FS.Open(fullFilePath)
 		if err != nil {
 			return err
 		}
@@ -756,9 +760,10 @@ func (s *Server) TransferFile(conn net.Conn) error {
 		//
 		// This notifies the server to send the next item header
 
-		var fh FilePath
-		_ = fh.UnmarshalBinary(fileTransfer.FilePath)
-		fullFilePath := fmt.Sprintf("%v/%v", s.Config.FileRoot+fh.String(), string(fileTransfer.FileName))
+		fullFilePath, err := readPath(s.Config.FileRoot, fileTransfer.FilePath, fileTransfer.FileName)
+		if err != nil {
+			return err
+		}
 
 		basePathLen := len(fullFilePath)
 
@@ -798,7 +803,11 @@ func (s *Server) TransferFile(conn net.Conn) error {
 
 			splitPath := strings.Split(path, "/")
 
-			ffo, err := NewFlattenedFileObject(strings.Join(splitPath[:len(splitPath)-1], "/"), info.Name())
+			ffo, err := NewFlattenedFileObject(
+				strings.Join(splitPath[:len(splitPath)-1], "/"),
+				nil,
+				[]byte(info.Name()),
+			)
 			if err != nil {
 				return err
 			}
@@ -851,20 +860,23 @@ func (s *Server) TransferFile(conn net.Conn) error {
 		})
 
 	case FolderUpload:
-		dstPath := s.Config.FileRoot + ReadFilePath(fileTransfer.FilePath) + "/" + string(fileTransfer.FileName)
+		dstPath, err := readPath(s.Config.FileRoot, fileTransfer.FilePath, fileTransfer.FileName)
+		if err != nil {
+			return err
+		}
 		s.Logger.Infow(
 			"Folder upload started",
 			"transactionRef", fileTransfer.ReferenceNumber,
 			"RemoteAddr", conn.RemoteAddr().String(),
 			"dstPath", dstPath,
-			"TransferSize", fileTransfer.TransferSize,
+			"TransferSize", fmt.Sprintf("%x", fileTransfer.TransferSize),
 			"FolderItemCount", fileTransfer.FolderItemCount,
 		)
 
 		// Check if the target folder exists.  If not, create it.
-		if _, err := os.Stat(dstPath); os.IsNotExist(err) {
-			s.Logger.Infow("Target path does not exist; Creating...", "dstPath", dstPath)
-			if err := os.Mkdir(dstPath, 0777); err != nil {
+		if _, err := FS.Stat(dstPath); os.IsNotExist(err) {
+			s.Logger.Infow("Creating target path", "dstPath", dstPath)
+			if err := FS.Mkdir(dstPath, 0777); err != nil {
 				s.Logger.Error(err)
 			}
 		}

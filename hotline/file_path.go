@@ -32,6 +32,9 @@ type FilePath struct {
 
 const minFilePathLen = 2
 func (fp *FilePath) UnmarshalBinary(b []byte) error {
+	if b == nil {
+		return nil
+	}
 	if len(b) < minFilePathLen {
 		return errors.New("insufficient bytes")
 	}
@@ -70,4 +73,22 @@ func ReadFilePath(filePathFieldData []byte) string {
 		// TODO
 	}
 	return fp.String()
+}
+
+func readPath(fileRoot string, filePath, fileName []byte) (fullPath string, err error) {
+	var fp FilePath
+	if filePath != nil {
+		if err = fp.UnmarshalBinary(filePath); err != nil {
+			return "", err
+		}
+	}
+
+	fullPath = path.Join(
+		"/",
+		fileRoot,
+		fp.String(),
+		path.Join("/", string(fileName)),
+	)
+
+	return fullPath, nil
 }

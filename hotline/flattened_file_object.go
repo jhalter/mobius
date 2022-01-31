@@ -2,7 +2,6 @@ package hotline
 
 import (
 	"encoding/binary"
-	"fmt"
 	"os"
 )
 
@@ -197,8 +196,12 @@ func (f flattenedFileObject) BinaryMarshal() []byte {
 	return out
 }
 
-func NewFlattenedFileObject(filePath, fileName string) (*flattenedFileObject, error) {
-	file, err := os.Open(fmt.Sprintf("%v/%v", filePath, fileName))
+func NewFlattenedFileObject(fileRoot string, filePath, fileName []byte) (*flattenedFileObject, error) {
+	fullFilePath, err := readPath(fileRoot, filePath, fileName)
+	if err != nil {
+		return nil, err
+	}
+	file, err := os.Open(fullFilePath)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +217,7 @@ func NewFlattenedFileObject(filePath, fileName string) (*flattenedFileObject, er
 
 	return &flattenedFileObject{
 		FlatFileHeader:          NewFlatFileHeader(),
-		FlatFileInformationFork: NewFlatFileInformationFork(fileName),
+		FlatFileInformationFork: NewFlatFileInformationFork(string(fileName)),
 		FlatFileDataForkHeader: FlatFileDataForkHeader{
 			ForkType:        []byte("DATA"),
 			CompressionType: []byte{0, 0, 0, 0},

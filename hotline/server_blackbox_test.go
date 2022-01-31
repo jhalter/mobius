@@ -66,6 +66,8 @@ func NewTestLogger() *zap.SugaredLogger {
 func StartTestServer() (*Server, context.Context, context.CancelFunc) {
 	ctx, cancelRoot := context.WithCancel(context.Background())
 
+	FS = OSFileStore{}
+
 	srv, err := NewServer("test/config/", "localhost", 0, NewTestLogger())
 	if err != nil {
 		panic(err)
@@ -82,6 +84,14 @@ func StartTestServer() (*Server, context.Context, context.CancelFunc) {
 }
 
 func TestHandshake(t *testing.T) {
+	mfs := MockFileStore{}
+	fh, _ := os.Open("./test/config/Agreement.txt")
+	mfs.On("Open", "/test/config/Agreement.txt").Return(fh, nil)
+	fh, _ = os.Open("./test/config/config.yaml")
+	mfs.On("Open", "/test/config/config.yaml").Return(fh, nil)
+	FS = mfs
+	spew.Dump(mfs)
+
 	srv, _, cancelFunc := StartTestServer()
 	defer cancelFunc()
 
@@ -313,18 +323,16 @@ func TestNewUser(t *testing.T) {
 func tranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
 	var newT1 []Transaction
 	var newT2 []Transaction
-	for _, trans := range tran1{
-		trans.ID = []byte{0,0,0,0}
+	for _, trans := range tran1 {
+		trans.ID = []byte{0, 0, 0, 0}
 		newT1 = append(newT1, trans)
 	}
 
-	for _, trans := range tran2{
-		trans.ID = []byte{0,0,0,0}
+	for _, trans := range tran2 {
+		trans.ID = []byte{0, 0, 0, 0}
 		newT2 = append(newT2, trans)
 
 	}
-
-	spew.Dump(newT1, newT2)
 
 	return assert.Equal(t, newT1, newT2)
 }

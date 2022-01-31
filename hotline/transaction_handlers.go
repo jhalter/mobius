@@ -397,16 +397,16 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 }
 
 func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	fileName := string(t.GetField(fieldFileName).Data)
-	filePath := cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFilePath).Data)
+	fileName := t.GetField(fieldFileName).Data
+	filePath := t.GetField(fieldFilePath).Data
 
-	ffo, err := NewFlattenedFileObject(filePath, fileName)
+	ffo, err := NewFlattenedFileObject(cc.Server.Config.FileRoot, filePath, fileName)
 	if err != nil {
 		return res, err
 	}
 
 	res = append(res, cc.NewReply(t,
-		NewField(fieldFileName, []byte(fileName)),
+		NewField(fieldFileName, fileName),
 		NewField(fieldFileTypeString, ffo.FlatFileInformationFork.TypeSignature),
 		NewField(fieldFileCreatorString, ffo.FlatFileInformationFork.CreatorSignature),
 		NewField(fieldFileComment, ffo.FlatFileInformationFork.Comment),
@@ -427,14 +427,24 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 // * 210	File comment	Optional
 // Fields used in the reply:	None
 func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	fileName := string(t.GetField(fieldFileName).Data)
-	filePath := cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFilePath).Data)
+	fileName := t.GetField(fieldFileName).Data
+	filePath := t.GetField(fieldFilePath).Data
+
+	fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
+	if err != nil {
+		return res, err
+	}
+
+	fullNewFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, t.GetField(fieldFileNewName).Data)
+	if err != nil {
+		return nil, err
+	}
+
 	//fileComment := t.GetField(fieldFileComment).Data
 	fileNewName := t.GetField(fieldFileNewName).Data
 
 	if fileNewName != nil {
-		path := filePath + "/" + fileName
-		fi, err := os.Stat(path)
+		fi, err := FS.Stat(fullFilePath)
 		if err != nil {
 			return res, err
 		}
@@ -451,9 +461,9 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 			}
 		}
 
-		err = os.Rename(filePath+"/"+fileName, filePath+"/"+string(fileNewName))
+		err = os.Rename(fullFilePath, fullNewFilePath)
 		if os.IsNotExist(err) {
-			res = append(res, cc.NewErrReply(t, "Cannot rename file "+fileName+" because it does not exist or cannot be found."))
+			res = append(res, cc.NewErrReply(t, "Cannot rename file "+string(fileName)+" because it does not exist or cannot be found."))
 			return res, err
 		}
 	}
@@ -468,16 +478,19 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 // * 202	File path
 // Fields used in the reply: none
 func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	fileName := string(t.GetField(fieldFileName).Data)
-	filePath := cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFilePath).Data)
+	fileName := t.GetField(fieldFileName).Data
+	filePath := t.GetField(fieldFilePath).Data
 
-	path := filePath + fileName
-
-	cc.Server.Logger.Debugw("Delete file", "src", path)
-
-	fi, err := os.Stat(path)
+	fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
 	if err != nil {
-		res = append(res, cc.NewErrReply(t, "Cannot delete file "+fileName+" because it does not exist or cannot be found."))
+		return res, err
+	}
+
+	cc.Server.Logger.Debugw("Delete file", "src", fullFilePath)
+
+	fi, err := os.Stat(fullFilePath)
+	if err != nil {
+		res = append(res, cc.NewErrReply(t, "Cannot delete file "+string(fileName)+" because it does not exist or cannot be found."))
 		return res, nil
 	}
 	switch mode := fi.Mode(); {
@@ -493,7 +506,7 @@ func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		}
 	}
 
-	if err := os.RemoveAll(path); err != nil {
+	if err := os.RemoveAll(fullFilePath); err != nil {
 		return res, err
 	}
 
@@ -1186,9 +1199,15 @@ func HandleGetMsgs(cc *ClientConn, t *Transaction) (res []Transaction, err error
 
 func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	fileName := t.GetField(fieldFileName).Data
-	filePath := ReadFilePath(t.GetField(fieldFilePath).Data)
+	filePath := t.GetField(fieldFilePath).Data
 
-	ffo, err := NewFlattenedFileObject(cc.Server.Config.FileRoot+filePath, string(fileName))
+	var fp FilePath
+	err = fp.UnmarshalBinary(filePath)
+	if err != nil {
+		return res, err
+	}
+
+	ffo, err := NewFlattenedFileObject(cc.Server.Config.FileRoot, filePath, fileName)
 	if err != nil {
 		return res, err
 	}
@@ -1196,11 +1215,9 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 	transactionRef := cc.Server.NewTransactionRef()
 	data := binary.BigEndian.Uint32(transactionRef)
 
-	cc.Server.Logger.Infow("File download", "path", filePath)
-
 	ft := &FileTransfer{
 		FileName:        fileName,
-		FilePath:        []byte(filePath),
+		FilePath:        filePath,
 		ReferenceNumber: transactionRef,
 		Type:            FileDownload,
 	}
@@ -1261,7 +1278,8 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 		return res, err
 	}
 
-	fullFilePath := fmt.Sprintf("%v%v", cc.Server.Config.FileRoot+fp.String(), string(fileTransfer.FileName))
+	fullFilePath, err := readPath(cc.Server.Config.FileRoot, t.GetField(fieldFilePath).Data, t.GetField(fieldFileName).Data)
+
 	transferSize, err := CalcTotalSize(fullFilePath)
 	if err != nil {
 		return res, err
@@ -1390,14 +1408,16 @@ func HandleKeepAlive(cc *ClientConn, t *Transaction) (res []Transaction, err err
 }
 
 func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	filePath := cc.Server.Config.FileRoot
-
-	path := t.GetField(fieldFilePath).Data
-	if len(path) > 0 {
-		filePath = cc.Server.Config.FileRoot + ReadFilePath(path)
+	fullPath, err := readPath(
+		cc.Server.Config.FileRoot,
+		t.GetField(fieldFilePath).Data,
+		nil,
+	)
+	if err != nil {
+		return res, err
 	}
 
-	fileNames, err := getFileNameList(filePath)
+	fileNames, err := getFileNameList(fullPath)
 	if err != nil {
 		return res, err
 	}

@@ -469,7 +469,7 @@ func TestHandleGetFileInfo(t *testing.T) {
 					ID: &[]byte{0x00, 0x01},
 					Server: &Server{
 						Config: &Config{
-							FileRoot: "./test/config/Files/",
+							FileRoot: func() string { path, _ := os.Getwd(); return path + "/test/config/Files" }(),
 						},
 					},
 				},
@@ -477,19 +477,6 @@ func TestHandleGetFileInfo(t *testing.T) {
 					tranGetFileInfo, nil,
 					NewField(fieldFileName, []byte("testfile.txt")),
 					NewField(fieldFilePath, []byte{0x00, 0x00}),
-					//NewField(fieldFilePath, []byte{
-					//	0x00, 0x03,
-					//	0x00, 0x00,
-					//	0x04,
-					//	0x74, 0x65, 0x73, 0x74,
-					//	0x00, 0x00,
-					//	0x06,
-					//	0x63, 0x6f, 0x6e, 0x66, 0x69, 0x67,
-					//
-					//	0x00, 0x00,
-					//	0x05,
-					//	0x46, 0x69, 0x6c, 0x65, 73},
-					//),
 				),
 			},
 			wantRes: []Transaction{
@@ -659,7 +646,6 @@ func TestHandleNewFolder(t *testing.T) {
 				t: NewTransaction(
 					tranNewFolder, &[]byte{0, 1},
 					NewField(fieldFileName, []byte("../../testFolder")),
-
 				),
 			},
 			setup: func() {
@@ -677,7 +663,7 @@ func TestHandleNewFolder(t *testing.T) {
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
 					ErrorCode: []byte{0, 0, 0, 0},
 				},
-			},			wantErr: false,
+			}, wantErr: false,
 		},
 		{
 			name: "fieldFilePath does not allow directory traversal",
@@ -719,7 +705,7 @@ func TestHandleNewFolder(t *testing.T) {
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
 					ErrorCode: []byte{0, 0, 0, 0},
 				},
-			},			wantErr: false,
+			}, wantErr: false,
 		},
 	}
 	for _, tt := range tests {
@@ -738,3 +724,110 @@ func TestHandleNewFolder(t *testing.T) {
 	}
 }
 
+func TestHandleUploadFile(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr bool
+	}{
+		{
+			name: "when request is valid",
+			args: args{
+				cc: &ClientConn{
+					Server: &Server{
+						FileTransfers: map[uint32]*FileTransfer{},
+					},
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessUploadFile)
+							access := bits[:]
+							return &access
+						}(),
+					},
+				},
+				t: NewTransaction(
+					tranUploadFile, &[]byte{0, 1},
+					NewField(fieldFileName, []byte("testFile")),
+					NewField(fieldFilePath, []byte{
+						0x00, 0x01,
+						0x00, 0x00,
+						0x03,
+						0x2e, 0x2e, 0x2f,
+					}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0xcb},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(fieldRefNum, []byte{0x52, 0xfd, 0xfc, 0x07}), // rand.Seed(1)
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "when user does not have required access",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							access := bits[:]
+							return &access
+						}(),
+					},
+					Server: &Server{
+						FileTransfers: map[uint32]*FileTransfer{},
+					},
+				},
+				t: NewTransaction(
+					tranUploadFile, &[]byte{0, 1},
+					NewField(fieldFileName, []byte("testFile")),
+					NewField(fieldFilePath, []byte{
+						0x00, 0x01,
+						0x00, 0x00,
+						0x03,
+						0x2e, 0x2e, 0x2f,
+					}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to upload files.")), // rand.Seed(1)
+					},
+				},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rand.Seed(1)
+			gotRes, err := HandleUploadFile(tt.args.cc, tt.args.t)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("HandleUploadFile() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tranAssertEqual(t, tt.wantRes, gotRes) {
+				t.Errorf("HandleUploadFile() gotRes = %v, want %v", gotRes, tt.wantRes)
+			}
+		})
+	}
+}
