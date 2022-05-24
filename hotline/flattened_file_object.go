@@ -67,18 +67,18 @@ func NewFlatFileInformationFork(fileName string) FlatFileInformationFork {
 		ModifyDate:       []byte{0x07, 0x70, 0x00, 0x00, 0xba, 0x74, 0x24, 0x73}, // TODO: implement
 		NameScript:       make([]byte, 2),                                        // TODO: What is this?
 		Name:             []byte(fileName),
+		CommentSize:      []byte{0, 4},
 		Comment:          []byte("TODO"), // TODO: implement (maybe?)
 	}
 }
 
-// Size of the flat file information fork, which is the fixed size of 72 bytes
-// plus the number of bytes in the FileName
-// TODO: plus the size of the Comment!
+// DataSize calculates the size of the flat file information fork, which is
+// 72 bytes for the fixed length fields plus the length of the Name + Comment
 func (ffif FlatFileInformationFork) DataSize() []byte {
 	size := make([]byte, 4)
-	nameLen := len(ffif.Name)
+
 	//TODO: Can I do math directly on two byte slices?
-	dataSize := nameLen + 74
+	dataSize := len(ffif.Name) + len(ffif.Comment) + 74
 
 	binary.BigEndian.PutUint32(size, uint32(dataSize))
 
@@ -184,9 +184,8 @@ func (f flattenedFileObject) BinaryMarshal() []byte {
 	out = append(out, f.FlatFileInformationFork.NameScript...)
 	out = append(out, f.FlatFileInformationFork.ReadNameSize()...)
 	out = append(out, f.FlatFileInformationFork.Name...)
-
-	// TODO: Implement commentlen and comment field
-	out = append(out, []byte{0, 0}...)
+	out = append(out, f.FlatFileInformationFork.CommentSize...)
+	out = append(out, f.FlatFileInformationFork.Comment...)
 
 	out = append(out, f.FlatFileDataForkHeader.ForkType...)
 	out = append(out, f.FlatFileDataForkHeader.CompressionType...)
