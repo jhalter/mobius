@@ -8,39 +8,21 @@ import (
 	"strings"
 )
 
-const defaultCreator = "TTXT"
-const defaultType = "TEXT"
+func downcaseFileExtension(filename string) string {
+	splitStr := strings.Split(filename, ".")
+	ext := strings.ToLower(
+		splitStr[len(splitStr)-1],
+	)
 
-var fileCreatorCodes = map[string]string{
-	"sit": "SIT!",
-	"pdf": "CARO",
+	return ext
 }
 
-var fileTypeCodes = map[string]string{
-	"sit": "SIT!",
-	"jpg": "JPEG",
-	"pdf": "PDF ",
-}
-
-func fileTypeFromFilename(fn string) string {
-	ext := strings.Split(fn, ".")
-	code := fileTypeCodes[ext[len(ext)-1]]
-
-	if code == "" {
-		code = defaultType
+func fileTypeFromFilename(fn string) fileType {
+	ft, ok := fileTypes[downcaseFileExtension(fn)]
+	if ok {
+		return ft
 	}
-
-	return code
-}
-
-func fileCreatorFromFilename(fn string) string {
-	ext := strings.Split(fn, ".")
-	code := fileCreatorCodes[ext[len(ext)-1]]
-	if code == "" {
-		code = defaultCreator
-	}
-
-	return code
+	return defaultFileType
 }
 
 func getFileNameList(filePath string) (fields []Field, err error) {
@@ -53,10 +35,9 @@ func getFileNameList(filePath string) (fields []Field, err error) {
 		var fileType []byte
 		var fnwi FileNameWithInfo
 		fileCreator := make([]byte, 4)
-		//fileSize := make([]byte, 4)
 		if !file.IsDir() {
-			fileType = []byte(fileTypeFromFilename(file.Name()))
-			fileCreator = []byte(fileCreatorFromFilename(file.Name()))
+			fileType = []byte(fileTypeFromFilename(file.Name()).TypeCode)
+			fileCreator = []byte(fileTypeFromFilename(file.Name()).CreatorCode)
 
 			binary.BigEndian.PutUint32(fnwi.FileSize[:], uint32(file.Size()))
 			copy(fnwi.Type[:], fileType[:])
