@@ -228,6 +228,12 @@ func TestHandleGetUserNameList(t *testing.T) {
 								Flags:    &[]byte{0, 3},
 								UserName: []byte{0, 4},
 							},
+							uint16(2): {
+								ID:       &[]byte{0, 2},
+								Icon:     &[]byte{0, 2},
+								Flags:    &[]byte{0, 3},
+								UserName: []byte{0, 4},
+							},
 						},
 					},
 				},
@@ -248,6 +254,10 @@ func TestHandleGetUserNameList(t *testing.T) {
 						NewField(
 							fieldUsernameWithInfo,
 							[]byte{00, 01, 00, 02, 00, 03, 00, 02, 00, 04},
+						),
+						NewField(
+							fieldUsernameWithInfo,
+							[]byte{00, 02, 00, 02, 00, 03, 00, 02, 00, 04},
 						),
 					},
 				},

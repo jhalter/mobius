@@ -169,7 +169,7 @@ func (s *Server) Serve(ctx context.Context, cancelRoot context.CancelFunc, ln ne
 }
 
 const (
-	agreementFile    = "Agreement.txt"
+	agreementFile = "Agreement.txt"
 )
 
 // NewServer constructs a new Server from a config dir
@@ -377,7 +377,7 @@ func (s *Server) connectedUsers() []Field {
 	defer s.mux.Unlock()
 
 	var connectedUsers []Field
-	for _, c := range s.Clients {
+	for _, c := range sortedClients(s.Clients) {
 		user := User{
 			ID:    *c.ID,
 			Icon:  *c.Icon,
@@ -992,7 +992,6 @@ func transferFile(conn net.Conn, dst string) error {
 		receivedBytes += int(n)
 	}
 }
-
 
 // sortedClients is a utility function that takes a map of *ClientConn and returns a sorted slice of the values.
 // The purpose of this is to ensure that the ordering of client connections is deterministic so that test assertions work.
