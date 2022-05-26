@@ -67,8 +67,8 @@ func NewFlatFileInformationFork(fileName string, modifyTime []byte) FlatFileInfo
 		ModifyDate:       modifyTime,
 		NameScript:       make([]byte, 2), // TODO: What is this?
 		Name:             []byte(fileName),
-		CommentSize:      []byte{0, 4},
-		Comment:          []byte("TODO"), // TODO: implement (maybe?)
+		CommentSize:      []byte{0, 0},
+		Comment:          []byte{}, // TODO: implement (maybe?)
 	}
 }
 
