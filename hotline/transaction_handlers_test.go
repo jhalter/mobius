@@ -469,7 +469,10 @@ func TestHandleGetFileInfo(t *testing.T) {
 					ID: &[]byte{0x00, 0x01},
 					Server: &Server{
 						Config: &Config{
-							FileRoot: func() string { path, _ := os.Getwd(); return path + "/test/config/Files" }(),
+							FileRoot: func() string {
+								path, _ := os.Getwd()
+								return path + "/test/config/Files"
+							}(),
 						},
 					},
 				},
@@ -493,8 +496,8 @@ func TestHandleGetFileInfo(t *testing.T) {
 						NewField(fieldFileCreatorString, []byte("ttxt")),
 						NewField(fieldFileComment, []byte("TODO")),
 						NewField(fieldFileType, []byte("TEXT")),
-						NewField(fieldFileCreateDate, []byte{0x07, 0x70, 0x00, 0x00, 0xba, 0x74, 0x24, 0x73}),
-						NewField(fieldFileModifyDate, []byte{0x07, 0x70, 0x00, 0x00, 0xba, 0x74, 0x24, 0x73}),
+						NewField(fieldFileCreateDate, make([]byte, 8)),
+						NewField(fieldFileModifyDate, make([]byte, 8)),
 						NewField(fieldFileSize, []byte{0x0, 0x0, 0x0, 0x17}),
 					},
 				},
@@ -511,6 +514,11 @@ func TestHandleGetFileInfo(t *testing.T) {
 				t.Errorf("HandleGetFileInfo() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
+			// Clear the file timestamp fields to work around problems running the tests in multiple timezones
+			// TODO: revisit how to test this by mocking the stat calls
+			gotRes[0].Fields[5].Data = make([]byte, 8)
+			gotRes[0].Fields[6].Data = make([]byte, 8)
 			if !assert.Equal(t, tt.wantRes, gotRes) {
 				t.Errorf("HandleGetFileInfo() gotRes = %v, want %v", gotRes, tt.wantRes)
 			}
