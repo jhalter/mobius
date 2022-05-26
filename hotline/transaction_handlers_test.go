@@ -494,7 +494,7 @@ func TestHandleGetFileInfo(t *testing.T) {
 						NewField(fieldFileName, []byte("testfile.txt")),
 						NewField(fieldFileTypeString, []byte("TEXT")),
 						NewField(fieldFileCreatorString, []byte("ttxt")),
-						NewField(fieldFileComment, []byte("TODO")),
+						NewField(fieldFileComment, []byte{}),
 						NewField(fieldFileType, []byte("TEXT")),
 						NewField(fieldFileCreateDate, make([]byte, 8)),
 						NewField(fieldFileModifyDate, make([]byte, 8)),
