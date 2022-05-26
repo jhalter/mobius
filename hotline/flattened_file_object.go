@@ -55,17 +55,17 @@ type FlatFileInformationFork struct {
 	Comment          []byte // File comment
 }
 
-func NewFlatFileInformationFork(fileName string) FlatFileInformationFork {
+func NewFlatFileInformationFork(fileName string, modifyTime []byte) FlatFileInformationFork {
 	return FlatFileInformationFork{
-		Platform:         []byte("AMAC"),                                         // TODO: Remove hardcode to support "AWIN" Platform (maybe?)
-		TypeSignature:    []byte(fileTypeFromFilename(fileName).TypeCode),        // TODO: Don't infer types from filename
-		CreatorSignature: []byte(fileTypeFromFilename(fileName).CreatorCode),     // TODO: Don't infer types from filename
-		Flags:            []byte{0, 0, 0, 0},                                     // TODO: What is this?
-		PlatformFlags:    []byte{0, 0, 1, 0},                                     // TODO: What is this?
-		RSVD:             make([]byte, 32),                                       // Unimplemented in Hotline Protocol
-		CreateDate:       []byte{0x07, 0x70, 0x00, 0x00, 0xba, 0x74, 0x24, 0x73}, // TODO: implement
-		ModifyDate:       []byte{0x07, 0x70, 0x00, 0x00, 0xba, 0x74, 0x24, 0x73}, // TODO: implement
-		NameScript:       make([]byte, 2),                                        // TODO: What is this?
+		Platform:         []byte("AMAC"),                                     // TODO: Remove hardcode to support "AWIN" Platform (maybe?)
+		TypeSignature:    []byte(fileTypeFromFilename(fileName).TypeCode),    // TODO: Don't infer types from filename
+		CreatorSignature: []byte(fileTypeFromFilename(fileName).CreatorCode), // TODO: Don't infer types from filename
+		Flags:            []byte{0, 0, 0, 0},                                 // TODO: What is this?
+		PlatformFlags:    []byte{0, 0, 1, 0},                                 // TODO: What is this?
+		RSVD:             make([]byte, 32),                                   // Unimplemented in Hotline Protocol
+		CreateDate:       modifyTime,                                         // some filesystems don't support createTime
+		ModifyDate:       modifyTime,
+		NameScript:       make([]byte, 2), // TODO: What is this?
 		Name:             []byte(fileName),
 		CommentSize:      []byte{0, 4},
 		Comment:          []byte("TODO"), // TODO: implement (maybe?)
@@ -204,7 +204,7 @@ func NewFlattenedFileObject(fileRoot string, filePath, fileName []byte) (*flatte
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func(file *os.File) { _ = file.Close() }(file)
 
 	fileInfo, err := file.Stat()
 	if err != nil {
@@ -214,9 +214,11 @@ func NewFlattenedFileObject(fileRoot string, filePath, fileName []byte) (*flatte
 	dataSize := make([]byte, 4)
 	binary.BigEndian.PutUint32(dataSize, uint32(fileInfo.Size()))
 
+	mTime := toHotlineTime(fileInfo.ModTime())
+
 	return &flattenedFileObject{
 		FlatFileHeader:          NewFlatFileHeader(),
-		FlatFileInformationFork: NewFlatFileInformationFork(string(fileName)),
+		FlatFileInformationFork: NewFlatFileInformationFork(string(fileName), mTime),
 		FlatFileDataForkHeader: FlatFileDataForkHeader{
 			ForkType:        []byte("DATA"),
 			CompressionType: []byte{0, 0, 0, 0},
