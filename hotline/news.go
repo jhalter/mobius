@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"sort"
-	"time"
 )
 
 type ThreadedNews struct {
@@ -249,26 +248,4 @@ func (s *Server) GetNewsCatByPath(paths []string) map[string]NewsCategoryListDat
 		cats = cats[path].SubCats
 	}
 	return cats
-}
-
-// News article date field contains this structure:
-// Year					2
-// Milliseconds	2 (seriously?)
-// Seconds			4
-func NewsDate() []byte {
-	t := time.Now()
-	ms := []byte{0, 0}
-	seconds := []byte{0, 0, 0, 0}
-
-	year := []byte{0, 0}
-	binary.BigEndian.PutUint16(year, uint16(t.Year()))
-
-	yearStart := time.Date(t.Year(), time.January, 1, 0, 0, 0, 0, time.Local)
-
-	binary.BigEndian.PutUint32(seconds, uint32(t.Sub(yearStart).Seconds()))
-
-	date := append(year, ms...)
-	date = append(date, seconds...)
-
-	return date
 }

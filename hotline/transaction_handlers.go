@@ -1140,7 +1140,7 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	newArt := NewsArtData{
 		Title:         string(t.GetField(fieldNewsArtTitle).Data),
 		Poster:        string(cc.UserName),
-		Date:          NewsDate(),
+		Date:          toHotlineTime(time.Now()),
 		PrevArt:       []byte{0, 0, 0, 0},
 		NextArt:       []byte{0, 0, 0, 0},
 		ParentArt:     append([]byte{0, 0}, t.GetField(fieldNewsArtID).Data...),
