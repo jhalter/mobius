@@ -37,6 +37,7 @@ type ClientConn struct {
 	Idle       bool
 	AutoReply  *[]byte
 	Transfers  map[int][]*FileTransfer
+	Agreed     bool
 }
 
 func (cc *ClientConn) sendAll(t int, fields ...Field) {
@@ -168,7 +169,7 @@ func (cc ClientConn) Disconnect() {
 // NotifyOthers sends transaction t to other clients connected to the server
 func (cc ClientConn) NotifyOthers(t Transaction) {
 	for _, c := range sortedClients(cc.Server.Clients) {
-		if c.ID != cc.ID {
+		if c.ID != cc.ID && c.Agreed {
 			t.clientID = c.ID
 			cc.Server.outbox <- t
 		}

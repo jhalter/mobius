@@ -5,7 +5,6 @@ import (
 	"io/fs"
 	"math/rand"
 	"os"
-	"reflect"
 	"testing"
 )
 
@@ -227,12 +226,21 @@ func TestHandleGetUserNameList(t *testing.T) {
 								Icon:     &[]byte{0, 2},
 								Flags:    &[]byte{0, 3},
 								UserName: []byte{0, 4},
+								Agreed:   true,
 							},
 							uint16(2): {
 								ID:       &[]byte{0, 2},
 								Icon:     &[]byte{0, 2},
 								Flags:    &[]byte{0, 3},
 								UserName: []byte{0, 4},
+								Agreed:   true,
+							},
+							uint16(3): {
+								ID:       &[]byte{0, 3},
+								Icon:     &[]byte{0, 2},
+								Flags:    &[]byte{0, 3},
+								UserName: []byte{0, 4},
+								Agreed:   false,
 							},
 						},
 					},
@@ -272,9 +280,7 @@ func TestHandleGetUserNameList(t *testing.T) {
 				t.Errorf("HandleGetUserNameList() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("HandleGetUserNameList() got = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
