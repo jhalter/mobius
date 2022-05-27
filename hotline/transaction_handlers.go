@@ -821,11 +821,8 @@ func (cc *ClientConn) notifyNewUserHasJoined() (res []Transaction, err error) {
 }
 
 func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	bs := make([]byte, 2)
-	binary.BigEndian.PutUint16(bs, *cc.Server.NextGuestID)
-
+	cc.Agreed = true
 	cc.UserName = t.GetField(fieldUserName).Data
-	*cc.ID = bs
 	*cc.Icon = t.GetField(fieldUserIconID).Data
 
 	options := t.GetField(fieldOptions).Data

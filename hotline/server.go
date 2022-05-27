@@ -111,7 +111,7 @@ func (s *Server) sendTransaction(t Transaction) error {
 	client := s.Clients[uint16(clientID)]
 	s.mux.Unlock()
 	if client == nil {
-		return errors.New("invalid client")
+		return fmt.Errorf("invalid client id %v", *t.clientID)
 	}
 	userName := string(client.UserName)
 	login := client.Account.Login
@@ -330,6 +330,7 @@ func (s *Server) NewClientConn(conn net.Conn) *ClientConn {
 		IdleTime:   new(int),
 		AutoReply:  &[]byte{},
 		Transfers:  make(map[int][]*FileTransfer),
+		Agreed:     false,
 	}
 	*s.NextGuestID++
 	ID := *s.NextGuestID
@@ -378,6 +379,9 @@ func (s *Server) connectedUsers() []Field {
 
 	var connectedUsers []Field
 	for _, c := range sortedClients(s.Clients) {
+		if c.Agreed == false {
+			continue
+		}
 		user := User{
 			ID:    *c.ID,
 			Icon:  *c.Icon,
@@ -536,9 +540,14 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 	// Show agreement to client
 	c.Server.outbox <- *NewTransaction(tranShowAgreement, c.ID, NewField(fieldData, s.Agreement))
 
-	if _, err := c.notifyNewUserHasJoined(); err != nil {
-		return err
+	// assume simplified hotline v1.2.3 login flow that does not require agreement
+	if *c.Version == nil {
+		c.Agreed = true
+		if _, err := c.notifyNewUserHasJoined(); err != nil {
+			return err
+		}
 	}
+
 	c.Server.Stats.LoginCount += 1
 
 	const readBuffSize = 1024000 // 1KB - TODO: what should this be?
