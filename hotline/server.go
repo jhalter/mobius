@@ -278,8 +278,8 @@ func (s *Server) keepaliveHandler() {
 		s.mux.Lock()
 
 		for _, c := range s.Clients {
-			*c.IdleTime += idleCheckInterval
-			if *c.IdleTime > userIdleSeconds && !c.Idle {
+			c.IdleTime += idleCheckInterval
+			if c.IdleTime > userIdleSeconds && !c.Idle {
 				c.Idle = true
 
 				flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*c.Flags)))
@@ -327,15 +327,12 @@ func (s *Server) NewClientConn(conn net.Conn) *ClientConn {
 		Connection: conn,
 		Server:     s,
 		Version:    &[]byte{},
-		IdleTime:   new(int),
 		AutoReply:  &[]byte{},
 		Transfers:  make(map[int][]*FileTransfer),
 		Agreed:     false,
 	}
 	*s.NextGuestID++
 	ID := *s.NextGuestID
-
-	*clientConn.IdleTime = 0
 
 	binary.BigEndian.PutUint16(*clientConn.ID, ID)
 	s.Clients[ID] = clientConn

@@ -31,7 +31,7 @@ type ClientConn struct {
 	Flags      *[]byte
 	UserName   []byte
 	Account    *Account
-	IdleTime   *int
+	IdleTime   int
 	Server     *Server
 	Version    *[]byte
 	Idle       bool
@@ -103,27 +103,27 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 	cc.Server.mux.Lock()
 	defer cc.Server.mux.Unlock()
 
-	// if user was idle and this is a non-keepalive transaction
-	if *cc.IdleTime > userIdleSeconds && requestNum != tranKeepAlive {
-		flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*cc.Flags)))
-		flagBitmap.SetBit(flagBitmap, userFlagAway, 0)
-		binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
-		cc.Idle = false
-		//*cc.IdleTime = 0
+	if requestNum != tranKeepAlive {
+		// reset the user idle timer
+		cc.IdleTime = 0
 
-		cc.sendAll(
-			tranNotifyChangeUser,
-			NewField(fieldUserID, *cc.ID),
-			NewField(fieldUserFlags, *cc.Flags),
-			NewField(fieldUserName, cc.UserName),
-			NewField(fieldUserIconID, *cc.Icon),
-		)
+		// if user was previously idle, mark as not idle and notify other connected clients that
+		// the user is no longer away
+		if cc.Idle {
+			flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*cc.Flags)))
+			flagBitmap.SetBit(flagBitmap, userFlagAway, 0)
+			binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
+			cc.Idle = false
 
-		//return nil
+			cc.sendAll(
+				tranNotifyChangeUser,
+				NewField(fieldUserID, *cc.ID),
+				NewField(fieldUserFlags, *cc.Flags),
+				NewField(fieldUserName, cc.UserName),
+				NewField(fieldUserIconID, *cc.Icon),
+			)
+		}
 	}
-
-	// TODO: Don't we need to skip this if requestNum == tranKeepalive ??
-	*cc.IdleTime = 0
 
 	return nil
 }

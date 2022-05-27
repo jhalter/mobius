@@ -13,7 +13,7 @@ func TestClientConn_handleTransaction(t *testing.T) {
 		Flags      *[]byte
 		UserName   []byte
 		Account    *Account
-		IdleTime   *int
+		IdleTime   int
 		Server     *Server
 		Version    *[]byte
 		Idle       bool
@@ -39,7 +39,6 @@ func TestClientConn_handleTransaction(t *testing.T) {
 				Flags:      tt.fields.Flags,
 				UserName:   tt.fields.UserName,
 				Account:    tt.fields.Account,
-				IdleTime:   tt.fields.IdleTime,
 				Server:     tt.fields.Server,
 				Version:    tt.fields.Version,
 				Idle:       tt.fields.Idle,

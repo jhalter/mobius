@@ -1399,9 +1399,9 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction,
 	return res, err
 }
 
-// HandleKeepAlive response to keepalive transactions with an empty reply
-// HL 1.9.2 Client sends keepalive msg every 3 minutes
-// HL 1.2.3 Client doesn't send keepalives
+// HandleKeepAlive responds to keepalive transactions with an empty reply
+// * HL 1.9.2 Client sends keepalive msg every 3 minutes
+// * HL 1.2.3 Client doesn't send keepalives
 func HandleKeepAlive(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	res = append(res, cc.NewReply(t))
 
