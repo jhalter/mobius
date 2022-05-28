@@ -8,7 +8,6 @@ import (
 	"go.uber.org/zap"
 	"io"
 	"io/ioutil"
-	"log"
 	"math/big"
 	"math/rand"
 	"net"
@@ -21,7 +20,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v2"
 )
 
@@ -50,8 +48,8 @@ type Server struct {
 	APIListener  net.Listener
 	FileListener net.Listener
 
-	newsReader io.Reader
-	newsWriter io.WriteCloser
+	// newsReader io.Reader
+	// newsWriter io.WriteCloser
 
 	outbox chan Transaction
 
@@ -327,7 +325,7 @@ func (s *Server) NewClientConn(conn net.Conn) *ClientConn {
 		Connection: conn,
 		Server:     s,
 		Version:    &[]byte{},
-		AutoReply:  &[]byte{},
+		AutoReply:  []byte{},
 		Transfers:  make(map[int][]*FileTransfer),
 		Agreed:     false,
 	}
@@ -376,7 +374,7 @@ func (s *Server) connectedUsers() []Field {
 
 	var connectedUsers []Field
 	for _, c := range sortedClients(s.Clients) {
-		if c.Agreed == false {
+		if !c.Agreed {
 			continue
 		}
 		user := User{
@@ -575,21 +573,6 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 			}
 		}
 	}
-}
-
-func hashAndSalt(pwd []byte) string {
-	// Use GenerateFromPassword to hash & salt pwd.
-	// MinCost is just an integer constant provided by the bcrypt
-	// package along with DefaultCost & MaxCost.
-	// The cost can be any value you want provided it isn't lower
-	// than the MinCost (4)
-	hash, err := bcrypt.GenerateFromPassword(pwd, bcrypt.MinCost)
-	if err != nil {
-		log.Println(err)
-	}
-	// GenerateFromPassword returns a byte slice so we need to
-	// convert the bytes to a string and return it
-	return string(hash)
 }
 
 // NewTransactionRef generates a random ID for the file transfer.  The Hotline client includes this ID
@@ -796,7 +779,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			}
 
 			// Read the client's Next Action request
-			//TODO: Remove hardcoded behavior and switch behaviors based on the next action send
+			// TODO: Remove hardcoded behavior and switch behaviors based on the next action send
 			if _, err := conn.Read(readBuffer); err != nil {
 				return err
 			}
@@ -848,7 +831,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				bytesRead, err := file.Read(sendBuffer)
 				if err == io.EOF {
 					// Read the client's Next Action request
-					//TODO: Remove hardcoded behavior and switch behaviors based on the next action send
+					// TODO: Remove hardcoded behavior and switch behaviors based on the next action send
 					if _, err := conn.Read(readBuffer); err != nil {
 						s.Logger.Errorf("error reading next action: %v", err)
 						return err

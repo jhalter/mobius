@@ -579,7 +579,7 @@ func TestHandleNewFolder(t *testing.T) {
 				),
 			},
 			setup: func() {
-				mfs := MockFileStore{}
+				mfs := &MockFileStore{}
 				mfs.On("Mkdir", "/Files/aaa/testFolder", fs.FileMode(0777)).Return(nil)
 				mfs.On("Stat", "/Files/aaa/testFolder").Return(nil, os.ErrNotExist)
 				FS = mfs
@@ -613,7 +613,7 @@ func TestHandleNewFolder(t *testing.T) {
 				),
 			},
 			setup: func() {
-				mfs := MockFileStore{}
+				mfs := &MockFileStore{}
 				mfs.On("Mkdir", "/Files/testFolder", fs.FileMode(0777)).Return(nil)
 				mfs.On("Stat", "/Files/testFolder").Return(nil, os.ErrNotExist)
 				FS = mfs
@@ -650,7 +650,7 @@ func TestHandleNewFolder(t *testing.T) {
 				),
 			},
 			setup: func() {
-				mfs := MockFileStore{}
+				mfs := &MockFileStore{}
 				mfs.On("Mkdir", "/Files/aaa/testFolder", fs.FileMode(0777)).Return(nil)
 				mfs.On("Stat", "/Files/aaa/testFolder").Return(nil, os.ErrNotExist)
 				FS = mfs
@@ -675,7 +675,7 @@ func TestHandleNewFolder(t *testing.T) {
 				),
 			},
 			setup: func() {
-				mfs := MockFileStore{}
+				mfs := &MockFileStore{}
 				mfs.On("Mkdir", "/Files/testFolder", fs.FileMode(0777)).Return(nil)
 				mfs.On("Stat", "/Files/testFolder").Return(nil, os.ErrNotExist)
 				FS = mfs
@@ -717,7 +717,7 @@ func TestHandleNewFolder(t *testing.T) {
 				),
 			},
 			setup: func() {
-				mfs := MockFileStore{}
+				mfs := &MockFileStore{}
 				mfs.On("Mkdir", "/Files/foo/testFolder", fs.FileMode(0777)).Return(nil)
 				mfs.On("Stat", "/Files/foo/testFolder").Return(nil, os.ErrNotExist)
 				FS = mfs
@@ -851,9 +851,9 @@ func TestHandleUploadFile(t *testing.T) {
 				t.Errorf("HandleUploadFile() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !tranAssertEqual(t, tt.wantRes, gotRes) {
-				t.Errorf("HandleUploadFile() gotRes = %v, want %v", gotRes, tt.wantRes)
-			}
+
+			tranAssertEqual(t, tt.wantRes, gotRes)
+
 		})
 	}
 }
@@ -873,7 +873,7 @@ func TestHandleMakeAlias(t *testing.T) {
 		{
 			name: "with valid input and required permissions",
 			setup: func() {
-				mfs := MockFileStore{}
+				mfs := &MockFileStore{}
 				path, _ := os.Getwd()
 				mfs.On(
 					"Symlink",
@@ -924,7 +924,7 @@ func TestHandleMakeAlias(t *testing.T) {
 		{
 			name: "when symlink returns an error",
 			setup: func() {
-				mfs := MockFileStore{}
+				mfs := &MockFileStore{}
 				path, _ := os.Getwd()
 				mfs.On(
 					"Symlink",

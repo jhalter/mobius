@@ -1,7 +1,7 @@
 package hotline
 
 //
-//import (
+// import (
 //	"bytes"
 //	"fmt"
 //	"github.com/google/go-cmp/cmp"
@@ -11,18 +11,18 @@ package hotline
 //	"strings"
 //	"sync"
 //	"testing"
-//)
+// )
 //
-//type transactionTest struct {
+// type transactionTest struct {
 //	description string      // Human understandable description
 //	account     Account     // Account struct for a user that will test transaction will execute under
 //	request     Transaction // transaction that will be sent by the client to the server
 //	want        Transaction // transaction that the client expects to receive in response
 //	setup       func()      // Optional setup required for the test scenario
 //	teardown    func()      // Optional teardown for test scenario
-//}
+// }
 //
-//func (tt *transactionTest) Setup(srv *Server) error {
+// func (tt *transactionTest) Setup(srv *Server) error {
 //	if err := srv.NewUser(tt.account.Login, tt.account.Name, NegatedUserString([]byte(tt.account.Password)), tt.account.Access); err != nil {
 //		return err
 //	}
@@ -32,9 +32,9 @@ package hotline
 //	}
 //
 //	return nil
-//}
+// }
 //
-//func (tt *transactionTest) Teardown(srv *Server) error {
+// func (tt *transactionTest) Teardown(srv *Server) error {
 //	if err := srv.DeleteUser(tt.account.Login); err != nil {
 //		return err
 //	}
@@ -44,10 +44,10 @@ package hotline
 //	}
 //
 //	return nil
-//}
+// }
 //
-//// StartTestServer
-//func StartTestServer() (srv *Server, lnPort int) {
+// // StartTestServer
+// func StartTestServer() (srv *Server, lnPort int) {
 //	hotlineServer, _ := NewServer("test/config/")
 //	ln, err := net.Listen("tcp", ":0")
 //
@@ -61,9 +61,9 @@ package hotline
 //		}
 //	}()
 //	return hotlineServer, ln.Addr().(*net.TCPAddr).Port
-//}
+// }
 //
-//func StartTestClient(serverPort int, login, passwd string) (*Client, error) {
+// func StartTestClient(serverPort int, login, passwd string) (*Client, error) {
 //	c := NewClient("")
 //
 //	err := c.JoinServer(fmt.Sprintf(":%v", serverPort), login, passwd)
@@ -72,9 +72,9 @@ package hotline
 //	}
 //
 //	return c, nil
-//}
+// }
 //
-//func StartTestServerWithClients(clientCount int) ([]*Client, int) {
+// func StartTestServerWithClients(clientCount int) ([]*Client, int) {
 //	_, serverPort := StartTestServer()
 //
 //	var clients []*Client
@@ -88,48 +88,48 @@ package hotline
 //	clients[0].ReadN(2)
 //
 //	return clients, serverPort
-//}
+// }
 //
 
-////func TestHandleTranAgreed(t *testing.T) {
-////	clients, _ := StartTestServerWithClients(2)
-////
-////	chatMsg := "Test Chat"
-////
-////	// Assert that both clients should receive the user join notification
-////	var wg sync.WaitGroup
-////	for _, client := range clients {
-////		wg.Add(1)
-////		go func(wg *sync.WaitGroup, c *Client) {
-////			defer wg.Done()
-////
-////			receivedMsg := c.ReadTransactions()[0].GetField(fieldData).Data
-////
-////			want := []byte(fmt.Sprintf("test: %s\r", chatMsg))
-////			if bytes.Compare(receivedMsg, want) != 0 {
-////				t.Errorf("%q, want %q", receivedMsg, want)
-////			}
-////		}(&wg, client)
-////	}
-////
-////	trans := clients[1].ReadTransactions()
-////	spew.Dump(trans)
-////
-////	// Send the agreement
-////	clients[1].Connection.Write(
-////		NewTransaction(
-////			tranAgreed, 0,
-////			[]Field{
-////				NewField(fieldUserName, []byte("testUser")),
-////				NewField(fieldUserIconID, []byte{0x00,0x07}),
-////			},
-////		).Payload(),
-////	)
-////
-////	wg.Wait()
-////}
+// //func TestHandleTranAgreed(t *testing.T) {
+// //	clients, _ := StartTestServerWithClients(2)
+// //
+// //	chatMsg := "Test Chat"
+// //
+// //	// Assert that both clients should receive the user join notification
+// //	var wg sync.WaitGroup
+// //	for _, client := range clients {
+// //		wg.Add(1)
+// //		go func(wg *sync.WaitGroup, c *Client) {
+// //			defer wg.Done()
+// //
+// //			receivedMsg := c.ReadTransactions()[0].GetField(fieldData).Data
+// //
+// //			want := []byte(fmt.Sprintf("test: %s\r", chatMsg))
+// //			if bytes.Compare(receivedMsg, want) != 0 {
+// //				t.Errorf("%q, want %q", receivedMsg, want)
+// //			}
+// //		}(&wg, client)
+// //	}
+// //
+// //	trans := clients[1].ReadTransactions()
+// //	spew.Dump(trans)
+// //
+// //	// Send the agreement
+// //	clients[1].Connection.Write(
+// //		NewTransaction(
+// //			tranAgreed, 0,
+// //			[]Field{
+// //				NewField(fieldUserName, []byte("testUser")),
+// //				NewField(fieldUserIconID, []byte{0x00,0x07}),
+// //			},
+// //		).Payload(),
+// //	)
+// //
+// //	wg.Wait()
+// //}
 //
-//func TestChatSend(t *testing.T) {
+// func TestChatSend(t *testing.T) {
 //	//srvPort := StartTestServer()
 //	//
 //	//senderClient := NewClient("senderClient")
@@ -169,9 +169,9 @@ package hotline
 //	)
 //
 //	wg.Wait()
-//}
+// }
 //
-//func TestSetClientUserInfo(t *testing.T) {
+// func TestSetClientUserInfo(t *testing.T) {
 //	clients, _ := StartTestServerWithClients(2)
 //
 //	newIcon := []byte{0x00, 0x01}
@@ -208,11 +208,11 @@ package hotline
 //	}
 //
 //	wg.Wait()
-//}
+// }
 //
-//// TestSendInstantMsg tests that client A can send an instant message to client B
-////
-//func TestSendInstantMsg(t *testing.T) {
+// // TestSendInstantMsg tests that client A can send an instant message to client B
+// //
+// func TestSendInstantMsg(t *testing.T) {
 //	clients, _ := StartTestServerWithClients(2)
 //
 //	instantMsg := "Test IM"
@@ -258,9 +258,9 @@ package hotline
 //	}
 //
 //	wg.Wait()
-//}
+// }
 //
-//func TestOldPostNews(t *testing.T) {
+// func TestOldPostNews(t *testing.T) {
 //	clients, _ := StartTestServerWithClients(2)
 //
 //	newsPost := "Test News Post"
@@ -287,35 +287,35 @@ package hotline
 //	)
 //
 //	wg.Wait()
-//}
+// }
 //
-//// TODO: Fixme
-////func TestGetFileNameList(t *testing.T) {
-////	clients, _ := StartTestServerWithClients(2)
-////
-////	clients[0].Connection.Write(
-////		NewTransaction(
-////			tranGetFileNameList, 0,
-////			[]Field{},
-////		).Payload(),
-////	)
-////
-////	ts := clients[0].ReadTransactions()
-////	testfileSit := ReadFileNameWithInfo(ts[0].Fields[1].Data)
-////
-////	want := "testfile.sit"
-////	got := testfileSit.Name
-////	diff := cmp.Diff(want, got)
-////	if diff != "" {
-////		t.Fatalf(diff)
-////	}
-////	if testfileSit.Name != "testfile.sit" {
-////		t.Errorf("news post missing")
-////		t.Errorf("%q, want %q", testfileSit.Name, "testfile.sit")
-////	}
-////}
+// // TODO: Fixme
+// //func TestGetFileNameList(t *testing.T) {
+// //	clients, _ := StartTestServerWithClients(2)
+// //
+// //	clients[0].Connection.Write(
+// //		NewTransaction(
+// //			tranGetFileNameList, 0,
+// //			[]Field{},
+// //		).Payload(),
+// //	)
+// //
+// //	ts := clients[0].ReadTransactions()
+// //	testfileSit := ReadFileNameWithInfo(ts[0].Fields[1].Data)
+// //
+// //	want := "testfile.sit"
+// //	got := testfileSit.Name
+// //	diff := cmp.Diff(want, got)
+// //	if diff != "" {
+// //		t.Fatalf(diff)
+// //	}
+// //	if testfileSit.Name != "testfile.sit" {
+// //		t.Errorf("news post missing")
+// //		t.Errorf("%q, want %q", testfileSit.Name, "testfile.sit")
+// //	}
+// //}
 //
-//func TestNewsCategoryList(t *testing.T) {
+// func TestNewsCategoryList(t *testing.T) {
 //	clients, _ := StartTestServerWithClients(2)
 //	client := clients[0]
 //
@@ -344,9 +344,9 @@ package hotline
 //	if diff != "" {
 //		t.Fatalf(diff)
 //	}
-//}
+// }
 //
-//func TestNestedNewsCategoryList(t *testing.T) {
+// func TestNestedNewsCategoryList(t *testing.T) {
 //	clients, _ := StartTestServerWithClients(2)
 //	client := clients[0]
 //	newsPath := NewsPath{
@@ -381,9 +381,9 @@ package hotline
 //	if diff != "" {
 //		t.Fatalf(diff)
 //	}
-//}
+// }
 //
-//func TestFileDownload(t *testing.T) {
+// func TestFileDownload(t *testing.T) {
 //	clients, _ := StartTestServerWithClients(2)
 //	client := clients[0]
 //
@@ -436,9 +436,9 @@ package hotline
 //			t.Errorf("TestFileDownload: fieldTransferSize: %s: got %#v, want %#v", test.fileName, got, test.want.transferSize)
 //		}
 //	}
-//}
+// }
 //
-//func TestFileUpload(t *testing.T) {
+// func TestFileUpload(t *testing.T) {
 //	clients, _ := StartTestServerWithClients(2)
 //	client := clients[0]
 //
@@ -479,10 +479,10 @@ package hotline
 //			}
 //		}
 //	}
-//}
+// }
 //
-//// TODO: Make canonical
-//func TestNewUser(t *testing.T) {
+// // TODO: Make canonical
+// func TestNewUser(t *testing.T) {
 //	srv, port := StartTestServer()
 //
 //	var tests = []struct {
@@ -604,9 +604,9 @@ package hotline
 //			test.teardown()
 //		}
 //	}
-//}
+// }
 //
-//func TestDeleteUser(t *testing.T) {
+// func TestDeleteUser(t *testing.T) {
 //	srv, port := StartTestServer()
 //
 //	var tests = []transactionTest{
@@ -676,9 +676,9 @@ package hotline
 //
 //		test.Teardown(srv)
 //	}
-//}
+// }
 //
-//func TestDeleteFile(t *testing.T) {
+// func TestDeleteFile(t *testing.T) {
 //	srv, port := StartTestServer()
 //
 //	var tests = []transactionTest{
@@ -769,9 +769,9 @@ package hotline
 //
 //		test.Teardown(srv)
 //	}
-//}
+// }
 //
-//func Test_authorize(t *testing.T) {
+// func Test_authorize(t *testing.T) {
 //	accessBitmap := big.NewInt(int64(0))
 //	accessBitmap.SetBit(accessBitmap, accessCreateFolder, 1)
 //	fmt.Printf("%v %b %x\n", accessBitmap, accessBitmap, accessBitmap)
@@ -802,4 +802,4 @@ package hotline
 //			}
 //		})
 //	}
-//}
+// }

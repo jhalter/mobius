@@ -77,7 +77,7 @@ func NewFlatFileInformationFork(fileName string, modifyTime []byte) FlatFileInfo
 func (ffif FlatFileInformationFork) DataSize() []byte {
 	size := make([]byte, 4)
 
-	//TODO: Can I do math directly on two byte slices?
+	// TODO: Can I do math directly on two byte slices?
 	dataSize := len(ffif.Name) + len(ffif.Comment) + 74
 
 	binary.BigEndian.PutUint32(size, uint32(dataSize))
@@ -124,8 +124,8 @@ func ReadFlattenedFileObject(bytes []byte) flattenedFileObject {
 
 	comment := bytes[commentStartPos:commentEndPos]
 
-	//dataSizeField := bytes[nameEnd+14+commentLen : nameEnd+18+commentLen]
-	//dataSize := binary.BigEndian.Uint32(dataSizeField)
+	// dataSizeField := bytes[nameEnd+14+commentLen : nameEnd+18+commentLen]
+	// dataSize := binary.BigEndian.Uint32(dataSizeField)
 
 	ffo := flattenedFileObject{
 		FlatFileHeader: NewFlatFileHeader(),

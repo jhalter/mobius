@@ -12,7 +12,7 @@ type ThreadedNews struct {
 }
 
 type NewsCategoryListData15 struct {
-	Type     []byte `yaml:"Type"` //Size 2 ; Bundle (2) or category (3)
+	Type     []byte `yaml:"Type"` // Size 2 ; Bundle (2) or category (3)
 	Count    []byte // Article or SubCategory count Size 2
 	NameSize byte
 	Name     string                            `yaml:"Name"`     //
@@ -64,11 +64,11 @@ func (newscat *NewsCategoryListData15) GetNewsArtListData() NewsArtListData {
 type NewsArtData struct {
 	Title         string `yaml:"Title"`
 	Poster        string `yaml:"Poster"`
-	Date          []byte `yaml:"Date"`             //size 8
-	PrevArt       []byte `yaml:"PrevArt"`          //size 4
-	NextArt       []byte `yaml:"NextArt"`          //size 4
-	ParentArt     []byte `yaml:"ParentArt"`        //size 4
-	FirstChildArt []byte `yaml:"FirstChildArtArt"` //size 4
+	Date          []byte `yaml:"Date"`             // size 8
+	PrevArt       []byte `yaml:"PrevArt"`          // size 4
+	NextArt       []byte `yaml:"NextArt"`          // size 4
+	ParentArt     []byte `yaml:"ParentArt"`        // size 4
+	FirstChildArt []byte `yaml:"FirstChildArtArt"` // size 4
 	DataFlav      []byte `yaml:"DataFlav"`         // "text/plain"
 	Data          string `yaml:"Data"`
 }
@@ -201,27 +201,6 @@ func ReadNewsCategoryListData(payload []byte) NewsCategoryListData15 {
 func (newscat *NewsCategoryListData15) nameLen() []byte {
 	return []byte{uint8(len(newscat.Name))}
 }
-
-//type NewsPath struct {
-//	Paths []string
-//}
-//
-//func (np *NewsPath) Payload() []byte {
-//	var out []byte
-//
-//	count := make([]byte, 2)
-//	binary.BigEndian.PutUint16(count, uint16(len(np.Paths)))
-//
-//	out = append(out, count...)
-//	for _, p := range np.Paths {
-//		pLen := byte(len(p))
-//		out = append(out, []byte{0, 0}...) // what is this?
-//		out = append(out, pLen)
-//		out = append(out, []byte(p)...)
-//	}
-//
-//	return out
-//}
 
 func ReadNewsPath(newsPath []byte) []string {
 	if len(newsPath) == 0 {

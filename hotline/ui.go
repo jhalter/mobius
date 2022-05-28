@@ -231,7 +231,7 @@ func (ui *UI) renderJoinServerForm(name, server, login, password, backPage strin
 	joinServerForm.
 		//	AddInputField("Name", server, 0, func(textToCheck string, lastChar rune) bool {
 		//	return false
-		//}, nil).
+		// }, nil).
 		AddInputField("Server", server, 0, nil, nil).
 		AddInputField("Login", login, 0, nil, nil).
 		AddPasswordField("Password", password, 0, '*', nil).
@@ -370,7 +370,7 @@ func (ui *UI) renderServerUI() *tview.Flex {
 
 			newsPostForm := tview.NewForm().
 				SetButtonsAlign(tview.AlignRight).
-				//AddButton("Cancel", nil). // TODO: implement cancel button behavior
+				// AddButton("Cancel", nil). // TODO: implement cancel button behavior
 				AddButton("Send", nil)
 			newsPostForm.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 				switch event.Key() {
@@ -438,7 +438,7 @@ func (ui *UI) renderServerUI() *tview.Flex {
 					SetDirection(tview.FlexRow).
 					AddItem(nil, 0, 1, false).
 					AddItem(newsFlex, 15, 1, true).
-					//AddItem(newsPostForm, 3, 0, false).
+					// AddItem(newsPostForm, 3, 0, false).
 					AddItem(nil, 0, 1, false), 40, 1, false).
 				AddItem(nil, 0, 1, false)
 

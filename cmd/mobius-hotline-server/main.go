@@ -44,7 +44,7 @@ func main() {
 		logger.Fatalw("Configuration directory not found", "path", configDir)
 	}
 
-	hotline.FS = hotline.OSFileStore{}
+	hotline.FS = &hotline.OSFileStore{}
 
 	srv, err := hotline.NewServer(*configDir, "", *basePort, logger)
 	if err != nil {

@@ -336,8 +336,8 @@ func handleGetMsgs(c *Client, t *Transaction) (res []Transaction, err error) {
 	newsTextView.SetBorder(true).SetTitle("News")
 
 	c.UI.Pages.AddPage("news", newsTextView, true, true)
-	//c.UI.Pages.SwitchToPage("news")
-	//c.UI.App.SetFocus(newsTextView)
+	// c.UI.Pages.SwitchToPage("news")
+	// c.UI.App.SetFocus(newsTextView)
 	c.UI.App.Draw()
 
 	return res, err
@@ -605,10 +605,10 @@ var ServerHandshake = []byte{
 }
 
 func (c *Client) Handshake() error {
-	//Protocol ID	4	‘TRTP’	0x54 52 54 50
-	//Sub-protocol ID	4		User defined
-	//Version	2	1	Currently 1
-	//Sub-version	2		User defined
+	// Protocol ID	4	‘TRTP’	0x54 52 54 50
+	// Sub-protocol ID	4		User defined
+	// Version	2	1	Currently 1
+	// Sub-version	2		User defined
 	if _, err := c.Connection.Write(ClientHandshake); err != nil {
 		return fmt.Errorf("handshake write err: %s", err)
 	}
@@ -644,7 +644,7 @@ func (c *Client) Send(t Transaction) error {
 	requestNum := binary.BigEndian.Uint16(t.Type)
 	tID := binary.BigEndian.Uint32(t.ID)
 
-	//handler := TransactionHandlers[requestNum]
+	// handler := TransactionHandlers[requestNum]
 
 	// if transaction is NOT reply, add it to the list to transactions we're expecting a response for
 	if t.IsReply == 0 {

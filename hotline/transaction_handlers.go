@@ -237,8 +237,8 @@ var TransactionHandlers = map[uint16]TransactionType{
 	},
 	tranSendInstantMsg: {
 		Access: accessAlwaysAllow,
-		//Access: accessSendPrivMsg,
-		//DenyMsg: "You are not allowed to send private messages",
+		// Access: accessSendPrivMsg,
+		// DenyMsg: "You are not allowed to send private messages",
 		Name:    "tranSendInstantMsg",
 		Handler: HandleSendInstantMsg,
 		RequiredFields: []requiredField{
@@ -357,13 +357,13 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 //	101	Data	Optional
 //	214	Quoting message	Optional
 //
-//Fields used in the reply:
+// Fields used in the reply:
 // None
 func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	msg := t.GetField(fieldData)
 	ID := t.GetField(fieldUserID)
 	// TODO: Implement reply quoting
-	//options := transaction.GetField(hotline.fieldOptions)
+	// options := transaction.GetField(hotline.fieldOptions)
 
 	res = append(res,
 		*NewTransaction(
@@ -377,23 +377,18 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 	)
 	id, _ := byteToInt(ID.Data)
 
-	//keys := make([]uint16, 0, len(cc.Server.Clients))
-	//for k := range cc.Server.Clients {
-	//	keys = append(keys, k)
-	//}
-
 	otherClient := cc.Server.Clients[uint16(id)]
 	if otherClient == nil {
 		return res, errors.New("ohno")
 	}
 
 	// Respond with auto reply if other client has it enabled
-	if len(*otherClient.AutoReply) > 0 {
+	if len(otherClient.AutoReply) > 0 {
 		res = append(res,
 			*NewTransaction(
 				tranServerMsg,
 				cc.ID,
-				NewField(fieldData, *otherClient.AutoReply),
+				NewField(fieldData, otherClient.AutoReply),
 				NewField(fieldUserName, otherClient.UserName),
 				NewField(fieldUserID, *otherClient.ID),
 				NewField(fieldOptions, []byte{0, 1}),
@@ -450,7 +445,7 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		return nil, err
 	}
 
-	//fileComment := t.GetField(fieldFileComment).Data
+	// fileComment := t.GetField(fieldFileComment).Data
 	fileNewName := t.GetField(fieldFileNewName).Data
 
 	if fileNewName != nil {
@@ -662,8 +657,8 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 }
 
 func HandleGetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	userLogin := string(t.GetField(fieldUserLogin).Data)
-	account := cc.Server.Accounts[userLogin]
+	// userLogin := string(t.GetField(fieldUserLogin).Data)
+	account := cc.Server.Accounts[string(t.GetField(fieldUserLogin).Data)]
 	if account == nil {
 		errorT := cc.NewErrReply(t, "Account does not exist.")
 		res = append(res, errorT)
@@ -854,9 +849,9 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	// Check auto response
 	if optBitmap.Bit(autoResponse) == 1 {
-		*cc.AutoReply = t.GetField(fieldAutomaticResponse).Data
+		cc.AutoReply = t.GetField(fieldAutomaticResponse).Data
 	} else {
-		*cc.AutoReply = []byte{}
+		cc.AutoReply = []byte{}
 	}
 
 	_, _ = cc.notifyNewUserHasJoined()
@@ -1286,6 +1281,9 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 	}
 
 	fullFilePath, err := readPath(cc.Server.Config.FileRoot, t.GetField(fieldFilePath).Data, t.GetField(fieldFileName).Data)
+	if err != nil {
+		return res, err
+	}
 
 	transferSize, err := CalcTotalSize(fullFilePath)
 	if err != nil {
@@ -1385,9 +1383,9 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction,
 
 		// Check auto response
 		if optBitmap.Bit(autoResponse) == 1 {
-			*cc.AutoReply = t.GetField(fieldAutomaticResponse).Data
+			cc.AutoReply = t.GetField(fieldAutomaticResponse).Data
 		} else {
-			*cc.AutoReply = []byte{}
+			cc.AutoReply = []byte{}
 		}
 	}
 

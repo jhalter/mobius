@@ -49,9 +49,6 @@ func register(tracker string, tr TrackerRegistration) error {
 	return nil
 }
 
-type ServerListing struct {
-}
-
 const trackerTimeout = 5 * time.Second
 
 // All string values use 8-bit ASCII character set encoding.
@@ -67,10 +64,10 @@ type TrackerHeader struct {
 	Version  [2]byte // Old protocol (1) or new (2)
 }
 
-//Message type	2	1	Sending list of servers
-//Message data size	2		Remaining size of this request
-//Number of servers	2		Number of servers in the server list
-//Number of servers	2		Same as previous field
+// Message type	2	1	Sending list of servers
+// Message data size	2		Remaining size of this request
+// Number of servers	2		Number of servers in the server list
+// Number of servers	2		Same as previous field
 type ServerInfoHeader struct {
 	MsgType     [2]byte // always has value of 1
 	MsgDataSize [2]byte // Remaining size of request
@@ -176,25 +173,6 @@ func (s *ServerRecord) Read(b []byte) (n int, err error) {
 
 	return 12 + nameLen + int(s.DescriptionSize), nil
 }
-
-//
-//func (s *ServerRecord) UnmarshalBinary(b []byte) (err error) {
-//	r := bytes.NewReader(b[:10])
-//	if err := binary.Read(r, binary.BigEndian, s); err != nil {
-//		return err
-//	}
-//
-//	copy(s.IPAddr[:], b[0:4])
-//	s.Port = b[4:6]
-//	s.NumUsers = b[6:8]
-//	s.NameSize = b[10]
-//	nameLen := int(b[10])
-//	s.Name = b[11 : 11+nameLen]
-//	s.DescriptionSize = b[11+nameLen]
-//	s.Description = b[12+nameLen : 12+nameLen+int(s.DescriptionSize)]
-//
-//	return nil
-//}
 
 func (s *ServerRecord) PortInt() int {
 	data := binary.BigEndian.Uint16(s.Port[:])

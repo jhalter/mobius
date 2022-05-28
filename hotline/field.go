@@ -16,7 +16,8 @@ const fieldRefNum = 107
 const fieldTransferSize = 108
 const fieldChatOptions = 109
 const fieldUserAccess = 110
-//const fieldUserAlias = 111 TODO: implement
+
+// const fieldUserAlias = 111 TODO: implement
 const fieldUserFlags = 112
 const fieldOptions = 113
 const fieldChatID = 114

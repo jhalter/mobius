@@ -28,25 +28,25 @@ const (
 	accessOpenUser   = 16
 	accessModifyUser = 17
 	// accessChangeOwnPass    = 18 // Documented but unused?
-	//accessSendPrivMsg      = 19 // This doesn't do what it seems like it should do. TODO: Investigate
+	// accessSendPrivMsg      = 19 // This doesn't do what it seems like it should do. TODO: Investigate
 	accessNewsReadArt    = 20
 	accessNewsPostArt    = 21
 	accessDisconUser     = 22 // Toggles red user name in user list
 	accessCannotBeDiscon = 23
 	accessGetClientInfo  = 24
-	//accessUploadAnywhere   = 25
-	//accessAnyName          = 26
-	//accessNoAgreement      = 27
-	//accessSetFileComment   = 28
-	//accessSetFolderComment = 29
-	//accessViewDropBoxes    = 30
+	// accessUploadAnywhere   = 25
+	// accessAnyName          = 26
+	// accessNoAgreement      = 27
+	// accessSetFileComment   = 28
+	// accessSetFolderComment = 29
+	// accessViewDropBoxes    = 30
 	accessMakeAlias     = 31
 	accessBroadcast     = 32
 	accessNewsDeleteArt = 33
 	accessNewsCreateCat = 34
-	//accessNewsDeleteCat    = 35
+	// accessNewsDeleteCat    = 35
 	accessNewsCreateFldr = 36
-	//accessNewsDeleteFldr   = 37
+	// accessNewsDeleteFldr   = 37
 )
 
 type accessBitmap [8]byte

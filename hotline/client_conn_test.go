@@ -17,7 +17,7 @@ func TestClientConn_handleTransaction(t *testing.T) {
 		Server     *Server
 		Version    *[]byte
 		Idle       bool
-		AutoReply  *[]byte
+		AutoReply  []byte
 	}
 	type args struct {
 		transaction *Transaction

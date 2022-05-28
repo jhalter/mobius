@@ -66,7 +66,7 @@ func NewTestLogger() *zap.SugaredLogger {
 func StartTestServer() (*Server, context.Context, context.CancelFunc) {
 	ctx, cancelRoot := context.WithCancel(context.Background())
 
-	FS = OSFileStore{}
+	FS = &OSFileStore{}
 
 	srv, err := NewServer("test/config/", "localhost", 0, NewTestLogger())
 	if err != nil {
@@ -84,7 +84,7 @@ func StartTestServer() (*Server, context.Context, context.CancelFunc) {
 }
 
 func TestHandshake(t *testing.T) {
-	mfs := MockFileStore{}
+	mfs := &MockFileStore{}
 	fh, _ := os.Open("./test/config/Agreement.txt")
 	mfs.On("Open", "/test/config/Agreement.txt").Return(fh, nil)
 	fh, _ = os.Open("./test/config/config.yaml")
@@ -115,7 +115,7 @@ func TestHandshake(t *testing.T) {
 
 }
 
-//func TestLogin(t *testing.T) {
+// func TestLogin(t *testing.T) {
 //
 //	tests := []struct {
 //		name   string
@@ -131,13 +131,13 @@ func TestHandshake(t *testing.T) {
 //
 //		})
 //	}
-//}
+// }
 
 func TestNewUser(t *testing.T) {
 	srv, _, _ := StartTestServer()
 
 	tests := []testCase{
-		//{
+		// {
 		//	name: "a valid new account",
 		//	mockHandler: func() mockClientHandler {
 		//		mh := mockClientHandler{}
@@ -180,8 +180,8 @@ func TestNewUser(t *testing.T) {
 		//	want: &Transaction{
 		//		Fields: []Field{},
 		//	},
-		//},
-		//{
+		// },
+		// {
 		//	name: "a newUser request from a user without the required access",
 		//	mockHandler: func() *mockClientHandler {
 		//		mh := mockClientHandler{}
@@ -211,8 +211,8 @@ func TestNewUser(t *testing.T) {
 		//		NewField(fieldUserPassword, []byte(NegatedUserString([]byte("testPw")))),
 		//		NewField(fieldUserAccess, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}),
 		//	),
-		//},
-		//{
+		// },
+		// {
 		//	name: "when user does not have required permission",
 		//	mockHandler: func() map[int]*mockClientHandler {
 		//		mockHandlers := make(map[int]*mockClientHandler)
@@ -251,9 +251,9 @@ func TestNewUser(t *testing.T) {
 		//		NewField(fieldUserPassword, []byte(NegatedUserString([]byte("testPw")))),
 		//		NewField(fieldUserAccess, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}),
 		//	),
-		//},
+		// },
 
-		//{
+		// {
 		//	name: "a request to create a user that already exists",
 		//	setup: func() {
 		//
@@ -279,7 +279,7 @@ func TestNewUser(t *testing.T) {
 		//			NewField(fieldError, []byte("Cannot create account guest because there is already an account with that login.")),
 		//		},
 		//	},
-		//},
+		// },
 	}
 
 	for _, test := range tests {
@@ -301,7 +301,7 @@ func TestNewUser(t *testing.T) {
 			// send test case request
 			_ = c.Send(*test.request)
 
-			//time.Sleep(1 * time.Second)
+			// time.Sleep(1 * time.Second)
 			// ===
 
 			transactions, _ := readN(c.Connection, 1)
@@ -320,6 +320,7 @@ func TestNewUser(t *testing.T) {
 	}
 }
 
+// tranAssertEqual compares equality of transactions slices after stripping out the random ID
 func tranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
 	var newT1 []Transaction
 	var newT2 []Transaction
