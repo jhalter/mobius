@@ -40,8 +40,8 @@ const (
 	tranGetFileInfo          = 206
 	tranSetFileInfo          = 207
 	tranMoveFile             = 208
-	// tranMakeFileAlias        = 209 TODO: implement file alias command
-	tranDownloadFldr = 210
+	tranMakeFileAlias        = 209 // TODO: implement file alias command
+	tranDownloadFldr         = 210
 	// tranDownloadInfo         = 211 TODO: implement file transfer queue
 	// tranDownloadBanner     = 212 TODO: figure out what this is used for
 	tranUploadFldr        = 213

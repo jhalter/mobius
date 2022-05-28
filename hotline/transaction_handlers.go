@@ -256,6 +256,16 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Name:    "tranSetChatSubject",
 		Handler: HandleSetChatSubject,
 	},
+	tranMakeFileAlias: {
+		Access:  accessAlwaysAllow,
+		Name:    "tranMakeFileAlias",
+		Handler: HandleMakeAlias,
+		RequiredFields: []requiredField{
+			{ID: fieldFileName, minLen: 1},
+			{ID: fieldFilePath, minLen: 1},
+			{ID: fieldFileNewPath, minLen: 1},
+		},
+	},
 	tranSetClientUserInfo: {
 		Access:  accessAlwaysAllow,
 		Name:    "tranSetClientUserInfo",
@@ -1607,5 +1617,43 @@ func HandleSetChatSubject(cc *ClientConn, t *Transaction) (res []Transaction, er
 		)
 	}
 
+	return res, err
+}
+
+// HandleMakeAlias makes a file alias using the specified path.
+// Fields used in the request:
+// 201	File name
+// 202	File path
+// 212	File new path	Destination path
+//
+// Fields used in the reply:
+// None
+func HandleMakeAlias(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessMakeAlias) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to make aliases."))
+		return res, err
+	}
+	fileName := t.GetField(fieldFileName).Data
+	filePath := t.GetField(fieldFilePath).Data
+	fileNewPath := t.GetField(fieldFileNewPath).Data
+
+	fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
+	if err != nil {
+		return res, err
+	}
+
+	fullNewFilePath, err := readPath(cc.Server.Config.FileRoot, fileNewPath, fileName)
+	if err != nil {
+		return res, err
+	}
+
+	cc.Server.Logger.Debugw("Make alias", "src", fullFilePath, "dst", fullNewFilePath)
+
+	if err := FS.Symlink(fullFilePath, fullNewFilePath); err != nil {
+		res = append(res, cc.NewErrReply(t, "Error creating alias"))
+		return res, nil
+	}
+
+	res = append(res, cc.NewReply(t))
 	return res, err
 }

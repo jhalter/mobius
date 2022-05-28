@@ -40,7 +40,7 @@ const (
 	//accessSetFileComment   = 28
 	//accessSetFolderComment = 29
 	//accessViewDropBoxes    = 30
-	//accessMakeAlias        = 31
+	accessMakeAlias     = 31
 	accessBroadcast     = 32
 	accessNewsDeleteArt = 33
 	accessNewsCreateCat = 34
