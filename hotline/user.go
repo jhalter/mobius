@@ -14,6 +14,13 @@ const (
 	userFLagRefusePChat = 3 // User refuses private chat
 )
 
+// fieldOptions flags are sent from v1.5+ clients as part of tranAgreed
+const (
+	refusePM     = 0 // User has "Refuse private messages" pref set
+	refuseChat   = 1 // User has "Refuse private chat" pref set
+	autoResponse = 2 // User has "Automatic response" pref set
+)
+
 type User struct {
 	ID    []byte // Size 2
 	Icon  []byte // Size 2

@@ -45,13 +45,10 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Name: "tranNotifyDeleteUser",
 	},
 	tranAgreed: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranAgreed",
 		Handler: HandleTranAgreed,
 	},
 	tranChatSend: {
-		Access:  accessSendChat,
-		DenyMsg: "You are not allowed to participate in chat.",
 		Handler: HandleChatSend,
 		Name:    "tranChatSend",
 		RequiredFields: []requiredField{
@@ -68,20 +65,16 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleDelNewsArt,
 	},
 	tranDelNewsItem: {
-		Access: accessAlwaysAllow, // Granular access enforced inside the handler
 		// Has multiple access flags: News Delete Folder (37) or News Delete Category (35)
 		// TODO: Implement inside the handler
 		Name:    "tranDelNewsItem",
 		Handler: HandleDelNewsItem,
 	},
 	tranDeleteFile: {
-		Access:  accessAlwaysAllow, // Granular access enforced inside the handler
 		Name:    "tranDeleteFile",
 		Handler: HandleDeleteFile,
 	},
 	tranDeleteUser: {
-		Access:  accessDeleteUser,
-		DenyMsg: "You are not allowed to delete accounts.",
 		Name:    "tranDeleteUser",
 		Handler: HandleDeleteUser,
 	},
@@ -110,12 +103,10 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleGetClientConnInfoText,
 	},
 	tranGetFileInfo: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranGetFileInfo",
 		Handler: HandleGetFileInfo,
 	},
 	tranGetFileNameList: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranGetFileNameList",
 		Handler: HandleGetFileNameList,
 	},
@@ -144,13 +135,11 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleGetNewsCatNameList,
 	},
 	tranGetUser: {
-		Access:  accessOpenUser,
 		DenyMsg: "You are not allowed to view accounts.",
 		Name:    "tranGetUser",
 		Handler: HandleGetUser,
 	},
 	tranGetUserNameList: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranHandleGetUserNameList",
 		Handler: HandleGetUserNameList,
 	},
@@ -167,17 +156,14 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleInviteToChat,
 	},
 	tranJoinChat: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranJoinChat",
 		Handler: HandleJoinChat,
 	},
 	tranKeepAlive: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranKeepAlive",
 		Handler: HandleKeepAlive,
 	},
 	tranLeaveChat: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranJoinChat",
 		Handler: HandleLeaveChat,
 	},
@@ -231,7 +217,6 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandlePostNewsArt,
 	},
 	tranRejectChatInvite: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranRejectChatInvite",
 		Handler: HandleRejectChatInvite,
 	},
@@ -252,12 +237,10 @@ var TransactionHandlers = map[uint16]TransactionType{
 		},
 	},
 	tranSetChatSubject: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranSetChatSubject",
 		Handler: HandleSetChatSubject,
 	},
 	tranMakeFileAlias: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranMakeFileAlias",
 		Handler: HandleMakeAlias,
 		RequiredFields: []requiredField{
@@ -267,12 +250,10 @@ var TransactionHandlers = map[uint16]TransactionType{
 		},
 	},
 	tranSetClientUserInfo: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranSetClientUserInfo",
 		Handler: HandleSetClientUserInfo,
 	},
 	tranSetFileInfo: {
-		Access:  accessAlwaysAllow, // granular access is in the handler
 		Name:    "tranSetFileInfo",
 		Handler: HandleSetFileInfo,
 	},
@@ -283,13 +264,10 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleSetUser,
 	},
 	tranUploadFile: {
-		Access:  accessAlwaysAllow,
-		DenyMsg: "You are not allowed to upload files.",
 		Name:    "tranUploadFile",
 		Handler: HandleUploadFile,
 	},
 	tranUploadFldr: {
-		Access:  accessAlwaysAllow, // TODO: what should this be?
 		Name:    "tranUploadFldr",
 		Handler: HandleUploadFolder,
 	},
@@ -302,6 +280,11 @@ var TransactionHandlers = map[uint16]TransactionType{
 }
 
 func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessSendChat) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to participate in chat."))
+		return res, err
+	}
+
 	// Truncate long usernames
 	trunc := fmt.Sprintf("%13s", cc.UserName)
 	formattedMsg := fmt.Sprintf("\r%.14s:  %s", trunc, t.GetField(fieldData).Data)
@@ -527,8 +510,8 @@ func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 
 	cc.Server.Logger.Debugw("Move file", "src", filePath+"/"+fileName, "dst", fileNewPath+"/"+fileName)
 
-	path := filePath + "/" + fileName
-	fi, err := os.Stat(path)
+	fp := filePath + "/" + fileName
+	fi, err := os.Stat(fp)
 	if err != nil {
 		return res, err
 	}
@@ -649,15 +632,16 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 		}
 	}
 
-	// TODO: If we have just promoted a connected user to admin, notify
-	// connected clients to turn the user red
-
 	res = append(res, cc.NewReply(t))
 	return res, err
 }
 
 func HandleGetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	// userLogin := string(t.GetField(fieldUserLogin).Data)
+	if !authorize(cc.Account.Access, accessOpenUser) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to view accounts."))
+		return res, err
+	}
+
 	account := cc.Server.Accounts[string(t.GetField(fieldUserLogin).Data)]
 	if account == nil {
 		errorT := cc.NewErrReply(t, "Account does not exist.")
@@ -711,6 +695,11 @@ func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 }
 
 func HandleDeleteUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessDeleteUser) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to delete accounts."))
+		return res, err
+	}
+
 	// TODO: Handle case where account doesn't exist; e.g. delete race condition
 	login := DecodeUserString(t.GetField(fieldUserLogin).Data)
 
@@ -810,21 +799,6 @@ func HandleGetUserNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 	return res, err
 }
 
-func (cc *ClientConn) notifyNewUserHasJoined() (res []Transaction, err error) {
-	// Notify other ccs that a new user has connected
-	cc.NotifyOthers(
-		*NewTransaction(
-			tranNotifyChangeUser, nil,
-			NewField(fieldUserName, cc.UserName),
-			NewField(fieldUserID, *cc.ID),
-			NewField(fieldUserIconID, *cc.Icon),
-			NewField(fieldUserFlags, *cc.Flags),
-		),
-	)
-
-	return res, nil
-}
-
 func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	cc.Agreed = true
 	cc.UserName = t.GetField(fieldUserName).Data
@@ -854,7 +828,15 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		cc.AutoReply = []byte{}
 	}
 
-	_, _ = cc.notifyNewUserHasJoined()
+	cc.notifyOthers(
+		*NewTransaction(
+			tranNotifyChangeUser, nil,
+			NewField(fieldUserName, cc.UserName),
+			NewField(fieldUserID, *cc.ID),
+			NewField(fieldUserIconID, *cc.Icon),
+			NewField(fieldUserFlags, *cc.Flags),
+		),
+	)
 
 	res = append(res, cc.NewReply(t))
 
@@ -1010,9 +992,9 @@ func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction
 	var cat NewsCategoryListData15
 	cats := cc.Server.ThreadedNews.Categories
 
-	for _, path := range pathStrs {
-		cat = cats[path]
-		cats = cats[path].SubCats
+	for _, fp := range pathStrs {
+		cat = cats[fp]
+		cats = cats[fp].SubCats
 	}
 
 	nald := cat.GetNewsArtListData()
@@ -1023,7 +1005,7 @@ func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction
 
 func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	// Request fields
-	// 325	News path
+	// 325	News fp
 	// 326	News article ID
 	// 327	News article data flavor
 
@@ -1032,9 +1014,9 @@ func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, er
 	var cat NewsCategoryListData15
 	cats := cc.Server.ThreadedNews.Categories
 
-	for _, path := range pathStrs {
-		cat = cats[path]
-		cats = cats[path].SubCats
+	for _, fp := range pathStrs {
+		cat = cats[fp]
+		cats = cats[fp].SubCats
 	}
 	newsArtID := t.GetField(fieldNewsArtID).Data
 
@@ -1350,13 +1332,6 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	res = append(res, cc.NewReply(t, NewField(fieldRefNum, transactionRef)))
 	return res, err
 }
-
-// User options
-const (
-	refusePM     = 0
-	refuseChat   = 1
-	autoResponse = 2
-)
 
 func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	var icon []byte

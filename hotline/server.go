@@ -365,7 +365,7 @@ func (s *Server) DeleteUser(login string) error {
 
 	delete(s.Accounts, login)
 
-	return os.Remove(s.ConfigDir + "Users/" + login + ".yaml")
+	return FS.Remove(s.ConfigDir + "Users/" + login + ".yaml")
 }
 
 func (s *Server) connectedUsers() []Field {
@@ -538,9 +538,16 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 	// assume simplified hotline v1.2.3 login flow that does not require agreement
 	if *c.Version == nil {
 		c.Agreed = true
-		if _, err := c.notifyNewUserHasJoined(); err != nil {
-			return err
-		}
+
+		c.notifyOthers(
+			*NewTransaction(
+				tranNotifyChangeUser, nil,
+				NewField(fieldUserName, c.UserName),
+				NewField(fieldUserID, *c.ID),
+				NewField(fieldUserIconID, *c.Icon),
+				NewField(fieldUserFlags, *c.Flags),
+			),
+		)
 	}
 
 	c.Server.Stats.LoginCount += 1

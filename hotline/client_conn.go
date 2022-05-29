@@ -157,15 +157,15 @@ func (cc ClientConn) Disconnect() {
 
 	delete(cc.Server.Clients, binary.BigEndian.Uint16(*cc.ID))
 
-	cc.NotifyOthers(*NewTransaction(tranNotifyDeleteUser, nil, NewField(fieldUserID, *cc.ID)))
+	cc.notifyOthers(*NewTransaction(tranNotifyDeleteUser, nil, NewField(fieldUserID, *cc.ID)))
 
 	if err := cc.Connection.Close(); err != nil {
 		cc.Server.Logger.Errorw("error closing client connection", "RemoteAddr", cc.Connection.RemoteAddr())
 	}
 }
 
-// NotifyOthers sends transaction t to other clients connected to the server
-func (cc ClientConn) NotifyOthers(t Transaction) {
+// notifyOthers sends transaction t to other clients connected to the server
+func (cc ClientConn) notifyOthers(t Transaction) {
 	for _, c := range sortedClients(cc.Server.Clients) {
 		if c.ID != cc.ID && c.Agreed {
 			t.clientID = c.ID

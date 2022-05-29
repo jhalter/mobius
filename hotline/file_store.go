@@ -12,7 +12,7 @@ type FileStore interface {
 	Stat(name string) (os.FileInfo, error)
 	Open(name string) (*os.File, error)
 	Symlink(oldname, newname string) error
-
+	Remove(name string) error
 	// TODO: implement these
 	// Rename(oldpath string, newpath string) error
 	// RemoveAll(path string) error
@@ -34,6 +34,10 @@ func (fs *OSFileStore) Open(name string) (*os.File, error) {
 
 func (fs *OSFileStore) Symlink(oldname, newname string) error {
 	return os.Symlink(oldname, newname)
+}
+
+func (fs *OSFileStore) Remove(name string) error {
+	return os.Remove(name)
 }
 
 type MockFileStore struct {
@@ -61,5 +65,10 @@ func (mfs *MockFileStore) Open(name string) (*os.File, error) {
 
 func (mfs *MockFileStore) Symlink(oldname, newname string) error {
 	args := mfs.Called(oldname, newname)
+	return args.Error(0)
+}
+
+func (mfs *MockFileStore) Remove(name string) error {
+	args := mfs.Called(name)
 	return args.Error(0)
 }
