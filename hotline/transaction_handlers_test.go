@@ -2,6 +2,7 @@ package hotline
 
 import (
 	"errors"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"io/fs"
 	"math/rand"
@@ -302,6 +303,14 @@ func TestHandleChatSend(t *testing.T) {
 			name: "sends chat msg transaction to all clients",
 			args: args{
 				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessSendChat)
+							access := bits[:]
+							return &access
+						}(),
+					},
 					UserName: []byte{0x00, 0x01},
 					Server: &Server{
 						Clients: map[uint16]*ClientConn{
@@ -353,9 +362,51 @@ func TestHandleChatSend(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "when user does not have required permission",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							access := bits[:]
+							return &access
+						}(),
+					},
+					Server: &Server{
+						Accounts: map[string]*Account{},
+					},
+				},
+				t: NewTransaction(
+					tranChatSend, &[]byte{0, 1},
+					NewField(fieldData, []byte("hai")),
+				),
+			},
+			want: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to participate in chat.")),
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
 			name: "sends chat msg as emote if fieldChatOptions is set",
 			args: args{
 				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessSendChat)
+							access := bits[:]
+							return &access
+						}(),
+					},
 					UserName: []byte("Testy McTest"),
 					Server: &Server{
 						Clients: map[uint16]*ClientConn{
@@ -411,6 +462,14 @@ func TestHandleChatSend(t *testing.T) {
 			name: "only sends chat msg to clients with accessReadChat permission",
 			args: args{
 				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessSendChat)
+							access := bits[:]
+							return &access
+						}(),
+					},
 					UserName: []byte{0x00, 0x01},
 					Server: &Server{
 						Clients: map[uint16]*ClientConn{
@@ -452,7 +511,6 @@ func TestHandleChatSend(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		rand.Seed(1) // reset seed between tests to make transaction IDs predictable
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := HandleChatSend(tt.args.cc, tt.args.t)
 
@@ -460,9 +518,7 @@ func TestHandleChatSend(t *testing.T) {
 				t.Errorf("HandleChatSend() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !assert.Equal(t, tt.want, got) {
-				t.Errorf("HandleChatSend() got = %v, want %v", got, tt.want)
-			}
+			tranAssertEqual(t, tt.want, got)
 		})
 	}
 }
@@ -1034,6 +1090,250 @@ func TestHandleMakeAlias(t *testing.T) {
 			gotRes, err := HandleMakeAlias(tt.args.cc, tt.args.t)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("HandleMakeAlias(%v, %v)", tt.args.cc, tt.args.t)
+				return
+			}
+
+			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}
+
+func TestHandleGetUser(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "when account is valid",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessOpenUser)
+							access := bits[:]
+							return &access
+						}(),
+					},
+					Server: &Server{
+						Accounts: map[string]*Account{
+							"guest": {
+								Login:    "guest",
+								Name:     "Guest",
+								Password: "password",
+								Access:   &[]byte{1},
+							},
+						},
+					},
+				},
+				t: NewTransaction(
+					tranGetUser, &[]byte{0, 1},
+					NewField(fieldUserLogin, []byte("guest")),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0x01, 0x60},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(fieldUserName, []byte("Guest")),
+						NewField(fieldUserLogin, negateString([]byte("guest"))),
+						NewField(fieldUserPassword, []byte("password")),
+						NewField(fieldUserAccess, []byte{1}),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "when user does not have required permission",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							access := bits[:]
+							return &access
+						}(),
+					},
+					Server: &Server{
+						Accounts: map[string]*Account{},
+					},
+				},
+				t: NewTransaction(
+					tranGetUser, &[]byte{0, 1},
+					NewField(fieldUserLogin, []byte("nonExistentUser")),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to view accounts.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "when account does not exist",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessOpenUser)
+							access := bits[:]
+							return &access
+						}(),
+					},
+					Server: &Server{
+						Accounts: map[string]*Account{},
+					},
+				},
+				t: NewTransaction(
+					tranGetUser, &[]byte{0, 1},
+					NewField(fieldUserLogin, []byte("nonExistentUser")),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("Account does not exist.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes, err := HandleGetUser(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleGetUser(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
+
+			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}
+
+func TestHandleDeleteUser(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		setup   func()
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "when user exists",
+			setup: func() {
+				mfs := &MockFileStore{}
+				mfs.On("Remove", "Users/testuser.yaml").Return(nil)
+				FS = mfs
+			},
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessDeleteUser)
+							access := bits[:]
+							return &access
+						}(),
+					},
+					Server: &Server{
+						Accounts: map[string]*Account{
+							"testuser": {
+								Login:    "testuser",
+								Name:     "Testy McTest",
+								Password: "password",
+								Access:   &[]byte{1},
+							},
+						},
+					},
+				},
+				t: NewTransaction(
+					tranDeleteUser, &[]byte{0, 1},
+					NewField(fieldUserLogin, negateString([]byte("testuser"))),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0x1, 0x5f},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields:    []Field(nil),
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name:  "when user does not have required permission",
+			setup: func() {},
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							access := bits[:]
+							return &access
+						}(),
+					},
+					Server: &Server{
+						Accounts: map[string]*Account{},
+					},
+				},
+				t: NewTransaction(
+					tranDeleteUser, &[]byte{0, 1},
+					NewField(fieldUserLogin, negateString([]byte("testuser"))),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to delete accounts.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setup()
+			gotRes, err := HandleDeleteUser(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleDeleteUser(%v, %v)", tt.args.cc, tt.args.t)) {
 				return
 			}
 
