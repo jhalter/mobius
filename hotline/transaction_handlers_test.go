@@ -818,7 +818,7 @@ func TestHandleUploadFile(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "when request is valid",
+			name: "when request is valid and user has Upload Anywhere permission",
 			args: args{
 				cc: &ClientConn{
 					Server: &Server{
@@ -828,6 +828,7 @@ func TestHandleUploadFile(t *testing.T) {
 						Access: func() *[]byte {
 							var bits accessBitmap
 							bits.Set(accessUploadFile)
+							bits.Set(accessUploadAnywhere)
 							access := bits[:]
 							return &access
 						}(),

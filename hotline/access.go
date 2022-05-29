@@ -34,12 +34,12 @@ const (
 	accessDisconUser     = 22 // Toggles red user name in user list
 	accessCannotBeDiscon = 23
 	accessGetClientInfo  = 24
-	// accessUploadAnywhere   = 25
+	accessUploadAnywhere = 25
 	// accessAnyName          = 26
 	// accessNoAgreement      = 27
 	// accessSetFileComment   = 28
 	// accessSetFolderComment = 29
-	// accessViewDropBoxes    = 30
+	accessViewDropBoxes = 30
 	accessMakeAlias     = 31
 	accessBroadcast     = 32
 	accessNewsDeleteArt = 33

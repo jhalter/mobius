@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"path"
+	"strings"
 )
 
 const pathSeparator = "/" // File path separator TODO: make configurable to support Windows
@@ -31,6 +32,7 @@ type FilePath struct {
 }
 
 const minFilePathLen = 2
+
 func (fp *FilePath) UnmarshalBinary(b []byte) error {
 	if b == nil {
 		return nil
@@ -51,6 +53,22 @@ func (fp *FilePath) UnmarshalBinary(b []byte) error {
 	}
 
 	return nil
+}
+
+func (fp *FilePath) IsDropbox() bool {
+	if fp.Len() == 0 {
+		return false
+	}
+
+	return strings.Contains(strings.ToLower(string(fp.Items[fp.Len()-1].Name)), "drop box")
+}
+
+func (fp *FilePath) IsUploadDir() bool {
+	if fp.Len() == 0 {
+		return false
+	}
+
+	return strings.Contains(strings.ToLower(string(fp.Items[fp.Len()-1].Name)), "uploads")
 }
 
 func (fp *FilePath) Len() uint16 {

@@ -1066,8 +1066,8 @@ func HandleDelNewsItem(cc *ClientConn, t *Transaction) (res []Transaction, err e
 
 	delName := pathStrs[len(pathStrs)-1]
 	if len(pathStrs) > 1 {
-		for _, path := range pathStrs[0 : len(pathStrs)-1] {
-			cats = cats[path].SubCats
+		for _, fp := range pathStrs[0 : len(pathStrs)-1] {
+			cats = cats[fp].SubCats
 		}
 	}
 
@@ -1295,6 +1295,21 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err 
 	transactionRef := cc.Server.NewTransactionRef()
 	data := binary.BigEndian.Uint32(transactionRef)
 
+	var fp FilePath
+	if t.GetField(fieldFilePath).Data != nil {
+		if err = fp.UnmarshalBinary(t.GetField(fieldFilePath).Data); err != nil {
+			return res, err
+		}
+	}
+
+	// Handle special cases for Upload and Drop Box folders
+	if !authorize(cc.Account.Access, accessUploadAnywhere) {
+		if !fp.IsUploadDir() && !fp.IsDropbox() {
+			res = append(res, cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload of the folder \"%v\" because you are only allowed to upload to the \"Uploads\" folder.", string(t.GetField(fieldFileName).Data))))
+			return res, err
+		}
+	}
+
 	fileTransfer := &FileTransfer{
 		FileName:        t.GetField(fieldFileName).Data,
 		FilePath:        t.GetField(fieldFilePath).Data,
@@ -1309,8 +1324,10 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err 
 	return res, err
 }
 
+// HandleUploadFile
+// Special cases:
+// * If the target directory contains "uploads" (case insensitive)
 func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	// TODO: add permission handing for upload folders and drop boxes
 	if !authorize(cc.Account.Access, accessUploadFile) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to upload files."))
 		return res, err
@@ -1318,6 +1335,21 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	fileName := t.GetField(fieldFileName).Data
 	filePath := t.GetField(fieldFilePath).Data
+
+	var fp FilePath
+	if filePath != nil {
+		if err = fp.UnmarshalBinary(filePath); err != nil {
+			return res, err
+		}
+	}
+
+	// Handle special cases for Upload and Drop Box folders
+	if !authorize(cc.Account.Access, accessUploadAnywhere) {
+		if !fp.IsUploadDir() && !fp.IsDropbox() {
+			res = append(res, cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload of the file \"%v\" because you are only allowed to upload to the \"Uploads\" folder.", string(fileName))))
+			return res, err
+		}
+	}
 
 	transactionRef := cc.Server.NewTransactionRef()
 	data := binary.BigEndian.Uint32(transactionRef)
@@ -1392,6 +1424,19 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 		nil,
 	)
 	if err != nil {
+		return res, err
+	}
+
+	var fp FilePath
+	if t.GetField(fieldFilePath).Data != nil {
+		if err = fp.UnmarshalBinary(t.GetField(fieldFilePath).Data); err != nil {
+			return res, err
+		}
+	}
+
+	// Handle special case for drop box folders
+	if fp.IsDropbox() && !authorize(cc.Account.Access, accessViewDropBoxes) {
+		res = append(res, cc.NewReply(t))
 		return res, err
 	}
 
