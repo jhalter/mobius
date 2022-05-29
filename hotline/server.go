@@ -609,13 +609,14 @@ const dlFldrActionNextFile = 3
 func (s *Server) TransferFile(conn net.Conn) error {
 	defer func() { _ = conn.Close() }()
 
-	buf := make([]byte, 1024)
-	if _, err := conn.Read(buf); err != nil {
+	txBuf := make([]byte, 16)
+	_, err := conn.Read(txBuf)
+	if err != nil {
 		return err
 	}
 
 	var t transfer
-	_, err := t.Write(buf[:16])
+	_, err = t.Write(txBuf)
 	if err != nil {
 		return err
 	}
@@ -667,11 +668,16 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			}
 		}
 	case FileUpload:
-		if _, err := conn.Read(buf); err != nil {
+		const buffSize = 1460
+
+		uploadBuf := make([]byte, buffSize)
+
+		_, err := conn.Read(uploadBuf)
+		if err != nil {
 			return err
 		}
 
-		ffo := ReadFlattenedFileObject(buf)
+		ffo := ReadFlattenedFileObject(uploadBuf)
 		payloadLen := len(ffo.BinaryMarshal())
 		fileSize := int(binary.BigEndian.Uint32(ffo.FlatFileDataForkHeader.DataSize))
 
@@ -691,9 +697,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 
 		defer func() { _ = newFile.Close() }()
 
-		const buffSize = 1024
-
-		if _, err := newFile.Write(buf[payloadLen:]); err != nil {
+		if _, err := newFile.Write(uploadBuf[payloadLen:]); err != nil {
 			return err
 		}
 		receivedBytes := buffSize - payloadLen
