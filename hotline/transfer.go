@@ -1,6 +1,7 @@
 package hotline
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -28,6 +29,7 @@ func (tf *transfer) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
+const fileCopyBufSize = 524288 // 512k
 func receiveFile(conn io.Reader, targetFile io.Writer, resForkFile io.Writer) error {
 	ffhBuf := make([]byte, 24)
 	if _, err := conn.Read(ffhBuf); err != nil {
@@ -75,9 +77,12 @@ func receiveFile(conn io.Reader, targetFile io.Writer, resForkFile io.Writer) er
 	// this will be zero if the file only has a resource fork
 	fileSize := int(binary.BigEndian.Uint32(ffdfh.DataSize[:]))
 
-	// Copy N bytes from conn to upload file
-	_, err = io.CopyN(targetFile, conn, int64(fileSize))
+	bw := bufio.NewWriterSize(targetFile, fileCopyBufSize)
+	_, err = io.CopyN(bw, conn, int64(fileSize))
 	if err != nil {
+		return err
+	}
+	if err := bw.Flush(); err != nil {
 		return err
 	}
 
@@ -95,8 +100,12 @@ func receiveFile(conn io.Reader, targetFile io.Writer, resForkFile io.Writer) er
 
 		fileSize = int(binary.BigEndian.Uint32(resForkHeader.DataSize[:]))
 
+		bw = bufio.NewWriterSize(resForkFile, fileCopyBufSize)
 		_, err = io.CopyN(resForkFile, conn, int64(fileSize))
 		if err != nil {
+			return err
+		}
+		if err := bw.Flush(); err != nil {
 			return err
 		}
 	}
