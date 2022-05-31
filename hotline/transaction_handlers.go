@@ -401,7 +401,7 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		NewField(fieldFileType, ffo.FlatFileInformationFork.TypeSignature),
 		NewField(fieldFileCreateDate, ffo.FlatFileInformationFork.CreateDate),
 		NewField(fieldFileModifyDate, ffo.FlatFileInformationFork.ModifyDate),
-		NewField(fieldFileSize, ffo.FlatFileDataForkHeader.DataSize),
+		NewField(fieldFileSize, ffo.FlatFileDataForkHeader.DataSize[:]),
 	))
 	return res, err
 }
@@ -1213,7 +1213,7 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 		NewField(fieldRefNum, transactionRef),
 		NewField(fieldWaitingCount, []byte{0x00, 0x00}), // TODO: Implement waiting count
 		NewField(fieldTransferSize, ffo.TransferSize()),
-		NewField(fieldFileSize, ffo.FlatFileDataForkHeader.DataSize),
+		NewField(fieldFileSize, ffo.FlatFileDataForkHeader.DataSize[:]),
 	))
 
 	return res, err

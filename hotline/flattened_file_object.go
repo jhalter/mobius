@@ -18,7 +18,7 @@ type FlatFileHeader struct {
 	Format    [4]byte  // Always "FILP"
 	Version   [2]byte  // Always 1
 	RSVD      [16]byte // Always empty zeros
-	ForkCount [2]byte  // Always 2
+	ForkCount [2]byte  // Number of forks
 }
 
 // NewFlatFileHeader returns a FlatFileHeader struct
@@ -33,10 +33,10 @@ func NewFlatFileHeader() FlatFileHeader {
 
 // FlatFileInformationForkHeader is the second section of a "Flattened File Object"
 type FlatFileInformationForkHeader struct {
-	ForkType        []byte // Always "INFO"
-	CompressionType []byte // Always 0; Compression was never implemented in the Hotline protocol
-	RSVD            []byte // Always zeros
-	DataSize        []byte // Size of the flat file information fork
+	ForkType        [4]byte // Always "INFO"
+	CompressionType [4]byte // Always 0; Compression was never implemented in the Hotline protocol
+	RSVD            [4]byte // Always zeros
+	DataSize        [4]byte // Size of the flat file information fork
 }
 
 type FlatFileInformationFork struct {
@@ -74,7 +74,7 @@ func NewFlatFileInformationFork(fileName string, modifyTime []byte) FlatFileInfo
 
 // DataSize calculates the size of the flat file information fork, which is
 // 72 bytes for the fixed length fields plus the length of the Name + Comment
-func (ffif FlatFileInformationFork) DataSize() []byte {
+func (ffif *FlatFileInformationFork) DataSize() []byte {
 	size := make([]byte, 4)
 
 	// TODO: Can I do math directly on two byte slices?
@@ -85,9 +85,9 @@ func (ffif FlatFileInformationFork) DataSize() []byte {
 	return size
 }
 
-func (ffo flattenedFileObject) TransferSize() []byte {
+func (ffo *flattenedFileObject) TransferSize() []byte {
 	payloadSize := len(ffo.BinaryMarshal())
-	dataSize := binary.BigEndian.Uint32(ffo.FlatFileDataForkHeader.DataSize)
+	dataSize := binary.BigEndian.Uint32(ffo.FlatFileDataForkHeader.DataSize[:])
 
 	transferSize := make([]byte, 4)
 	binary.BigEndian.PutUint32(transferSize, dataSize+uint32(payloadSize))
@@ -95,7 +95,7 @@ func (ffo flattenedFileObject) TransferSize() []byte {
 	return transferSize
 }
 
-func (ffif FlatFileInformationFork) ReadNameSize() []byte {
+func (ffif *FlatFileInformationFork) ReadNameSize() []byte {
 	size := make([]byte, 2)
 	binary.BigEndian.PutUint16(size, uint16(len(ffif.Name)))
 
@@ -103,65 +103,45 @@ func (ffif FlatFileInformationFork) ReadNameSize() []byte {
 }
 
 type FlatFileDataForkHeader struct {
-	ForkType        []byte
-	CompressionType []byte
-	RSVD            []byte
-	DataSize        []byte
+	ForkType        [4]byte
+	CompressionType [4]byte
+	RSVD            [4]byte
+	DataSize        [4]byte
 }
 
-// ReadFlattenedFileObject parses a byte slice into a flattenedFileObject
-func ReadFlattenedFileObject(bytes []byte) flattenedFileObject {
-	nameSize := bytes[110:112]
+func (ffif *FlatFileInformationFork) UnmarshalBinary(b []byte) error {
+
+	nameSize := b[70:72]
 	bs := binary.BigEndian.Uint16(nameSize)
 
-	nameEnd := 112 + bs
+	nameEnd := 72 + bs
 
-	commentSize := bytes[nameEnd : nameEnd+2]
+	commentSize := b[nameEnd : nameEnd+2]
 	commentLen := binary.BigEndian.Uint16(commentSize)
 
 	commentStartPos := int(nameEnd) + 2
 	commentEndPos := int(nameEnd) + 2 + int(commentLen)
 
-	comment := bytes[commentStartPos:commentEndPos]
+	comment := b[commentStartPos:commentEndPos]
 
-	// dataSizeField := bytes[nameEnd+14+commentLen : nameEnd+18+commentLen]
-	// dataSize := binary.BigEndian.Uint32(dataSizeField)
+	ffif.Platform = b[0:4]
+	ffif.TypeSignature = b[4:8]
+	ffif.CreatorSignature = b[8:12]
+	ffif.Flags = b[12:16]
+	ffif.PlatformFlags = b[16:20]
+	ffif.RSVD = b[20:52]
+	ffif.CreateDate = b[52:60]
+	ffif.ModifyDate = b[60:68]
+	ffif.NameScript = b[68:70]
+	ffif.NameSize = b[70:72]
+	ffif.Name = b[72:nameEnd]
+	ffif.CommentSize = b[nameEnd : nameEnd+2]
+	ffif.Comment = comment
 
-	ffo := flattenedFileObject{
-		FlatFileHeader: NewFlatFileHeader(),
-		FlatFileInformationForkHeader: FlatFileInformationForkHeader{
-			ForkType:        bytes[24:28],
-			CompressionType: bytes[28:32],
-			RSVD:            bytes[32:36],
-			DataSize:        bytes[36:40],
-		},
-		FlatFileInformationFork: FlatFileInformationFork{
-			Platform:         bytes[40:44],
-			TypeSignature:    bytes[44:48],
-			CreatorSignature: bytes[48:52],
-			Flags:            bytes[52:56],
-			PlatformFlags:    bytes[56:60],
-			RSVD:             bytes[60:92],
-			CreateDate:       bytes[92:100],
-			ModifyDate:       bytes[100:108],
-			NameScript:       bytes[108:110],
-			NameSize:         bytes[110:112],
-			Name:             bytes[112:nameEnd],
-			CommentSize:      bytes[nameEnd : nameEnd+2],
-			Comment:          comment,
-		},
-		FlatFileDataForkHeader: FlatFileDataForkHeader{
-			ForkType:        bytes[commentEndPos : commentEndPos+4],
-			CompressionType: bytes[commentEndPos+4 : commentEndPos+8],
-			RSVD:            bytes[commentEndPos+8 : commentEndPos+12],
-			DataSize:        bytes[commentEndPos+12 : commentEndPos+16],
-		},
-	}
-
-	return ffo
+	return nil
 }
 
-func (f flattenedFileObject) BinaryMarshal() []byte {
+func (f *flattenedFileObject) BinaryMarshal() []byte {
 	var out []byte
 	out = append(out, f.FlatFileHeader.Format[:]...)
 	out = append(out, f.FlatFileHeader.Version[:]...)
@@ -187,10 +167,10 @@ func (f flattenedFileObject) BinaryMarshal() []byte {
 	out = append(out, f.FlatFileInformationFork.CommentSize...)
 	out = append(out, f.FlatFileInformationFork.Comment...)
 
-	out = append(out, f.FlatFileDataForkHeader.ForkType...)
-	out = append(out, f.FlatFileDataForkHeader.CompressionType...)
-	out = append(out, f.FlatFileDataForkHeader.RSVD...)
-	out = append(out, f.FlatFileDataForkHeader.DataSize...)
+	out = append(out, f.FlatFileDataForkHeader.ForkType[:]...)
+	out = append(out, f.FlatFileDataForkHeader.CompressionType[:]...)
+	out = append(out, f.FlatFileDataForkHeader.RSVD[:]...)
+	out = append(out, f.FlatFileDataForkHeader.DataSize[:]...)
 
 	return out
 }
@@ -220,10 +200,10 @@ func NewFlattenedFileObject(fileRoot string, filePath, fileName []byte) (*flatte
 		FlatFileHeader:          NewFlatFileHeader(),
 		FlatFileInformationFork: NewFlatFileInformationFork(string(fileName), mTime),
 		FlatFileDataForkHeader: FlatFileDataForkHeader{
-			ForkType:        []byte("DATA"),
-			CompressionType: []byte{0, 0, 0, 0},
-			RSVD:            []byte{0, 0, 0, 0},
-			DataSize:        dataSize,
+			ForkType:        [4]byte{0x44, 0x41, 0x54, 0x41}, // "DATA"
+			CompressionType: [4]byte{},
+			RSVD:            [4]byte{},
+			DataSize:        [4]byte{dataSize[0], dataSize[1], dataSize[2], dataSize[3]},
 		},
 	}, nil
 }

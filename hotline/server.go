@@ -91,7 +91,7 @@ func (s *Server) ServeFileTransfers(ln net.Listener) error {
 		}
 
 		go func() {
-			if err := s.TransferFile(conn); err != nil {
+			if err := s.handleFileTransfer(conn); err != nil {
 				s.Logger.Errorw("file transfer error", "reason", err)
 			}
 		}()
@@ -613,8 +613,13 @@ const dlFldrActionSendFile = 1
 const dlFldrActionResumeFile = 2
 const dlFldrActionNextFile = 3
 
-func (s *Server) TransferFile(conn net.Conn) error {
-	defer func() { _ = conn.Close() }()
+// handleFileTransfer receives a client net.Conn from the file transfer server, performs the requested transfer type, then closes the connection
+func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
+	defer func() {
+		if err := conn.Close(); err != nil {
+			s.Logger.Errorw("error closing connection", "error", err)
+		}
+	}()
 
 	txBuf := make([]byte, 16)
 	_, err := conn.Read(txBuf)
@@ -647,7 +652,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			return err
 		}
 
-		s.Logger.Infow("File download started", "filePath", fullFilePath, "transactionRef", fileTransfer.ReferenceNumber, "RemoteAddr", conn.RemoteAddr().String())
+		s.Logger.Infow("File download started", "filePath", fullFilePath, "transactionRef", fileTransfer.ReferenceNumber)
 
 		// Start by sending flat file object to client
 		if _, err := conn.Write(ffo.BinaryMarshal()); err != nil {
@@ -675,63 +680,20 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			}
 		}
 	case FileUpload:
-		const buffSize = 1460
-
-		uploadBuf := make([]byte, buffSize)
-
-		_, err := conn.Read(uploadBuf)
-		if err != nil {
-			return err
-		}
-
-		ffo := ReadFlattenedFileObject(uploadBuf)
-		payloadLen := len(ffo.BinaryMarshal())
-		fileSize := int(binary.BigEndian.Uint32(ffo.FlatFileDataForkHeader.DataSize))
-
 		destinationFile := s.Config.FileRoot + ReadFilePath(fileTransfer.FilePath) + "/" + string(fileTransfer.FileName)
-		s.Logger.Infow(
-			"File upload started",
-			"transactionRef", fileTransfer.ReferenceNumber,
-			"RemoteAddr", conn.RemoteAddr().String(),
-			"size", fileSize,
-			"dstFile", destinationFile,
-		)
-
-		newFile, err := os.Create(destinationFile)
+		newFile, err := FS.Create(destinationFile)
 		if err != nil {
 			return err
 		}
-
 		defer func() { _ = newFile.Close() }()
 
-		if _, err := newFile.Write(uploadBuf[payloadLen:]); err != nil {
-			return err
+		s.Logger.Infow("File upload started", "transactionRef", fileTransfer.ReferenceNumber, "dstFile", destinationFile)
+
+		if err := receiveFile(conn, newFile, nil); err != nil {
+			s.Logger.Errorw("file upload error", "error", err)
 		}
-		receivedBytes := buffSize - payloadLen
 
-		for {
-			if (fileSize - receivedBytes) < buffSize {
-				s.Logger.Infow(
-					"File upload complete",
-					"transactionRef", fileTransfer.ReferenceNumber,
-					"RemoteAddr", conn.RemoteAddr().String(),
-					"size", fileSize,
-					"dstFile", destinationFile,
-				)
-
-				if _, err := io.CopyN(newFile, conn, int64(fileSize-receivedBytes)); err != nil {
-					return fmt.Errorf("file transfer failed: %s", err)
-				}
-				return nil
-			}
-
-			// Copy N bytes from conn to upload file
-			n, err := io.CopyN(newFile, conn, buffSize)
-			if err != nil {
-				return err
-			}
-			receivedBytes += int(n)
-		}
+		s.Logger.Infow("File upload complete", "transactionRef", fileTransfer.ReferenceNumber, "dstFile", destinationFile)
 	case FolderDownload:
 		// Folder Download flow:
 		// 1. Get filePath from the transfer
@@ -767,21 +729,27 @@ func (s *Server) TransferFile(conn net.Conn) error {
 
 		basePathLen := len(fullFilePath)
 
-		readBuffer := make([]byte, 1024)
+		s.Logger.Infow("Start folder download", "path", fullFilePath, "ReferenceNumber", fileTransfer.ReferenceNumber)
 
-		s.Logger.Infow("Start folder download", "path", fullFilePath, "ReferenceNumber", fileTransfer.ReferenceNumber, "RemoteAddr", conn.RemoteAddr())
+		nextAction := make([]byte, 2)
+		if _, err := conn.Read(nextAction); err != nil {
+			return err
+		}
 
 		i := 0
-		_ = filepath.Walk(fullFilePath+"/", func(path string, info os.FileInfo, _ error) error {
+		err = filepath.Walk(fullFilePath+"/", func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
 			i += 1
-			subPath := path[basePathLen:]
+			subPath := path[basePathLen+1:]
 			s.Logger.Infow("Sending fileheader", "i", i, "path", path, "fullFilePath", fullFilePath, "subPath", subPath, "IsDir", info.IsDir())
-
-			fileHeader := NewFileHeader(subPath, info.IsDir())
 
 			if i == 1 {
 				return nil
 			}
+
+			fileHeader := NewFileHeader(subPath, info.IsDir())
 
 			// Send the file header to client
 			if _, err := conn.Write(fileHeader.Payload()); err != nil {
@@ -790,12 +758,14 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			}
 
 			// Read the client's Next Action request
-			// TODO: Remove hardcoded behavior and switch behaviors based on the next action send
-			if _, err := conn.Read(readBuffer); err != nil {
+			if _, err := conn.Read(nextAction); err != nil {
 				return err
 			}
+			if nextAction[1] == 3 {
+				return nil
+			}
 
-			s.Logger.Infow("Client folder download action", "action", fmt.Sprintf("%X", readBuffer[0:2]))
+			s.Logger.Infow("Client folder download action", "action", fmt.Sprintf("%X", nextAction[0:2]))
 
 			if info.IsDir() {
 				return nil
@@ -814,7 +784,6 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			s.Logger.Infow("File download started",
 				"fileName", info.Name(),
 				"transactionRef", fileTransfer.ReferenceNumber,
-				"RemoteAddr", conn.RemoteAddr().String(),
 				"TransferSize", fmt.Sprintf("%x", ffo.TransferSize()),
 			)
 
@@ -824,7 +793,7 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				return err
 			}
 
-			// Send file bytes to client
+			// Send ffo bytes to client
 			if _, err := conn.Write(ffo.BinaryMarshal()); err != nil {
 				s.Logger.Error(err)
 				return err
@@ -835,28 +804,22 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				return err
 			}
 
-			sendBuffer := make([]byte, 1048576)
-			totalBytesSent := len(ffo.BinaryMarshal())
-
-			for {
-				bytesRead, err := file.Read(sendBuffer)
-				if err == io.EOF {
-					// Read the client's Next Action request
-					// TODO: Remove hardcoded behavior and switch behaviors based on the next action send
-					if _, err := conn.Read(readBuffer); err != nil {
-						s.Logger.Errorf("error reading next action: %v", err)
-						return err
-					}
-					break
-				}
-
-				sentBytes, readErr := conn.Write(sendBuffer[:bytesRead])
-				totalBytesSent += sentBytes
-				if readErr != nil {
-					return err
-				}
+			// Copy N bytes from file to connection
+			_, err = io.CopyN(conn, file, int64(binary.BigEndian.Uint32(ffo.FlatFileDataForkHeader.DataSize[:])))
+			if err != nil {
+				return err
 			}
-			return nil
+			file.Close()
+
+			// TODO: optionally send resource fork header and resource fork data
+
+			// Read the client's Next Action request
+			if _, err := conn.Read(nextAction); err != nil {
+				return err
+			}
+			// TODO: switch behavior based on possible next action
+
+			return err
 		})
 
 	case FolderUpload:
@@ -867,7 +830,6 @@ func (s *Server) TransferFile(conn net.Conn) error {
 		s.Logger.Infow(
 			"Folder upload started",
 			"transactionRef", fileTransfer.ReferenceNumber,
-			"RemoteAddr", conn.RemoteAddr().String(),
 			"dstPath", dstPath,
 			"TransferSize", fmt.Sprintf("%x", fileTransfer.TransferSize),
 			"FolderItemCount", fileTransfer.FolderItemCount,
@@ -881,8 +843,6 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			}
 		}
 
-		readBuffer := make([]byte, 1024)
-
 		// Begin the folder upload flow by sending the "next file action" to client
 		if _, err := conn.Write([]byte{0, dlFldrActionNextFile}); err != nil {
 			return err
@@ -891,8 +851,10 @@ func (s *Server) TransferFile(conn net.Conn) error {
 		fileSize := make([]byte, 4)
 		itemCount := binary.BigEndian.Uint16(fileTransfer.FolderItemCount)
 
+		readBuffer := make([]byte, 1024)
 		for i := uint16(0); i < itemCount; i++ {
-			if _, err := conn.Read(readBuffer); err != nil {
+			_, err := conn.Read(readBuffer)
+			if err != nil {
 				return err
 			}
 			fu := readFolderUpload(readBuffer)
@@ -900,7 +862,6 @@ func (s *Server) TransferFile(conn net.Conn) error {
 			s.Logger.Infow(
 				"Folder upload continued",
 				"transactionRef", fmt.Sprintf("%x", fileTransfer.ReferenceNumber),
-				"RemoteAddr", conn.RemoteAddr().String(),
 				"FormattedPath", fu.FormattedPath(),
 				"IsFolder", fmt.Sprintf("%x", fu.IsFolder),
 				"PathItemCount", binary.BigEndian.Uint16(fu.PathItemCount[:]),
@@ -928,14 +889,21 @@ func (s *Server) TransferFile(conn net.Conn) error {
 				}
 
 				if _, err := conn.Read(fileSize); err != nil {
-					fmt.Println("Error reading:", err.Error()) // TODO: handle
+					return err
 				}
 
-				s.Logger.Infow("Starting file transfer", "fileNum", i+1, "totalFiles", itemCount, "fileSize", fileSize)
+				filePath := dstPath + "/" + fu.FormattedPath()
+				s.Logger.Infow("Starting file transfer", "path", filePath, "fileNum", i+1, "totalFiles", itemCount, "fileSize", binary.BigEndian.Uint32(fileSize))
 
-				if err := transferFile(conn, dstPath+"/"+fu.FormattedPath()); err != nil {
+				newFile, err := FS.Create(filePath)
+				if err != nil {
+					return err
+				}
+
+				if err := receiveFile(conn, newFile, ioutil.Discard); err != nil {
 					s.Logger.Error(err)
 				}
+				_ = newFile.Close()
 
 				// Tell client to send next file
 				if _, err := conn.Write([]byte{0, dlFldrActionNextFile}); err != nil {
@@ -943,54 +911,12 @@ func (s *Server) TransferFile(conn net.Conn) error {
 					return err
 				}
 
-				// Client sends "MACR" after the file.  Read and discard.
-				// TODO: This doesn't seem to be documented.  What is this?  Maybe resource fork?
-				if _, err := conn.Read(readBuffer); err != nil {
-					return err
-				}
 			}
 		}
 		s.Logger.Infof("Folder upload complete")
 	}
 
 	return nil
-}
-
-func transferFile(conn net.Conn, dst string) error {
-	const buffSize = 1024
-	buf := make([]byte, buffSize)
-
-	// Read first chunk of bytes from conn; this will be the Flat File Object and initial chunk of file bytes
-	if _, err := conn.Read(buf); err != nil {
-		return err
-	}
-	ffo := ReadFlattenedFileObject(buf)
-	payloadLen := len(ffo.BinaryMarshal())
-	fileSize := int(binary.BigEndian.Uint32(ffo.FlatFileDataForkHeader.DataSize))
-
-	newFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = newFile.Close() }()
-	if _, err := newFile.Write(buf[payloadLen:]); err != nil {
-		return err
-	}
-	receivedBytes := buffSize - payloadLen
-
-	for {
-		if (fileSize - receivedBytes) < buffSize {
-			_, err := io.CopyN(newFile, conn, int64(fileSize-receivedBytes))
-			return err
-		}
-
-		// Copy N bytes from conn to upload file
-		n, err := io.CopyN(newFile, conn, buffSize)
-		if err != nil {
-			return err
-		}
-		receivedBytes += int(n)
-	}
 }
 
 // sortedClients is a utility function that takes a map of *ClientConn and returns a sorted slice of the values.
