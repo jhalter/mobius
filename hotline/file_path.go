@@ -68,7 +68,7 @@ func (fp *FilePath) IsUploadDir() bool {
 		return false
 	}
 
-	return strings.Contains(strings.ToLower(string(fp.Items[fp.Len()-1].Name)), "uploads")
+	return strings.Contains(strings.ToLower(string(fp.Items[fp.Len()-1].Name)), "upload")
 }
 
 func (fp *FilePath) Len() uint16 {
