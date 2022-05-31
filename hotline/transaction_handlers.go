@@ -45,10 +45,13 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Name: "tranNotifyDeleteUser",
 	},
 	tranAgreed: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranAgreed",
 		Handler: HandleTranAgreed,
 	},
 	tranChatSend: {
+		Access:  accessSendChat,
+		DenyMsg: "You are not allowed to participate in chat.",
 		Handler: HandleChatSend,
 		Name:    "tranChatSend",
 		RequiredFields: []requiredField{
@@ -65,16 +68,20 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleDelNewsArt,
 	},
 	tranDelNewsItem: {
+		Access: accessAlwaysAllow, // Granular access enforced inside the handler
 		// Has multiple access flags: News Delete Folder (37) or News Delete Category (35)
 		// TODO: Implement inside the handler
 		Name:    "tranDelNewsItem",
 		Handler: HandleDelNewsItem,
 	},
 	tranDeleteFile: {
+		Access:  accessAlwaysAllow, // Granular access enforced inside the handler
 		Name:    "tranDeleteFile",
 		Handler: HandleDeleteFile,
 	},
 	tranDeleteUser: {
+		Access:  accessDeleteUser,
+		DenyMsg: "You are not allowed to delete accounts.",
 		Name:    "tranDeleteUser",
 		Handler: HandleDeleteUser,
 	},
@@ -103,10 +110,12 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleGetClientConnInfoText,
 	},
 	tranGetFileInfo: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranGetFileInfo",
 		Handler: HandleGetFileInfo,
 	},
 	tranGetFileNameList: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranGetFileNameList",
 		Handler: HandleGetFileNameList,
 	},
@@ -135,11 +144,13 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleGetNewsCatNameList,
 	},
 	tranGetUser: {
+		Access:  accessOpenUser,
 		DenyMsg: "You are not allowed to view accounts.",
 		Name:    "tranGetUser",
 		Handler: HandleGetUser,
 	},
 	tranGetUserNameList: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranHandleGetUserNameList",
 		Handler: HandleGetUserNameList,
 	},
@@ -156,14 +167,17 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleInviteToChat,
 	},
 	tranJoinChat: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranJoinChat",
 		Handler: HandleJoinChat,
 	},
 	tranKeepAlive: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranKeepAlive",
 		Handler: HandleKeepAlive,
 	},
 	tranLeaveChat: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranJoinChat",
 		Handler: HandleLeaveChat,
 	},
@@ -217,6 +231,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandlePostNewsArt,
 	},
 	tranRejectChatInvite: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranRejectChatInvite",
 		Handler: HandleRejectChatInvite,
 	},
@@ -237,10 +252,12 @@ var TransactionHandlers = map[uint16]TransactionType{
 		},
 	},
 	tranSetChatSubject: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranSetChatSubject",
 		Handler: HandleSetChatSubject,
 	},
 	tranMakeFileAlias: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranMakeFileAlias",
 		Handler: HandleMakeAlias,
 		RequiredFields: []requiredField{
@@ -250,10 +267,12 @@ var TransactionHandlers = map[uint16]TransactionType{
 		},
 	},
 	tranSetClientUserInfo: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranSetClientUserInfo",
 		Handler: HandleSetClientUserInfo,
 	},
 	tranSetFileInfo: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranSetFileInfo",
 		Handler: HandleSetFileInfo,
 	},
@@ -264,10 +283,12 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleSetUser,
 	},
 	tranUploadFile: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranUploadFile",
 		Handler: HandleUploadFile,
 	},
 	tranUploadFldr: {
+		Access:  accessAlwaysAllow,
 		Name:    "tranUploadFldr",
 		Handler: HandleUploadFolder,
 	},
