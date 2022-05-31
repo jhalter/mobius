@@ -19,10 +19,10 @@ var fileTypes = map[string]fileType{
 		TypeCode:    "PDF ",
 		CreatorCode: "CARO",
 	},
-	// "gif": {
-	// 	TypeCode:    "GIFf",
-	// 	CreatorCode: "ogle",
-	// },
+	"gif": {
+		TypeCode:    "GIFf",
+		CreatorCode: "ogle",
+	},
 	"txt": {
 		TypeCode:    "TEXT",
 		CreatorCode: "ttxt",
@@ -32,27 +32,27 @@ var fileTypes = map[string]fileType{
 		CreatorCode: "SITx",
 	},
 	"tgz": {
-		TypeCode:    "Gzip ",
+		TypeCode:    "Gzip",
 		CreatorCode: "SITx",
 	},
-	// "hqx": {
-	// 	TypeCode:    "TEXT ",
-	// 	CreatorCode: "SITx",
-	// },
-	// "jpg": {
-	// 	TypeCode:    "JPEG ",
-	// 	CreatorCode: "ogle",
-	// },
-	// "img": {
-	// 	TypeCode:    "rohd ",
-	// 	CreatorCode: "ddsk",
-	// },
-	// "sea": {
-	// 	TypeCode:    "APPL ",
-	// 	CreatorCode: "aust",
-	// },
-	// "mov": {
-	// 	TypeCode:    "MooV ",
-	// 	CreatorCode: "TVOD",
-	// },
+	"hqx": {
+		TypeCode:    "TEXT",
+		CreatorCode: "SITx",
+	},
+	"jpg": {
+		TypeCode:    "JPEG",
+		CreatorCode: "ogle",
+	},
+	"img": {
+		TypeCode:    "rohd",
+		CreatorCode: "ddsk",
+	},
+	"sea": {
+		TypeCode:    "APPL",
+		CreatorCode: "aust",
+	},
+	"mov": {
+		TypeCode:    "MooV",
+		CreatorCode: "TVOD",
+	},
 }
