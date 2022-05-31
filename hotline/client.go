@@ -10,7 +10,7 @@ import (
 	"github.com/rivo/tview"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	"math/big"
 	"math/rand"
 	"net"
@@ -61,7 +61,6 @@ func readConfig(cfgPath string) (*ClientPrefs, error) {
 
 	prefs := ClientPrefs{}
 	decoder := yaml.NewDecoder(fh)
-	decoder.SetStrict(true)
 	if err := decoder.Decode(&prefs); err != nil {
 		return nil, err
 	}

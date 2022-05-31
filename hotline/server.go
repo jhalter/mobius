@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -395,7 +395,6 @@ func (s *Server) loadThreadedNews(threadedNewsPath string) error {
 		return err
 	}
 	decoder := yaml.NewDecoder(fh)
-	decoder.SetStrict(true)
 
 	return decoder.Decode(s.ThreadedNews)
 }
@@ -419,7 +418,6 @@ func (s *Server) loadAccounts(userDir string) error {
 
 		account := Account{}
 		decoder := yaml.NewDecoder(fh)
-		decoder.SetStrict(true)
 		if err := decoder.Decode(&account); err != nil {
 			return err
 		}
@@ -436,7 +434,6 @@ func (s *Server) loadConfig(path string) error {
 	}
 
 	decoder := yaml.NewDecoder(fh)
-	decoder.SetStrict(true)
 	err = decoder.Decode(s.Config)
 	if err != nil {
 		return err
