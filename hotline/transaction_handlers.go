@@ -366,21 +366,25 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	msg := t.GetField(fieldData)
 	ID := t.GetField(fieldUserID)
-	// TODO: Implement reply quoting
-	// options := transaction.GetField(hotline.fieldOptions)
 
-	res = append(res,
-		*NewTransaction(
-			tranServerMsg,
-			&ID.Data,
-			NewField(fieldData, msg.Data),
-			NewField(fieldUserName, cc.UserName),
-			NewField(fieldUserID, *cc.ID),
-			NewField(fieldOptions, []byte{0, 1}),
-		),
+	reply := *NewTransaction(
+		tranServerMsg,
+		&ID.Data,
+		NewField(fieldData, msg.Data),
+		NewField(fieldUserName, cc.UserName),
+		NewField(fieldUserID, *cc.ID),
+		NewField(fieldOptions, []byte{0, 1}),
 	)
-	id, _ := byteToInt(ID.Data)
 
+	// Later versions of Hotline include the original message in the fieldQuotingMsg field so
+	//  the receiving client can display both the received message and what it is in reply to
+	if t.GetField(fieldQuotingMsg).Data != nil {
+		reply.Fields = append(reply.Fields, NewField(fieldQuotingMsg, t.GetField(fieldQuotingMsg).Data))
+	}
+
+	res = append(res, reply)
+
+	id, _ := byteToInt(ID.Data)
 	otherClient := cc.Server.Clients[uint16(id)]
 	if otherClient == nil {
 		return res, errors.New("ohno")
