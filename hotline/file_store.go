@@ -2,6 +2,7 @@ package hotline
 
 import (
 	"github.com/stretchr/testify/mock"
+	"io/fs"
 	"os"
 )
 
@@ -14,6 +15,7 @@ type FileStore interface {
 	Symlink(oldname, newname string) error
 	Remove(name string) error
 	Create(name string) (*os.File, error)
+	WriteFile(name string, data []byte, perm fs.FileMode) error
 	// TODO: implement these
 	// Rename(oldpath string, newpath string) error
 	// RemoveAll(path string) error
@@ -43,6 +45,10 @@ func (fs *OSFileStore) Remove(name string) error {
 
 func (fs *OSFileStore) Create(name string) (*os.File, error) {
 	return os.Create(name)
+}
+
+func (fs *OSFileStore) WriteFile(name string, data []byte, perm fs.FileMode) error {
+	return os.WriteFile(name, data, perm)
 }
 
 type MockFileStore struct {
@@ -81,4 +87,9 @@ func (mfs *MockFileStore) Remove(name string) error {
 func (mfs *MockFileStore) Create(name string) (*os.File, error) {
 	args := mfs.Called(name)
 	return args.Get(0).(*os.File), args.Error(1)
+}
+
+func (mfs *MockFileStore) WriteFile(name string, data []byte, perm fs.FileMode) error {
+	args := mfs.Called(name, data, perm)
+	return args.Error(0)
 }

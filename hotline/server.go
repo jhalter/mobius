@@ -355,7 +355,7 @@ func (s *Server) NewUser(login, name, password string, access []byte) error {
 	}
 	s.Accounts[login] = &account
 
-	return ioutil.WriteFile(s.ConfigDir+"Users/"+login+".yaml", out, 0666)
+	return FS.WriteFile(s.ConfigDir+"Users/"+login+".yaml", out, 0666)
 }
 
 // DeleteUser deletes the user account

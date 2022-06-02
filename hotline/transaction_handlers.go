@@ -50,8 +50,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleTranAgreed,
 	},
 	tranChatSend: {
-		Access:  accessSendChat,
-		DenyMsg: "You are not allowed to participate in chat.",
+		Access:  accessAlwaysAllow,
 		Handler: HandleChatSend,
 		Name:    "tranChatSend",
 		RequiredFields: []requiredField{
@@ -80,8 +79,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleDeleteFile,
 	},
 	tranDeleteUser: {
-		Access:  accessDeleteUser,
-		DenyMsg: "You are not allowed to delete accounts.",
+		Access:  accessAlwaysAllow,
 		Name:    "tranDeleteUser",
 		Handler: HandleDeleteUser,
 	},
@@ -92,8 +90,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleDisconnectUser,
 	},
 	tranDownloadFile: {
-		Access:  accessDownloadFile,
-		DenyMsg: "You are not allowed to download files.",
+		Access:  accessAlwaysAllow,
 		Name:    "tranDownloadFile",
 		Handler: HandleDownloadFile,
 	},
@@ -120,8 +117,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleGetFileNameList,
 	},
 	tranGetMsgs: {
-		Access:  accessNewsReadArt,
-		DenyMsg: "You are not allowed to read news.",
+		Access:  accessAlwaysAllow,
 		Name:    "tranGetMsgs",
 		Handler: HandleGetMsgs,
 	},
@@ -144,8 +140,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleGetNewsCatNameList,
 	},
 	tranGetUser: {
-		Access:  accessOpenUser,
-		DenyMsg: "You are not allowed to view accounts.",
+		Access:  accessAlwaysAllow,
 		Name:    "tranGetUser",
 		Handler: HandleGetUser,
 	},
@@ -181,10 +176,8 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Name:    "tranJoinChat",
 		Handler: HandleLeaveChat,
 	},
-
 	tranListUsers: {
-		Access:  accessOpenUser,
-		DenyMsg: "You are not allowed to view accounts.",
+		Access:  accessAlwaysAllow,
 		Name:    "tranListUsers",
 		Handler: HandleListUsers,
 	},
@@ -213,8 +206,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Handler: HandleNewNewsFldr,
 	},
 	tranNewUser: {
-		Access:  accessCreateUser,
-		DenyMsg: "You are not allowed to create new accounts.",
+		Access:  accessAlwaysAllow,
 		Name:    "tranNewUser",
 		Handler: HandleNewUser,
 	},
@@ -327,8 +319,10 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 		chatInt := binary.BigEndian.Uint32(chatID)
 		privChat := cc.Server.PrivateChats[chatInt]
 
+		clients := sortedClients(privChat.ClientConn)
+
 		// send the message to all connected clients of the private chat
-		for _, c := range privChat.ClientConn {
+		for _, c := range clients {
 			res = append(res, *NewTransaction(
 				tranChatMsg,
 				c.ID,
@@ -669,8 +663,7 @@ func HandleGetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 
 	account := cc.Server.Accounts[string(t.GetField(fieldUserLogin).Data)]
 	if account == nil {
-		errorT := cc.NewErrReply(t, "Account does not exist.")
-		res = append(res, errorT)
+		res = append(res, cc.NewErrReply(t, "Account does not exist."))
 		return res, err
 	}
 
@@ -684,6 +677,11 @@ func HandleGetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 }
 
 func HandleListUsers(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessOpenUser) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to view accounts."))
+		return res, err
+	}
+
 	var userFields []Field
 	// TODO: make order deterministic
 	for _, acc := range cc.Server.Accounts {
@@ -697,10 +695,14 @@ func HandleListUsers(cc *ClientConn, t *Transaction) (res []Transaction, err err
 
 // HandleNewUser creates a new user account
 func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessCreateUser) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to create new accounts."))
+		return res, err
+	}
+
 	login := DecodeUserString(t.GetField(fieldUserLogin).Data)
 
 	// If the account already exists, reply with an error
-	// TODO: make order deterministic
 	if _, ok := cc.Server.Accounts[login]; ok {
 		res = append(res, cc.NewErrReply(t, "Cannot create account "+login+" because there is already an account with that login."))
 		return res, err
@@ -1201,12 +1203,22 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 
 // HandleGetMsgs returns the flat news data
 func HandleGetMsgs(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessNewsReadArt) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to read news."))
+		return res, err
+	}
+
 	res = append(res, cc.NewReply(t, NewField(fieldData, cc.Server.FlatNews)))
 
 	return res, err
 }
 
 func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessDownloadFile) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to download files."))
+		return res, err
+	}
+
 	fileName := t.GetField(fieldFileName).Data
 	filePath := t.GetField(fieldFilePath).Data
 
