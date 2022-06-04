@@ -59,6 +59,16 @@ Download a compiled release for your architecture from the Releases page
 
     TODO
 
+### Docker
+
+To run the Mobius server from Docker with a local directory mounted for config and files, follow these steps:
+
+1. Clone this repo: `git clone https://github.com/jhalter/mobius.git`
+2. Copy the config dir somewhere `cp -r cmd/mobius-hotline-server/mobius/config ~/mobius-config` 
+3. Build the Docker image: `docker build . -t mobius-hotline-server:latest`
+4. Run the image:
+    `docker run --rm -p 5500:5500 -p 5501:5501 -v ~/mobius-config:/usr/local/var/mobius/config mobius-hotline-server:latest`
+
 
 ### Build from source
 
