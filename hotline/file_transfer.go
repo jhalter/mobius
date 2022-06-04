@@ -23,6 +23,7 @@ type FileTransfer struct {
 	FolderItemCount []byte
 	BytesSent       int
 	clientID        uint16
+	fileResumeData  *FileResumeData
 }
 
 func (ft *FileTransfer) String() string {
@@ -30,6 +31,10 @@ func (ft *FileTransfer) String() string {
 	out := fmt.Sprintf("%s\t %v", ft.FileName, percentComplete)
 
 	return out
+}
+
+func (ft *FileTransfer) ItemCount() int {
+	return int(binary.BigEndian.Uint16(ft.FolderItemCount))
 }
 
 // 00 28 // DataSize

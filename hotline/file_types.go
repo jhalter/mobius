@@ -1,8 +1,10 @@
 package hotline
 
 type fileType struct {
-	TypeCode    string
-	CreatorCode string
+	TypeCode       string // 4 byte type code used in file transfers
+	CreatorCode    string // 4 byte creator code used in file transfers
+	CreatorString  string // variable length string used in file get info
+	FileTypeString string // variable length string used in file get info
 }
 
 var defaultFileType = fileType{
@@ -54,5 +56,9 @@ var fileTypes = map[string]fileType{
 	"mov": {
 		TypeCode:    "MooV",
 		CreatorCode: "TVOD",
+	},
+	"incomplete": { // Partial file upload
+		TypeCode:    "HTft",
+		CreatorCode: "HTLC",
 	},
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
@@ -633,6 +634,9 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 	transferRefNum := binary.BigEndian.Uint32(t.ReferenceNumber[:])
 	fileTransfer := s.FileTransfers[transferRefNum]
 
+	// delete single use transferRefNum
+	delete(s.FileTransfers, transferRefNum)
+
 	switch fileTransfer.Type {
 	case FileDownload:
 		fullFilePath, err := readPath(s.Config.FileRoot, fileTransfer.FilePath, fileTransfer.FileName)
@@ -640,11 +644,12 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 			return err
 		}
 
-		ffo, err := NewFlattenedFileObject(
-			s.Config.FileRoot,
-			fileTransfer.FilePath,
-			fileTransfer.FileName,
-		)
+		var dataOffset int64
+		if fileTransfer.fileResumeData != nil {
+			dataOffset = int64(binary.BigEndian.Uint32(fileTransfer.fileResumeData.ForkInfoList[0].DataSize[:]))
+		}
+
+		ffo, err := NewFlattenedFileObject(s.Config.FileRoot, fileTransfer.FilePath, fileTransfer.FileName, dataOffset)
 		if err != nil {
 			return err
 		}
@@ -662,15 +667,21 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 		}
 
 		sendBuffer := make([]byte, 1048576)
+		var totalSent int64
 		for {
 			var bytesRead int
-			if bytesRead, err = file.Read(sendBuffer); err == io.EOF {
+			if bytesRead, err = file.ReadAt(sendBuffer, dataOffset+totalSent); err == io.EOF {
+				if _, err := conn.Write(sendBuffer[:bytesRead]); err != nil {
+					return err
+				}
 				break
 			}
+			if err != nil {
+				return err
+			}
+			totalSent += int64(bytesRead)
 
 			fileTransfer.BytesSent += bytesRead
-
-			delete(s.FileTransfers, transferRefNum)
 
 			if _, err := conn.Write(sendBuffer[:bytesRead]); err != nil {
 				return err
@@ -678,16 +689,27 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 		}
 	case FileUpload:
 		destinationFile := s.Config.FileRoot + ReadFilePath(fileTransfer.FilePath) + "/" + string(fileTransfer.FileName)
-		newFile, err := FS.Create(destinationFile)
-		if err != nil {
-			return err
+		tmpFile := destinationFile + ".incomplete"
+
+		file, err := effectiveFile(destinationFile)
+		if errors.Is(err, fs.ErrNotExist) {
+			file, err = FS.Create(tmpFile)
+			if err != nil {
+				return err
+			}
 		}
-		defer func() { _ = newFile.Close() }()
+
+		defer func() { _ = file.Close() }()
 
 		s.Logger.Infow("File upload started", "transactionRef", fileTransfer.ReferenceNumber, "dstFile", destinationFile)
 
-		if err := receiveFile(conn, newFile, nil); err != nil {
-			s.Logger.Errorw("file upload error", "error", err)
+		// TODO: replace io.Discard with a real file when ready to implement storing of resource fork data
+		if err := receiveFile(conn, file, io.Discard); err != nil {
+			return err
+		}
+
+		if err := os.Rename(destinationFile+".incomplete", destinationFile); err != nil {
+			return err
 		}
 
 		s.Logger.Infow("File upload complete", "transactionRef", fileTransfer.ReferenceNumber, "dstFile", destinationFile)
@@ -708,7 +730,7 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 		//			[2]byte // Resume data size
 		//			[]byte file resume data (see myField_FileResumeData)
 		//
-		// 3. Otherwise download of the file is requested and client sends []byte{0x00, 0x01}
+		// 3. Otherwise, download of the file is requested and client sends []byte{0x00, 0x01}
 		//
 		// When download is requested (case 2 or 3), server replies with:
 		// 			[4]byte - file size
@@ -758,11 +780,34 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 			if _, err := conn.Read(nextAction); err != nil {
 				return err
 			}
-			if nextAction[1] == 3 {
-				return nil
-			}
 
 			s.Logger.Infow("Client folder download action", "action", fmt.Sprintf("%X", nextAction[0:2]))
+
+			var dataOffset int64
+
+			switch nextAction[1] {
+			case dlFldrActionResumeFile:
+				// client asked to resume this file
+				var frd FileResumeData
+				// get size of resumeData
+				if _, err := conn.Read(nextAction); err != nil {
+					return err
+				}
+
+				resumeDataLen := binary.BigEndian.Uint16(nextAction)
+				resumeDataBytes := make([]byte, resumeDataLen)
+				if _, err := conn.Read(resumeDataBytes); err != nil {
+					return err
+				}
+
+				if err := frd.UnmarshalBinary(resumeDataBytes); err != nil {
+					return err
+				}
+				dataOffset = int64(binary.BigEndian.Uint32(frd.ForkInfoList[0].DataSize[:]))
+			case dlFldrActionNextFile:
+				// client asked to skip this file
+				return nil
+			}
 
 			if info.IsDir() {
 				return nil
@@ -770,11 +815,7 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 
 			splitPath := strings.Split(path, "/")
 
-			ffo, err := NewFlattenedFileObject(
-				strings.Join(splitPath[:len(splitPath)-1], "/"),
-				nil,
-				[]byte(info.Name()),
-			)
+			ffo, err := NewFlattenedFileObject(strings.Join(splitPath[:len(splitPath)-1], "/"), nil, []byte(info.Name()), dataOffset)
 			if err != nil {
 				return err
 			}
@@ -801,22 +842,42 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 				return err
 			}
 
-			// Copy N bytes from file to connection
-			_, err = io.CopyN(conn, file, int64(binary.BigEndian.Uint32(ffo.FlatFileDataForkHeader.DataSize[:])))
-			if err != nil {
-				return err
+			// // Copy N bytes from file to connection
+			// _, err = io.CopyN(conn, file, int64(binary.BigEndian.Uint32(ffo.FlatFileDataForkHeader.DataSize[:])))
+			// if err != nil {
+			// 	return err
+			// }
+			// file.Close()
+			sendBuffer := make([]byte, 1048576)
+			var totalSent int64
+			for {
+				var bytesRead int
+				if bytesRead, err = file.ReadAt(sendBuffer, dataOffset+totalSent); err == io.EOF {
+					if _, err := conn.Write(sendBuffer[:bytesRead]); err != nil {
+						return err
+					}
+					break
+				}
+				if err != nil {
+					panic(err)
+				}
+				totalSent += int64(bytesRead)
+
+				fileTransfer.BytesSent += bytesRead
+
+				if _, err := conn.Write(sendBuffer[:bytesRead]); err != nil {
+					return err
+				}
 			}
-			file.Close()
 
 			// TODO: optionally send resource fork header and resource fork data
 
-			// Read the client's Next Action request
+			// Read the client's Next Action request.  This is always 3, I think?
 			if _, err := conn.Read(nextAction); err != nil {
 				return err
 			}
-			// TODO: switch behavior based on possible next action
 
-			return err
+			return nil
 		})
 
 	case FolderUpload:
@@ -834,9 +895,8 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 
 		// Check if the target folder exists.  If not, create it.
 		if _, err := FS.Stat(dstPath); os.IsNotExist(err) {
-			s.Logger.Infow("Creating target path", "dstPath", dstPath)
 			if err := FS.Mkdir(dstPath, 0777); err != nil {
-				s.Logger.Error(err)
+				return err
 			}
 		}
 
@@ -846,10 +906,10 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 		}
 
 		fileSize := make([]byte, 4)
-		itemCount := binary.BigEndian.Uint16(fileTransfer.FolderItemCount)
-
 		readBuffer := make([]byte, 1024)
-		for i := uint16(0); i < itemCount; i++ {
+
+		for i := 0; i < fileTransfer.ItemCount(); i++ {
+
 			_, err := conn.Read(readBuffer)
 			if err != nil {
 				return err
@@ -866,48 +926,106 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 
 			if fu.IsFolder == [2]byte{0, 1} {
 				if _, err := os.Stat(dstPath + "/" + fu.FormattedPath()); os.IsNotExist(err) {
-					s.Logger.Infow("Target path does not exist; Creating...", "dstPath", dstPath)
 					if err := os.Mkdir(dstPath+"/"+fu.FormattedPath(), 0777); err != nil {
-						s.Logger.Error(err)
+						return err
 					}
 				}
 
 				// Tell client to send next file
 				if _, err := conn.Write([]byte{0, dlFldrActionNextFile}); err != nil {
-					s.Logger.Error(err)
 					return err
 				}
 			} else {
-				// TODO: Check if we have the full file already.  If so, send dlFldrAction_NextFile to client to skip.
-				// TODO: Check if we have a partial file already.  If so, send dlFldrAction_ResumeFile to client to resume upload.
-				// Send dlFldrAction_SendFile to client to begin transfer
-				if _, err := conn.Write([]byte{0, dlFldrActionSendFile}); err != nil {
+				nextAction := dlFldrActionSendFile
+
+				// Check if we have the full file already.  If so, send dlFldrAction_NextFile to client to skip.
+				_, err := os.Stat(dstPath + "/" + fu.FormattedPath())
+				if err != nil && !errors.Is(err, fs.ErrNotExist) {
+					return err
+				}
+				if err == nil {
+					nextAction = dlFldrActionNextFile
+				}
+
+				//  Check if we have a partial file already.  If so, send dlFldrAction_ResumeFile to client to resume upload.
+				inccompleteFile, err := os.Stat(dstPath + "/" + fu.FormattedPath() + incompleteFileSuffix)
+				if err != nil && !errors.Is(err, fs.ErrNotExist) {
+					return err
+				}
+				if err == nil {
+					nextAction = dlFldrActionResumeFile
+				}
+
+				fmt.Printf("Next Action: %v\n", nextAction)
+
+				if _, err := conn.Write([]byte{0, uint8(nextAction)}); err != nil {
 					return err
 				}
 
-				if _, err := conn.Read(fileSize); err != nil {
-					return err
-				}
+				switch nextAction {
+				case dlFldrActionNextFile:
+					continue
+				case dlFldrActionResumeFile:
+					offset := make([]byte, 4)
+					binary.BigEndian.PutUint32(offset, uint32(inccompleteFile.Size()))
 
-				filePath := dstPath + "/" + fu.FormattedPath()
-				s.Logger.Infow("Starting file transfer", "path", filePath, "fileNum", i+1, "totalFiles", itemCount, "fileSize", binary.BigEndian.Uint32(fileSize))
+					file, err := os.OpenFile(dstPath+"/"+fu.FormattedPath()+incompleteFileSuffix, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+					if err != nil {
+						return err
+					}
 
-				newFile, err := FS.Create(filePath)
-				if err != nil {
-					return err
-				}
+					fileResumeData := NewFileResumeData([]ForkInfoList{
+						*NewForkInfoList(offset),
+					})
 
-				if err := receiveFile(conn, newFile, ioutil.Discard); err != nil {
-					s.Logger.Error(err)
+					b, _ := fileResumeData.BinaryMarshal()
+
+					bs := make([]byte, 2)
+					binary.BigEndian.PutUint16(bs, uint16(len(b)))
+
+					if _, err := conn.Write(append(bs, b...)); err != nil {
+						return err
+					}
+
+					if _, err := conn.Read(fileSize); err != nil {
+						return err
+					}
+
+					if err := receiveFile(conn, file, ioutil.Discard); err != nil {
+						s.Logger.Error(err)
+					}
+
+					err = os.Rename(dstPath+"/"+fu.FormattedPath()+".incomplete", dstPath+"/"+fu.FormattedPath())
+					if err != nil {
+						return err
+					}
+
+				case dlFldrActionSendFile:
+					if _, err := conn.Read(fileSize); err != nil {
+						return err
+					}
+
+					filePath := dstPath + "/" + fu.FormattedPath()
+					s.Logger.Infow("Starting file transfer", "path", filePath, "fileNum", i+1, "totalFiles", "zz", "fileSize", binary.BigEndian.Uint32(fileSize))
+
+					newFile, err := FS.Create(filePath + ".incomplete")
+					if err != nil {
+						return err
+					}
+
+					if err := receiveFile(conn, newFile, ioutil.Discard); err != nil {
+						s.Logger.Error(err)
+					}
+					_ = newFile.Close()
+					if err := os.Rename(filePath+".incomplete", filePath); err != nil {
+						return err
+					}
 				}
-				_ = newFile.Close()
 
 				// Tell client to send next file
 				if _, err := conn.Write([]byte{0, dlFldrActionNextFile}); err != nil {
-					s.Logger.Error(err)
 					return err
 				}
-
 			}
 		}
 		s.Logger.Infof("Folder upload complete")

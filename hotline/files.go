@@ -2,6 +2,8 @@ package hotline
 
 import (
 	"encoding/binary"
+	"errors"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -54,11 +56,13 @@ func getFileNameList(filePath string) (fields []Field, err error) {
 			copy(fnwi.Creator[:], fileCreator[:])
 		}
 
+		strippedName := strings.Replace(file.Name(), ".incomplete", "", -1)
+
 		nameSize := make([]byte, 2)
-		binary.BigEndian.PutUint16(nameSize, uint16(len(file.Name())))
+		binary.BigEndian.PutUint16(nameSize, uint16(len(strippedName)))
 		copy(fnwi.NameSize[:], nameSize[:])
 
-		fnwi.name = []byte(file.Name())
+		fnwi.name = []byte(strippedName)
 
 		b, err := fnwi.MarshalBinary()
 		if err != nil {
@@ -132,4 +136,22 @@ func EncodeFilePath(filePath string) []byte {
 	}
 
 	return bytes
+}
+
+const incompleteFileSuffix = ".incomplete"
+
+// effectiveFile wraps os.Open to check for the presence of a partial file transfer as a fallback
+func effectiveFile(filePath string) (*os.File, error) {
+	file, err := os.Open(filePath)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+
+	if errors.Is(err, fs.ErrNotExist) {
+		file, err = os.OpenFile(filePath+incompleteFileSuffix, os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return file, nil
 }

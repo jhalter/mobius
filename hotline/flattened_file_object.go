@@ -175,15 +175,16 @@ func (f *flattenedFileObject) BinaryMarshal() []byte {
 	return out
 }
 
-func NewFlattenedFileObject(fileRoot string, filePath, fileName []byte) (*flattenedFileObject, error) {
+func NewFlattenedFileObject(fileRoot string, filePath, fileName []byte, dataOffset int64) (*flattenedFileObject, error) {
 	fullFilePath, err := readPath(fileRoot, filePath, fileName)
 	if err != nil {
 		return nil, err
 	}
-	file, err := os.Open(fullFilePath)
+	file, err := effectiveFile(fullFilePath)
 	if err != nil {
 		return nil, err
 	}
+
 	defer func(file *os.File) { _ = file.Close() }(file)
 
 	fileInfo, err := file.Stat()
@@ -192,7 +193,7 @@ func NewFlattenedFileObject(fileRoot string, filePath, fileName []byte) (*flatte
 	}
 
 	dataSize := make([]byte, 4)
-	binary.BigEndian.PutUint32(dataSize, uint32(fileInfo.Size()))
+	binary.BigEndian.PutUint32(dataSize, uint32(fileInfo.Size()-dataOffset))
 
 	mTime := toHotlineTime(fileInfo.ModTime())
 

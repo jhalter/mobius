@@ -407,7 +407,7 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	fileName := t.GetField(fieldFileName).Data
 	filePath := t.GetField(fieldFilePath).Data
 
-	ffo, err := NewFlattenedFileObject(cc.Server.Config.FileRoot, filePath, fileName)
+	ffo, err := NewFlattenedFileObject(cc.Server.Config.FileRoot, filePath, fileName, 0)
 	if err != nil {
 		return res, err
 	}
@@ -1222,13 +1222,26 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 	fileName := t.GetField(fieldFileName).Data
 	filePath := t.GetField(fieldFilePath).Data
 
+	// 2 bytes
+	// transferOptions := t.GetField(fieldFileTransferOptions).Data
+	resumeData := t.GetField(fieldFileResumeData).Data
+
+	var dataOffset int64
+	var frd FileResumeData
+	if resumeData != nil {
+		if err := frd.UnmarshalBinary(t.GetField(fieldFileResumeData).Data); err != nil {
+			return res, err
+		}
+		dataOffset = int64(binary.BigEndian.Uint32(frd.ForkInfoList[0].DataSize[:]))
+	}
+
 	var fp FilePath
 	err = fp.UnmarshalBinary(filePath)
 	if err != nil {
 		return res, err
 	}
 
-	ffo, err := NewFlattenedFileObject(cc.Server.Config.FileRoot, filePath, fileName)
+	ffo, err := NewFlattenedFileObject(cc.Server.Config.FileRoot, filePath, fileName, dataOffset)
 	if err != nil {
 		return res, err
 	}
@@ -1241,6 +1254,12 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 		FilePath:        filePath,
 		ReferenceNumber: transactionRef,
 		Type:            FileDownload,
+	}
+
+	if resumeData != nil {
+		var frd FileResumeData
+		frd.UnmarshalBinary(t.GetField(fieldFileResumeData).Data)
+		ft.fileResumeData = &frd
 	}
 
 	cc.Server.FileTransfers[data] = ft
@@ -1362,8 +1381,12 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err 
 }
 
 // HandleUploadFile
-// Special cases:
-// * If the target directory contains "uploads" (case insensitive)
+// Fields used in the request:
+// 201	File name
+// 202	File path
+// 204	File transfer options	"Optional
+// Used only to resume download, currently has value 2"
+// 108	File transfer size	"Optional used if download is not resumed"
 func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	if !authorize(cc.Account.Access, accessUploadFile) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to upload files."))
@@ -1372,6 +1395,11 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	fileName := t.GetField(fieldFileName).Data
 	filePath := t.GetField(fieldFilePath).Data
+
+	transferOptions := t.GetField(fieldFileTransferOptions).Data
+
+	// TODO: is this field useful for anything?
+	// transferSize := t.GetField(fieldTransferSize).Data
 
 	var fp FilePath
 	if filePath != nil {
@@ -1398,7 +1426,33 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		Type:            FileUpload,
 	}
 
-	res = append(res, cc.NewReply(t, NewField(fieldRefNum, transactionRef)))
+	replyT := cc.NewReply(t, NewField(fieldRefNum, transactionRef))
+
+	// client has requested to resume a partially transfered file
+	if transferOptions != nil {
+		fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
+		if err != nil {
+			return res, err
+		}
+
+		fileInfo, err := FS.Stat(fullFilePath + incompleteFileSuffix)
+		if err != nil {
+			return res, err
+		}
+
+		offset := make([]byte, 4)
+		binary.BigEndian.PutUint32(offset, uint32(fileInfo.Size()))
+
+		fileResumeData := NewFileResumeData([]ForkInfoList{
+			*NewForkInfoList(offset),
+		})
+
+		b, _ := fileResumeData.BinaryMarshal()
+
+		replyT.Fields = append(replyT.Fields, NewField(fieldFileResumeData, b))
+	}
+
+	res = append(res, replyT)
 	return res, err
 }
 

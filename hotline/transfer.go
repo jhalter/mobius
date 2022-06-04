@@ -89,8 +89,8 @@ func receiveFile(conn io.Reader, targetFile io.Writer, resForkFile io.Writer) er
 	if ffh.ForkCount == [2]byte{0, 3} {
 		var resForkHeader FlatFileDataForkHeader
 		resForkBuf := make([]byte, 16)
-
-		if _, err := conn.Read(resForkBuf); err != nil {
+		resForkBufWrter := bufio.NewWriterSize(resForkFile, 16)
+		if _, err := io.CopyN(resForkBufWrter, conn, 16); err != nil {
 			return err
 		}
 		err = binary.Read(bytes.NewReader(resForkBuf), binary.BigEndian, &resForkHeader)
