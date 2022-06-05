@@ -1731,3 +1731,179 @@ func TestHandleDownloadFile(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleUpdateUser(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "when action is create user without required permission",
+			args: args{
+				cc: &ClientConn{
+					Server: &Server{
+						Logger: NewTestLogger(),
+					},
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							access := bits[:]
+							return &access
+						}(),
+					},
+				},
+				t: NewTransaction(
+					tranUpdateUser,
+					&[]byte{0, 0},
+					NewField(fieldData, []byte{
+						0x00, 0x04, // field count
+
+						0x00, 0x69, // fieldUserLogin = 105
+						0x00, 0x03,
+						0x9d, 0x9d, 0x9d,
+
+						0x00, 0x6a, // fieldUserPassword = 106
+						0x00, 0x03,
+						0x9c, 0x9c, 0x9c,
+
+						0x00, 0x66, // fieldUserName = 102
+						0x00, 0x03,
+						0x61, 0x61, 0x61,
+
+						0x00, 0x6e, // fieldUserAccess = 110
+						0x00, 0x08,
+						0x60, 0x70, 0x0c, 0x20, 0x03, 0x80, 0x00, 0x00,
+					}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to create new accounts.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "when action is modify user without required permission",
+			args: args{
+				cc: &ClientConn{
+					Server: &Server{
+						Logger: NewTestLogger(),
+						Accounts: map[string]*Account{
+							"bbb": {},
+						},
+					},
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							access := bits[:]
+							return &access
+						}(),
+					},
+				},
+				t: NewTransaction(
+					tranUpdateUser,
+					&[]byte{0, 0},
+					NewField(fieldData, []byte{
+						0x00, 0x04, // field count
+
+						0x00, 0x69, // fieldUserLogin = 105
+						0x00, 0x03,
+						0x9d, 0x9d, 0x9d,
+
+						0x00, 0x6a, // fieldUserPassword = 106
+						0x00, 0x03,
+						0x9c, 0x9c, 0x9c,
+
+						0x00, 0x66, // fieldUserName = 102
+						0x00, 0x03,
+						0x61, 0x61, 0x61,
+
+						0x00, 0x6e, // fieldUserAccess = 110
+						0x00, 0x08,
+						0x60, 0x70, 0x0c, 0x20, 0x03, 0x80, 0x00, 0x00,
+					}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to modify accounts.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "when action is delete user without required permission",
+			args: args{
+				cc: &ClientConn{
+					Server: &Server{
+						Logger: NewTestLogger(),
+						Accounts: map[string]*Account{
+							"bbb": {},
+						},
+					},
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							access := bits[:]
+							return &access
+						}(),
+					},
+				},
+				t: NewTransaction(
+					tranUpdateUser,
+					&[]byte{0, 0},
+					NewField(fieldData, []byte{
+						0x00, 0x01,
+						0x00, 0x65,
+						0x00, 0x03,
+						0x88, 0x9e, 0x8b,
+					}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to delete accounts.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes, err := HandleUpdateUser(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleUpdateUser(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
+
+			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}

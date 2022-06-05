@@ -90,3 +90,12 @@ func NewField(id uint16, data []byte) Field {
 func (f Field) Payload() []byte {
 	return concat.Slices(f.ID, f.FieldSize, f.Data)
 }
+
+func getField(id int, fields *[]Field) *Field {
+	for _, field := range *fields {
+		if id == int(binary.BigEndian.Uint16(field.ID)) {
+			return &field
+		}
+	}
+	return nil
+}

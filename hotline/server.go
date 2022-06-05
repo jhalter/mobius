@@ -359,6 +359,38 @@ func (s *Server) NewUser(login, name, password string, access []byte) error {
 	return FS.WriteFile(s.ConfigDir+"Users/"+login+".yaml", out, 0666)
 }
 
+func (s *Server) UpdateUser(login, newLogin, name, password string, access []byte) error {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+
+	fmt.Printf("login: %v, newLogin: %v: ", login, newLogin)
+
+	// update renames the user login
+	if login != newLogin {
+		err := os.Rename(s.ConfigDir+"Users/"+login+".yaml", s.ConfigDir+"Users/"+newLogin+".yaml")
+		if err != nil {
+			return err
+		}
+		s.Accounts[newLogin] = s.Accounts[login]
+		delete(s.Accounts, login)
+	}
+
+	account := s.Accounts[newLogin]
+	account.Access = &access
+	account.Name = name
+	account.Password = password
+
+	out, err := yaml.Marshal(&account)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(s.ConfigDir+"Users/"+newLogin+".yaml", out, 0666); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // DeleteUser deletes the user account
 func (s *Server) DeleteUser(login string) error {
 	s.mux.Lock()

@@ -210,6 +210,11 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Name:    "tranNewUser",
 		Handler: HandleNewUser,
 	},
+	tranUpdateUser: {
+		Access:  accessAlwaysAllow,
+		Name:    "tranUpdateUser",
+		Handler: HandleUpdateUser,
+	},
 	tranOldPostNews: {
 		Access:  accessNewsPostArt,
 		DenyMsg: "You are not allowed to post news.",
@@ -615,12 +620,11 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 		account.Password = hashAndSalt(t.GetField(fieldUserPassword).Data)
 	}
 
-	file := cc.Server.ConfigDir + "Users/" + login + ".yaml"
 	out, err := yaml.Marshal(&account)
 	if err != nil {
 		return res, err
 	}
-	if err := ioutil.WriteFile(file, out, 0666); err != nil {
+	if err := os.WriteFile(cc.Server.ConfigDir+"Users/"+login+".yaml", out, 0666); err != nil {
 		return res, err
 	}
 
@@ -683,13 +687,100 @@ func HandleListUsers(cc *ClientConn, t *Transaction) (res []Transaction, err err
 	}
 
 	var userFields []Field
-	// TODO: make order deterministic
 	for _, acc := range cc.Server.Accounts {
 		userField := acc.MarshalBinary()
 		userFields = append(userFields, NewField(fieldData, userField))
 	}
 
 	res = append(res, cc.NewReply(t, userFields...))
+	return res, err
+}
+
+// HandleUpdateUser is used by the v1.5+ multi-user editor to perform account editing for multiple users at a time.
+// An update can be a mix of these actions:
+// * Create user
+// * Delete user
+// * Modify user (including renaming the account login)
+//
+// The Transaction sent by the client includes one data field per user that was modified.  This data field in turn
+// contains another data field encoded in its payload with a varying number of sub fields depending on which action is
+// performed.  This seems to be the only place in the Hotline protocol where a data field contains another data field.
+func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	for _, field := range t.Fields {
+		subFields, err := ReadFields(field.Data[0:2], field.Data[2:])
+		if err != nil {
+			return res, err
+		}
+
+		if len(subFields) == 1 {
+			login := DecodeUserString(getField(fieldData, &subFields).Data)
+			cc.Server.Logger.Infow("DeleteUser", "login", login)
+
+			if !authorize(cc.Account.Access, accessDeleteUser) {
+				res = append(res, cc.NewErrReply(t, "You are not allowed to delete accounts."))
+				return res, err
+			}
+
+			if err := cc.Server.DeleteUser(login); err != nil {
+				return res, err
+			}
+			continue
+		}
+
+		login := DecodeUserString(getField(fieldUserLogin, &subFields).Data)
+
+		// check if the login exists; if so, we know we are updating an existing user
+		if acc, ok := cc.Server.Accounts[login]; ok {
+			cc.Server.Logger.Infow("UpdateUser", "login", login)
+
+			// account exists, so this is an update action
+			if !authorize(cc.Account.Access, accessModifyUser) {
+				res = append(res, cc.NewErrReply(t, "You are not allowed to modify accounts."))
+				return res, err
+			}
+
+			if getField(fieldUserPassword, &subFields) != nil {
+				newPass := getField(fieldUserPassword, &subFields).Data
+				acc.Password = hashAndSalt(newPass)
+			} else {
+				acc.Password = hashAndSalt([]byte(""))
+			}
+
+			if getField(fieldUserAccess, &subFields) != nil {
+				acc.Access = &getField(fieldUserAccess, &subFields).Data
+			}
+
+			err = cc.Server.UpdateUser(
+				DecodeUserString(getField(fieldData, &subFields).Data),
+				DecodeUserString(getField(fieldUserLogin, &subFields).Data),
+				string(getField(fieldUserName, &subFields).Data),
+				acc.Password,
+				*acc.Access,
+			)
+			if err != nil {
+				return res, err
+			}
+		} else {
+			cc.Server.Logger.Infow("CreateUser", "login", login)
+
+			if !authorize(cc.Account.Access, accessCreateUser) {
+				res = append(res, cc.NewErrReply(t, "You are not allowed to create new accounts."))
+				return res, err
+			}
+
+			err := cc.Server.NewUser(
+				login,
+				string(getField(fieldUserName, &subFields).Data),
+				string(getField(fieldUserPassword, &subFields).Data),
+				getField(fieldUserAccess, &subFields).Data,
+			)
+			if err != nil {
+				return []Transaction{}, err
+			}
+		}
+	}
+
+	res = append(res, cc.NewReply(t))
 	return res, err
 }
 
