@@ -1313,8 +1313,6 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 	fileName := t.GetField(fieldFileName).Data
 	filePath := t.GetField(fieldFilePath).Data
 
-	// 2 bytes
-	// transferOptions := t.GetField(fieldFileTransferOptions).Data
 	resumeData := t.GetField(fieldFileResumeData).Data
 
 	var dataOffset int64
@@ -1353,13 +1351,26 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 		ft.fileResumeData = &frd
 	}
 
+	xferSize := ffo.TransferSize()
+
+	// Optional field for when a HL v1.5+ client requests file preview
+	// Used only for TEXT, JPEG, GIFF, BMP or PICT files
+	// The value will always be 2
+	if t.GetField(fieldFileTransferOptions).Data != nil {
+		ft.options = t.GetField(fieldFileTransferOptions).Data
+		xferSize = ffo.FlatFileDataForkHeader.DataSize[:]
+	}
+
+	cc.Server.mux.Lock()
+	defer cc.Server.mux.Unlock()
 	cc.Server.FileTransfers[data] = ft
+
 	cc.Transfers[FileDownload] = append(cc.Transfers[FileDownload], ft)
 
 	res = append(res, cc.NewReply(t,
 		NewField(fieldRefNum, transactionRef),
 		NewField(fieldWaitingCount, []byte{0x00, 0x00}), // TODO: Implement waiting count
-		NewField(fieldTransferSize, ffo.TransferSize()),
+		NewField(fieldTransferSize, xferSize),
 		NewField(fieldFileSize, ffo.FlatFileDataForkHeader.DataSize[:]),
 	))
 

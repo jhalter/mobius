@@ -688,9 +688,11 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 
 		s.Logger.Infow("File download started", "filePath", fullFilePath, "transactionRef", fileTransfer.ReferenceNumber)
 
-		// Start by sending flat file object to client
-		if _, err := conn.Write(ffo.BinaryMarshal()); err != nil {
-			return err
+		if fileTransfer.options == nil {
+			// Start by sending flat file object to client
+			if _, err := conn.Write(ffo.BinaryMarshal()); err != nil {
+				return err
+			}
 		}
 
 		file, err := FS.Open(fullFilePath)

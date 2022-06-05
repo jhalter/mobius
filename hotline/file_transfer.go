@@ -24,6 +24,7 @@ type FileTransfer struct {
 	BytesSent       int
 	clientID        uint16
 	fileResumeData  *FileResumeData
+	options         []byte
 }
 
 func (ft *FileTransfer) String() string {
@@ -60,7 +61,6 @@ func readFolderUpload(buf []byte) folderUpload {
 
 	return fu
 }
-
 
 func (fu *folderUpload) UnmarshalBinary(b []byte) error {
 	fu.DataSize = [2]byte{b[0], b[1]}
