@@ -649,7 +649,7 @@ func TestHandleGetFileInfo(t *testing.T) {
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
 						NewField(fieldFileName, []byte("testfile.txt")),
-						NewField(fieldFileTypeString, []byte("TEXT")),
+						NewField(fieldFileTypeString, []byte("Text File")),
 						NewField(fieldFileCreatorString, []byte("ttxt")),
 						NewField(fieldFileComment, []byte{}),
 						NewField(fieldFileType, []byte("TEXT")),

@@ -30,7 +30,7 @@ func TestNewFlattenedFileObject(t *testing.T) {
 			want: &flattenedFileObject{
 				FlatFileHeader:                NewFlatFileHeader(),
 				FlatFileInformationForkHeader: FlatFileInformationForkHeader{},
-				FlatFileInformationFork:       NewFlatFileInformationFork("testfile.txt", make([]byte, 8)),
+				FlatFileInformationFork:       NewFlatFileInformationFork("testfile.txt", make([]byte, 8), "", ""),
 				FlatFileDataForkHeader: FlatFileDataForkHeader{
 					ForkType:        [4]byte{0x4d, 0x41, 0x43, 0x52}, // DATA
 					CompressionType: [4]byte{0, 0, 0, 0},

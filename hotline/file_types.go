@@ -1,10 +1,8 @@
 package hotline
 
 type fileType struct {
-	TypeCode       string // 4 byte type code used in file transfers
-	CreatorCode    string // 4 byte creator code used in file transfers
-	CreatorString  string // variable length string used in file get info
-	FileTypeString string // variable length string used in file get info
+	TypeCode    string // 4 byte type code used in file transfers
+	CreatorCode string // 4 byte creator code used in file transfers
 }
 
 var defaultFileType = fileType{
@@ -61,4 +59,13 @@ var fileTypes = map[string]fileType{
 		TypeCode:    "HTft",
 		CreatorCode: "HTLC",
 	},
+}
+
+// A small number of type codes are displayed in the GetInfo window with a friendly name instead of the 4 letter code
+var friendlyCreatorNames = map[string]string{
+	"fldr": "Folder",
+	"flda": "Folder Alias",
+	"HTft": "Incomplete File",
+	"SIT!": "StuffIt Archive",
+	"TEXT": "Text File",
 }

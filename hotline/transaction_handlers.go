@@ -419,7 +419,7 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 
 	res = append(res, cc.NewReply(t,
 		NewField(fieldFileName, fileName),
-		NewField(fieldFileTypeString, ffo.FlatFileInformationFork.TypeSignature),
+		NewField(fieldFileTypeString, ffo.FlatFileInformationFork.friendlyType()),
 		NewField(fieldFileCreatorString, ffo.FlatFileInformationFork.CreatorSignature),
 		NewField(fieldFileComment, ffo.FlatFileInformationFork.Comment),
 		NewField(fieldFileType, ffo.FlatFileInformationFork.TypeSignature),

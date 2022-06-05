@@ -55,21 +55,29 @@ type FlatFileInformationFork struct {
 	Comment          []byte // File comment
 }
 
-func NewFlatFileInformationFork(fileName string, modifyTime []byte) FlatFileInformationFork {
+func NewFlatFileInformationFork(fileName string, modifyTime []byte, typeSignature string, creatorSignature string) FlatFileInformationFork {
 	return FlatFileInformationFork{
-		Platform:         []byte("AMAC"),                                     // TODO: Remove hardcode to support "AWIN" Platform (maybe?)
-		TypeSignature:    []byte(fileTypeFromFilename(fileName).TypeCode),    // TODO: Don't infer types from filename
-		CreatorSignature: []byte(fileTypeFromFilename(fileName).CreatorCode), // TODO: Don't infer types from filename
-		Flags:            []byte{0, 0, 0, 0},                                 // TODO: What is this?
-		PlatformFlags:    []byte{0, 0, 1, 0},                                 // TODO: What is this?
-		RSVD:             make([]byte, 32),                                   // Unimplemented in Hotline Protocol
-		CreateDate:       modifyTime,                                         // some filesystems don't support createTime
+		Platform:         []byte("AMAC"),           // TODO: Remove hardcode to support "AWIN" Platform (maybe?)
+		TypeSignature:    []byte(typeSignature),    // TODO: Don't infer types from filename
+		CreatorSignature: []byte(creatorSignature), // TODO: Don't infer types from filename
+		Flags:            []byte{0, 0, 0, 0},       // TODO: What is this?
+		PlatformFlags:    []byte{0, 0, 1, 0},       // TODO: What is this?
+		RSVD:             make([]byte, 32),         // Unimplemented in Hotline Protocol
+		CreateDate:       modifyTime,               // some filesystems don't support createTime
 		ModifyDate:       modifyTime,
 		NameScript:       make([]byte, 2), // TODO: What is this?
 		Name:             []byte(fileName),
 		CommentSize:      []byte{0, 0},
 		Comment:          []byte{}, // TODO: implement (maybe?)
 	}
+}
+
+func (ffif *FlatFileInformationFork) friendlyType() []byte {
+
+	if name, ok := friendlyCreatorNames[string(ffif.TypeSignature)]; ok {
+		return []byte(name)
+	}
+	return ffif.CreatorSignature
 }
 
 // DataSize calculates the size of the flat file information fork, which is
@@ -195,9 +203,11 @@ func NewFlattenedFileObject(fileRoot string, filePath, fileName []byte, dataOffs
 
 	mTime := toHotlineTime(fileInfo.ModTime())
 
+	ft, _ := fileTypeFromInfo(fileInfo)
+
 	return &flattenedFileObject{
 		FlatFileHeader:          NewFlatFileHeader(),
-		FlatFileInformationFork: NewFlatFileInformationFork(string(fileName), mTime),
+		FlatFileInformationFork: NewFlatFileInformationFork(string(fileName), mTime, ft.TypeCode, ft.CreatorCode),
 		FlatFileDataForkHeader: FlatFileDataForkHeader{
 			ForkType:        [4]byte{0x44, 0x41, 0x54, 0x41}, // "DATA"
 			CompressionType: [4]byte{},

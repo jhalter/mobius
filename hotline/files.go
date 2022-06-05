@@ -27,6 +27,17 @@ func fileTypeFromFilename(fn string) fileType {
 	return defaultFileType
 }
 
+func fileTypeFromInfo(info os.FileInfo) (ft fileType, err error) {
+	if info.IsDir() {
+		ft.CreatorCode = "n/a "
+		ft.TypeCode = "fldr"
+	} else {
+		ft = fileTypeFromFilename(info.Name())
+	}
+
+	return ft, nil
+}
+
 func getFileNameList(filePath string) (fields []Field, err error) {
 	files, err := ioutil.ReadDir(filePath)
 	if err != nil {
