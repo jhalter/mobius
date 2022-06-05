@@ -21,6 +21,7 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT, os.Interrupt)
 
+	configDir := flag.String("config", defaultConfigPath(), "Path to config root")
 	version := flag.Bool("version", false, "print version and exit")
 	logLevel := flag.String("log-level", "info", "Log level")
 	logFile := flag.String("log-file", "", "output logs to file")
@@ -70,9 +71,7 @@ func main() {
 		cancelRoot()
 	}()
 
-	cfgPath := defaultConfigPath()
-
-	client := hotline.NewClient(cfgPath, logger)
+	client := hotline.NewClient(*configDir, logger)
 	client.DebugBuf = db
 	client.UI.Start()
 
