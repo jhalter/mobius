@@ -45,26 +45,47 @@ func getFileNameList(filePath string) (fields []Field, err error) {
 	}
 
 	for _, file := range files {
-		var fileType []byte
 		var fnwi FileNameWithInfo
+
 		fileCreator := make([]byte, 4)
-		if !file.IsDir() {
-			fileType = []byte(fileTypeFromFilename(file.Name()).TypeCode)
-			fileCreator = []byte(fileTypeFromFilename(file.Name()).CreatorCode)
 
-			binary.BigEndian.PutUint32(fnwi.FileSize[:], uint32(file.Size()))
-			copy(fnwi.Type[:], fileType[:])
-			copy(fnwi.Creator[:], fileCreator[:])
-		} else {
-			fileType = []byte("fldr")
+		if file.Mode()&os.ModeSymlink != 0 {
+			resolvedPath, err := os.Readlink(filePath + "/" + file.Name())
+			if err != nil {
+				return fields, err
+			}
 
+			rFile, err := os.Stat(filePath + "/" + resolvedPath)
+			if err != nil {
+				return fields, err
+			}
+
+			if rFile.IsDir() {
+				dir, err := ioutil.ReadDir(filePath + "/" + file.Name())
+				if err != nil {
+					return fields, err
+				}
+				binary.BigEndian.PutUint32(fnwi.FileSize[:], uint32(len(dir)))
+				copy(fnwi.Type[:], []byte("fldr")[:])
+				copy(fnwi.Creator[:], fileCreator[:])
+			} else {
+				binary.BigEndian.PutUint32(fnwi.FileSize[:], uint32(rFile.Size()))
+				copy(fnwi.Type[:], []byte(fileTypeFromFilename(rFile.Name()).TypeCode)[:])
+				copy(fnwi.Creator[:], []byte(fileTypeFromFilename(rFile.Name()).CreatorCode)[:])
+			}
+
+		} else if file.IsDir() {
 			dir, err := ioutil.ReadDir(filePath + "/" + file.Name())
 			if err != nil {
 				return fields, err
 			}
 			binary.BigEndian.PutUint32(fnwi.FileSize[:], uint32(len(dir)))
-			copy(fnwi.Type[:], fileType[:])
+			copy(fnwi.Type[:], []byte("fldr")[:])
 			copy(fnwi.Creator[:], fileCreator[:])
+		} else {
+			binary.BigEndian.PutUint32(fnwi.FileSize[:], uint32(file.Size()))
+			copy(fnwi.Type[:], []byte(fileTypeFromFilename(file.Name()).TypeCode)[:])
+			copy(fnwi.Creator[:], []byte(fileTypeFromFilename(file.Name()).CreatorCode)[:])
 		}
 
 		strippedName := strings.Replace(file.Name(), ".incomplete", "", -1)
