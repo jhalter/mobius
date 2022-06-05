@@ -646,28 +646,42 @@ const dlFldrActionNextFile = 3
 // handleFileTransfer receives a client net.Conn from the file transfer server, performs the requested transfer type, then closes the connection
 func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 	defer func() {
+
 		if err := conn.Close(); err != nil {
 			s.Logger.Errorw("error closing connection", "error", err)
 		}
 	}()
 
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("stacktrace from panic: \n" + string(debug.Stack()))
+			s.Logger.Errorw("PANIC", "err", r, "trace", string(debug.Stack()))
+		}
+	}()
+
 	txBuf := make([]byte, 16)
-	_, err := conn.Read(txBuf)
-	if err != nil {
+	if _, err := io.ReadFull(conn, txBuf); err != nil {
 		return err
 	}
 
 	var t transfer
-	_, err = t.Write(txBuf)
-	if err != nil {
+	if _, err := t.Write(txBuf); err != nil {
 		return err
 	}
 
 	transferRefNum := binary.BigEndian.Uint32(t.ReferenceNumber[:])
-	fileTransfer := s.FileTransfers[transferRefNum]
+	defer func() {
+		s.mux.Lock()
+		delete(s.FileTransfers, transferRefNum)
+		s.mux.Unlock()
+	}()
 
-	// delete single use transferRefNum
-	delete(s.FileTransfers, transferRefNum)
+	s.mux.Lock()
+	fileTransfer, ok := s.FileTransfers[transferRefNum]
+	s.mux.Unlock()
+	if !ok {
+		return errors.New("invalid transaction ID")
+	}
 
 	switch fileTransfer.Type {
 	case FileDownload:

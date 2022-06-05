@@ -1521,12 +1521,14 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	transactionRef := cc.Server.NewTransactionRef()
 	data := binary.BigEndian.Uint32(transactionRef)
 
+	cc.Server.mux.Lock()
 	cc.Server.FileTransfers[data] = &FileTransfer{
 		FileName:        fileName,
 		FilePath:        filePath,
 		ReferenceNumber: transactionRef,
 		Type:            FileUpload,
 	}
+	cc.Server.mux.Unlock()
 
 	replyT := cc.NewReply(t, NewField(fieldRefNum, transactionRef))
 

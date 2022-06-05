@@ -151,7 +151,7 @@ func (cc *ClientConn) Authorize(access int) bool {
 }
 
 // Disconnect notifies other clients that a client has disconnected
-func (cc ClientConn) Disconnect() {
+func (cc *ClientConn) Disconnect() {
 	cc.Server.mux.Lock()
 	defer cc.Server.mux.Unlock()
 
@@ -165,7 +165,7 @@ func (cc ClientConn) Disconnect() {
 }
 
 // notifyOthers sends transaction t to other clients connected to the server
-func (cc ClientConn) notifyOthers(t Transaction) {
+func (cc *ClientConn) notifyOthers(t Transaction) {
 	for _, c := range sortedClients(cc.Server.Clients) {
 		if c.ID != cc.ID && c.Agreed {
 			t.clientID = c.ID

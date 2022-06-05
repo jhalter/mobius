@@ -214,7 +214,7 @@ func ReadFields(paramCount []byte, buf []byte) ([]Field, error) {
 	return fields, nil
 }
 
-func (t Transaction) MarshalBinary() (data []byte, err error) {
+func (t *Transaction) MarshalBinary() (data []byte, err error) {
 	payloadSize := t.Size()
 
 	fieldCount := make([]byte, 2)
@@ -238,7 +238,7 @@ func (t Transaction) MarshalBinary() (data []byte, err error) {
 }
 
 // Size returns the total size of the transaction payload
-func (t Transaction) Size() []byte {
+func (t *Transaction) Size() []byte {
 	bs := make([]byte, 4)
 
 	fieldSize := 0
@@ -251,7 +251,7 @@ func (t Transaction) Size() []byte {
 	return bs
 }
 
-func (t Transaction) GetField(id int) Field {
+func (t *Transaction) GetField(id int) Field {
 	for _, field := range t.Fields {
 		if id == int(binary.BigEndian.Uint16(field.ID)) {
 			return field
