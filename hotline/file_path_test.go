@@ -41,6 +41,17 @@ func TestFilePath_UnmarshalBinary(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "handles empty data payload",
+			args: args{b: []byte{
+				0x00, 0x00,
+			}},
+			want: FilePath{
+				ItemCount: [2]byte{0x00, 0x00},
+				Items:     []FilePathItem(nil),
+			},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -78,7 +89,7 @@ func Test_readPath(t *testing.T) {
 					0x61, 0x61, 0x61,
 				},
 			},
-			want: "",
+			want:    "",
 			wantErr: true,
 		},
 		{
@@ -87,7 +98,6 @@ func Test_readPath(t *testing.T) {
 				fileRoot: "/usr/local/var/mobius/Files",
 				filePath: nil,
 				fileName: []byte("foo"),
-
 			},
 			want: "/usr/local/var/mobius/Files/foo",
 		},

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"io"
 	"path"
 	"strings"
 )
@@ -19,37 +20,39 @@ type FilePathItem struct {
 	Name []byte
 }
 
-func NewFilePathItem(b []byte) FilePathItem {
-	return FilePathItem{
-		Len:  b[2],
-		Name: b[3:],
-	}
-}
-
 type FilePath struct {
 	ItemCount [2]byte
 	Items     []FilePathItem
 }
 
-const minFilePathLen = 2
-
 func (fp *FilePath) UnmarshalBinary(b []byte) error {
-	if b == nil {
-		return nil
-	}
-	if len(b) < minFilePathLen {
-		return errors.New("insufficient bytes")
-	}
-	err := binary.Read(bytes.NewReader(b[0:2]), binary.BigEndian, &fp.ItemCount)
-	if err != nil {
+	reader := bytes.NewReader(b)
+	err := binary.Read(reader, binary.BigEndian, &fp.ItemCount)
+	if err != nil && !errors.Is(err, io.EOF) {
 		return err
 	}
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
 
-	pathData := b[2:]
 	for i := uint16(0); i < fp.Len(); i++ {
-		segLen := pathData[2]
-		fp.Items = append(fp.Items, NewFilePathItem(pathData[:segLen+3]))
-		pathData = pathData[3+segLen:]
+		// skip two bytes for the file path delimiter
+		_, _ = reader.Seek(2, io.SeekCurrent)
+
+		// read the length of the next pathItem
+		segLen, err := reader.ReadByte()
+		if err != nil {
+			return err
+		}
+
+		pBytes := make([]byte, segLen)
+
+		_, err = reader.Read(pBytes)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return err
+		}
+
+		fp.Items = append(fp.Items, FilePathItem{Len: segLen, Name: pBytes})
 	}
 
 	return nil

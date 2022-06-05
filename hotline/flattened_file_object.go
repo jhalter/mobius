@@ -110,19 +110,9 @@ type FlatFileDataForkHeader struct {
 }
 
 func (ffif *FlatFileInformationFork) UnmarshalBinary(b []byte) error {
-
 	nameSize := b[70:72]
 	bs := binary.BigEndian.Uint16(nameSize)
-
 	nameEnd := 72 + bs
-
-	commentSize := b[nameEnd : nameEnd+2]
-	commentLen := binary.BigEndian.Uint16(commentSize)
-
-	commentStartPos := int(nameEnd) + 2
-	commentEndPos := int(nameEnd) + 2 + int(commentLen)
-
-	comment := b[commentStartPos:commentEndPos]
 
 	ffif.Platform = b[0:4]
 	ffif.TypeSignature = b[4:8]
@@ -135,8 +125,16 @@ func (ffif *FlatFileInformationFork) UnmarshalBinary(b []byte) error {
 	ffif.NameScript = b[68:70]
 	ffif.NameSize = b[70:72]
 	ffif.Name = b[72:nameEnd]
-	ffif.CommentSize = b[nameEnd : nameEnd+2]
-	ffif.Comment = comment
+
+	if len(b) > int(nameEnd) {
+		ffif.CommentSize = b[nameEnd : nameEnd+2]
+		commentLen := binary.BigEndian.Uint16(ffif.CommentSize)
+
+		commentStartPos := int(nameEnd) + 2
+		commentEndPos := int(nameEnd) + 2 + int(commentLen)
+
+		ffif.Comment = b[commentStartPos:commentEndPos]
+	}
 
 	return nil
 }
