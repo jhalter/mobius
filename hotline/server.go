@@ -742,11 +742,27 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 		}
 	case FileUpload:
 		destinationFile := s.Config.FileRoot + ReadFilePath(fileTransfer.FilePath) + "/" + string(fileTransfer.FileName)
-		tmpFile := destinationFile + ".incomplete"
 
-		file, err := effectiveFile(destinationFile)
+		var file *os.File
+
+		// A file upload has three possible cases:
+		// 1) Upload a new file
+		// 2) Resume a partially transferred file
+		// 3) Replace a fully uploaded file
+		// Unfortunately we have to infer which case applies by inspecting what is already on the file system
+
+		// 1) Check for existing file:
+		_, err := os.Stat(destinationFile)
+		if err == nil {
+			// If found, that means this upload is intended to replace the file
+			if err = os.Remove(destinationFile); err != nil {
+				return err
+			}
+			file, err = os.Create(destinationFile + incompleteFileSuffix)
+		}
 		if errors.Is(err, fs.ErrNotExist) {
-			file, err = FS.Create(tmpFile)
+			// If not found, open or create a new incomplete file
+			file, err = os.OpenFile(destinationFile+incompleteFileSuffix, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 			if err != nil {
 				return err
 			}

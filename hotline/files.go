@@ -180,7 +180,7 @@ func effectiveFile(filePath string) (*os.File, error) {
 	}
 
 	if errors.Is(err, fs.ErrNotExist) {
-		file, err = os.OpenFile(filePath+incompleteFileSuffix, os.O_APPEND|os.O_WRONLY, 0644)
+		file, err = os.OpenFile(filePath+incompleteFileSuffix, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
 			return nil, err
 		}
