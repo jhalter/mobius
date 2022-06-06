@@ -5,6 +5,7 @@ FileRoot: Files/
 EnableTrackerRegistration: false
 Trackers:
 - hltracker.com:5499
+- tracker.preterhuman.net:5499
 NewsDelimiter: ""
 NewsDateFormat: ""
 MaxDownloads: 0
