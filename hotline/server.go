@@ -478,6 +478,15 @@ const (
 	minTransactionLen = 22 // minimum length of any transaction
 )
 
+// dontPanic recovers and logs panics instead of crashing
+// TODO: remove this after known issues are fixed
+func dontPanic(logger *zap.SugaredLogger) {
+	if r := recover(); r != nil {
+		fmt.Println("stacktrace from panic: \n" + string(debug.Stack()))
+		logger.Errorw("PANIC", "err", r, "trace", string(debug.Stack()))
+	}
+}
+
 // handleNewConnection takes a new net.Conn and performs the initial login sequence
 func (s *Server) handleNewConnection(conn net.Conn) error {
 	handshakeBuf := make([]byte, 12) // handshakes are always 12 bytes in length
@@ -503,14 +512,9 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 	}
 
 	c := s.NewClientConn(conn)
+
 	defer c.Disconnect()
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("stacktrace from panic: \n" + string(debug.Stack()))
-			c.Server.Logger.Errorw("PANIC", "err", r, "trace", string(debug.Stack()))
-			c.Disconnect()
-		}
-	}()
+	defer dontPanic(s.Logger)
 
 	encodedLogin := clientLogin.GetField(fieldUserLogin).Data
 	encodedPassword := clientLogin.GetField(fieldUserPassword).Data
@@ -652,12 +656,7 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 		}
 	}()
 
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("stacktrace from panic: \n" + string(debug.Stack()))
-			s.Logger.Errorw("PANIC", "err", r, "trace", string(debug.Stack()))
-		}
-	}()
+	defer dontPanic(s.Logger)
 
 	txBuf := make([]byte, 16)
 	if _, err := io.ReadFull(conn, txBuf); err != nil {
