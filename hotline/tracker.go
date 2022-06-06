@@ -36,7 +36,7 @@ func (tr *TrackerRegistration) Payload() []byte {
 	)
 }
 
-func register(tracker string, tr TrackerRegistration) error {
+func register(tracker string, tr *TrackerRegistration) error {
 	conn, err := net.Dial("udp", tracker)
 	if err != nil {
 		return err

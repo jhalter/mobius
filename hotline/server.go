@@ -236,9 +236,15 @@ func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredL
 	*server.NextGuestID = 1
 
 	if server.Config.EnableTrackerRegistration {
+		server.Logger.Infow(
+			"Tracker registration enabled",
+			"frequency", fmt.Sprintf("%vs", trackerUpdateFrequency),
+			"trackers", server.Config.Trackers,
+		)
+
 		go func() {
 			for {
-				tr := TrackerRegistration{
+				tr := &TrackerRegistration{
 					Port:        []byte{0x15, 0x7c},
 					UserCount:   server.userCount(),
 					PassID:      server.TrackerPassID,
@@ -246,11 +252,10 @@ func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredL
 					Description: server.Config.Description,
 				}
 				for _, t := range server.Config.Trackers {
-					server.Logger.Infof("Registering with tracker %v", t)
-
 					if err := register(t, tr); err != nil {
 						server.Logger.Errorw("unable to register with tracker %v", "error", err)
 					}
+					server.Logger.Infow("Sent Tracker registration", "data", tr)
 				}
 
 				time.Sleep(trackerUpdateFrequency * time.Second)
