@@ -7,7 +7,9 @@ import (
 	"github.com/jhalter/mobius/hotline"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"math/rand"
 	"os"
+	"time"
 )
 
 const (
@@ -16,6 +18,8 @@ const (
 )
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
+
 	ctx, cancelRoot := context.WithCancel(context.Background())
 
 	basePort := flag.Int("bind", defaultPort, "Bind address and port")
