@@ -1,5 +1,5 @@
 Name: My Hotline server
-Description: A default configured Hotline server running Mobius v0.0.1
+Description: A default configured Hotline server running Mobius
 BannerID: 0
 FileRoot: Files/
 EnableTrackerRegistration: false
