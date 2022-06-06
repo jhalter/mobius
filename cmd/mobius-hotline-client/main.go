@@ -97,12 +97,15 @@ var zapLogLevel = map[string]zapcore.Level{
 }
 
 func defaultConfigPath() (cfgPath string) {
-	os := runtime.GOOS
-	switch os {
+	switch runtime.GOOS {
 	case "windows":
 		cfgPath = "mobius-client-config.yaml"
 	case "darwin":
-		cfgPath = "/usr/local/etc/mobius-client-config.yaml"
+		if _, err := os.Stat("/usr/local/etc/mobius-client-config.yaml"); err == nil {
+			cfgPath = "/usr/local/etc/mobius-client-config.yaml"
+		} else if _, err := os.Stat("/opt/homebrew/etc/mobius-client-config.yaml"); err == nil {
+			cfgPath = "/opt/homebrew/etc/mobius-client-config.yaml"
+		}
 	case "linux":
 		cfgPath = "/usr/local/etc/mobius-client-config.yaml"
 	default:

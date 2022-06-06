@@ -103,8 +103,7 @@ func NewClient(cfgPath string, logger *zap.SugaredLogger) *Client {
 
 	prefs, err := readConfig(cfgPath)
 	if err != nil {
-		fmt.Printf("unable to read config file %s", cfgPath)
-		os.Exit(1)
+		logger.Fatal(fmt.Sprintf("unable to read config file %s\n", cfgPath))
 	}
 	c.pref = prefs
 
