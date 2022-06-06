@@ -1411,7 +1411,9 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 		ReferenceNumber: transactionRef,
 		Type:            FolderDownload,
 	}
+	cc.Server.mux.Lock()
 	cc.Server.FileTransfers[data] = fileTransfer
+	cc.Server.mux.Unlock()
 	cc.Transfers[FolderDownload] = append(cc.Transfers[FolderDownload], fileTransfer)
 
 	var fp FilePath

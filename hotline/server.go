@@ -489,15 +489,18 @@ func dontPanic(logger *zap.SugaredLogger) {
 
 // handleNewConnection takes a new net.Conn and performs the initial login sequence
 func (s *Server) handleNewConnection(conn net.Conn) error {
-	handshakeBuf := make([]byte, 12) // handshakes are always 12 bytes in length
-	if _, err := conn.Read(handshakeBuf); err != nil {
+	defer dontPanic(s.Logger)
+
+	handshakeBuf := make([]byte, 12)
+	if _, err := io.ReadFull(conn, handshakeBuf); err != nil {
 		return err
 	}
-	if err := Handshake(conn, handshakeBuf[:12]); err != nil {
+	if err := Handshake(conn, handshakeBuf); err != nil {
 		return err
 	}
 
 	buf := make([]byte, 1024)
+	// TODO: fix potential short read with io.ReadFull
 	readLen, err := conn.Read(buf)
 	if readLen < minTransactionLen {
 		return err
@@ -512,9 +515,7 @@ func (s *Server) handleNewConnection(conn net.Conn) error {
 	}
 
 	c := s.NewClientConn(conn)
-
 	defer c.Disconnect()
-	defer dontPanic(s.Logger)
 
 	encodedLogin := clientLogin.GetField(fieldUserLogin).Data
 	encodedPassword := clientLogin.GetField(fieldUserPassword).Data
@@ -798,7 +799,7 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 		s.Logger.Infow("Start folder download", "path", fullFilePath, "ReferenceNumber", fileTransfer.ReferenceNumber)
 
 		nextAction := make([]byte, 2)
-		if _, err := conn.Read(nextAction); err != nil {
+		if _, err := io.ReadFull(conn, nextAction); err != nil {
 			return err
 		}
 
@@ -824,7 +825,7 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 			}
 
 			// Read the client's Next Action request
-			if _, err := conn.Read(nextAction); err != nil {
+			if _, err := io.ReadFull(conn, nextAction); err != nil {
 				return err
 			}
 
@@ -837,13 +838,13 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 				// client asked to resume this file
 				var frd FileResumeData
 				// get size of resumeData
-				if _, err := conn.Read(nextAction); err != nil {
+				if _, err := io.ReadFull(conn, nextAction); err != nil {
 					return err
 				}
 
 				resumeDataLen := binary.BigEndian.Uint16(nextAction)
 				resumeDataBytes := make([]byte, resumeDataLen)
-				if _, err := conn.Read(resumeDataBytes); err != nil {
+				if _, err := io.ReadFull(conn, resumeDataBytes); err != nil {
 					return err
 				}
 
@@ -920,7 +921,7 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 			// TODO: optionally send resource fork header and resource fork data
 
 			// Read the client's Next Action request.  This is always 3, I think?
-			if _, err := conn.Read(nextAction); err != nil {
+			if _, err := io.ReadFull(conn, nextAction); err != nil {
 				return err
 			}
 
@@ -956,7 +957,7 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 		readBuffer := make([]byte, 1024)
 
 		for i := 0; i < fileTransfer.ItemCount(); i++ {
-
+			// TODO: fix potential short read with io.ReadFull
 			_, err := conn.Read(readBuffer)
 			if err != nil {
 				return err
@@ -1034,7 +1035,7 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 						return err
 					}
 
-					if _, err := conn.Read(fileSize); err != nil {
+					if _, err := io.ReadFull(conn, fileSize); err != nil {
 						return err
 					}
 
