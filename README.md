@@ -66,7 +66,7 @@ To run the Mobius server from Docker with a local directory mounted for config a
 1. Clone this repo: `git clone https://github.com/jhalter/mobius.git`
 2. Copy the config dir somewhere `cp -r cmd/mobius-hotline-server/mobius/config ~/mobius-config` 
 4. Run the image:
-    `docker run -p 5500:5500 -p 5501:5501 -v ~/mobius-config:/usr/local/var/mobius/config jhalter/mobius-hotline-server:0.3.0`
+    `docker run -p 5500:5500 -p 5501:5501 -v ~/mobius-config:/usr/local/var/mobius/config jhalter/mobius-hotline-server:latest`
 
 
 ### Build from source
