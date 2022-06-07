@@ -86,6 +86,10 @@ func getFileNameList(filePath string) (fields []Field, err error) {
 			copy(fnwi.Type[:], []byte("fldr")[:])
 			copy(fnwi.Creator[:], fileCreator[:])
 		} else {
+			// the Hotline protocol does not support file sizes > 4GiB due to the 4 byte field size, so skip them
+			if file.Size() > 4294967296 {
+				continue
+			}
 			binary.BigEndian.PutUint32(fnwi.FileSize[:], uint32(file.Size()))
 			copy(fnwi.Type[:], []byte(fileTypeFromFilename(file.Name()).TypeCode)[:])
 			copy(fnwi.Creator[:], []byte(fileTypeFromFilename(file.Name()).CreatorCode)[:])
