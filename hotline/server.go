@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/go-playground/validator/v10"
 	"go.uber.org/zap"
 	"io"
 	"io/fs"
@@ -474,6 +475,12 @@ func (s *Server) loadConfig(path string) error {
 
 	decoder := yaml.NewDecoder(fh)
 	err = decoder.Decode(s.Config)
+	if err != nil {
+		return err
+	}
+
+	validate := validator.New()
+	err = validate.Struct(s.Config)
 	if err != nil {
 		return err
 	}
