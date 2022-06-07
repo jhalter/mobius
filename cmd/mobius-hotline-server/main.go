@@ -9,12 +9,12 @@ import (
 	"go.uber.org/zap/zapcore"
 	"math/rand"
 	"os"
+	"runtime"
 	"time"
 )
 
 const (
-	defaultConfigPath = "/usr/local/var/mobius/config/" // matches Homebrew default config location
-	defaultPort       = 5500
+	defaultPort = 5500
 )
 
 func main() {
@@ -23,7 +23,7 @@ func main() {
 	ctx, cancelRoot := context.WithCancel(context.Background())
 
 	basePort := flag.Int("bind", defaultPort, "Bind address and port")
-	configDir := flag.String("config", defaultConfigPath, "Path to config root")
+	configDir := flag.String("config", defaultConfigPath(), "Path to config root")
 	version := flag.Bool("version", false, "print version and exit")
 	logLevel := flag.String("log-level", "info", "Log level")
 	flag.Parse()
@@ -76,4 +76,23 @@ var zapLogLevel = map[string]zapcore.Level{
 	"info":  zap.InfoLevel,
 	"warn":  zap.WarnLevel,
 	"error": zap.ErrorLevel,
+}
+
+func defaultConfigPath() (cfgPath string) {
+	switch runtime.GOOS {
+	case "windows":
+		cfgPath = "config"
+	case "darwin":
+		if _, err := os.Stat("/usr/local/var/mobius/config/"); err == nil {
+			cfgPath = "/usr/local/var/mobius/config/"
+		} else if _, err := os.Stat("/opt/homebrew/var/mobius/config"); err == nil {
+			cfgPath = "/opt/homebrew/var/mobius/config/"
+		}
+	case "linux":
+		cfgPath = "/usr/local/var/mobius/config/"
+	default:
+		fmt.Printf("unsupported OS")
+	}
+
+	return cfgPath
 }
