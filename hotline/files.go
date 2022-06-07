@@ -56,6 +56,9 @@ func getFileNameList(filePath string) (fields []Field, err error) {
 			}
 
 			rFile, err := os.Stat(filePath + "/" + resolvedPath)
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
 			if err != nil {
 				return fields, err
 			}
