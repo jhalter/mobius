@@ -65,7 +65,12 @@ type PrivateChat struct {
 }
 
 func (s *Server) ListenAndServe(ctx context.Context, cancelRoot context.CancelFunc) error {
-	s.Logger.Infow("Hotline server started", "version", VERSION)
+	s.Logger.Infow("Hotline server started",
+		"version", VERSION,
+		"API port", fmt.Sprintf(":%v", s.Port),
+		"Transfer port", fmt.Sprintf(":%v", s.Port+1),
+	)
+
 	var wg sync.WaitGroup
 
 	wg.Add(1)
@@ -79,13 +84,7 @@ func (s *Server) ListenAndServe(ctx context.Context, cancelRoot context.CancelFu
 	return nil
 }
 
-func (s *Server) APIPort() int {
-	return s.APIListener.Addr().(*net.TCPAddr).Port
-}
-
 func (s *Server) ServeFileTransfers(ln net.Listener) error {
-	s.Logger.Infow("Hotline file transfer server started", "Addr", fmt.Sprintf(":%v", s.Port+1))
-
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -138,7 +137,6 @@ func (s *Server) sendTransaction(t Transaction) error {
 }
 
 func (s *Server) Serve(ctx context.Context, cancelRoot context.CancelFunc, ln net.Listener) error {
-	s.Logger.Infow("Hotline server started", "Addr", fmt.Sprintf(":%v", s.Port))
 
 	for {
 		conn, err := ln.Accept()
@@ -195,11 +193,7 @@ func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredL
 	}
 	server.APIListener = ln
 
-	if netPort != 0 {
-		netPort += 1
-	}
-
-	ln2, err := net.Listen("tcp", fmt.Sprintf("%s:%v", netInterface, netPort))
+	ln2, err := net.Listen("tcp", fmt.Sprintf("%s:%v", netInterface, netPort+1))
 	server.FileListener = ln2
 	if err != nil {
 		return nil, err
@@ -210,7 +204,6 @@ func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredL
 		return nil, err
 	}
 
-	server.Logger.Debugw("Loading Agreement", "path", configDir+agreementFile)
 	if server.Agreement, err = os.ReadFile(configDir + agreementFile); err != nil {
 		return nil, err
 	}

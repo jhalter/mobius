@@ -301,7 +301,7 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 	msg := t.GetField(fieldData)
 	ID := t.GetField(fieldUserID)
 
-	reply := *NewTransaction(
+	reply := NewTransaction(
 		tranServerMsg,
 		&ID.Data,
 		NewField(fieldData, msg.Data),
@@ -316,12 +316,12 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 		reply.Fields = append(reply.Fields, NewField(fieldQuotingMsg, t.GetField(fieldQuotingMsg).Data))
 	}
 
-	res = append(res, reply)
+	res = append(res, *reply)
 
 	id, _ := byteToInt(ID.Data)
-	otherClient := cc.Server.Clients[uint16(id)]
-	if otherClient == nil {
-		return res, errors.New("ohno")
+	otherClient, ok := cc.Server.Clients[uint16(id)]
+	if !ok {
+		return res, errors.New("invalid client ID")
 	}
 
 	// Respond with auto reply if other client has it enabled

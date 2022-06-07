@@ -2136,3 +2136,121 @@ func TestHandleDisconnectUser(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleSendInstantMsg(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "when client 1 sends a message to client 2",
+			args: args{
+				cc: &ClientConn{
+					ID:       &[]byte{0, 1},
+					UserName: []byte("User1"),
+					Server: &Server{
+						Clients: map[uint16]*ClientConn{
+							uint16(2): {
+								AutoReply: []byte(nil),
+							},
+						},
+					},
+				},
+				t: NewTransaction(
+					tranSendInstantMsg,
+					&[]byte{0, 1},
+					NewField(fieldData, []byte("hai")),
+					NewField(fieldUserID, []byte{0, 2}),
+				),
+			},
+			wantRes: []Transaction{
+				*NewTransaction(
+					tranServerMsg,
+					&[]byte{0, 2},
+					NewField(fieldData, []byte("hai")),
+					NewField(fieldUserName, []byte("User1")),
+					NewField(fieldUserID, []byte{0, 1}),
+					NewField(fieldOptions, []byte{0, 1}),
+				),
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0x0, 0x6c},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields:    []Field(nil),
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "when client 2 has autoreply enabled",
+			args: args{
+				cc: &ClientConn{
+					ID:       &[]byte{0, 1},
+					UserName: []byte("User1"),
+					Server: &Server{
+						Clients: map[uint16]*ClientConn{
+							uint16(2): {
+								ID:        &[]byte{0, 2},
+								UserName:  []byte("User2"),
+								AutoReply: []byte("autohai"),
+							},
+						},
+					},
+				},
+				t: NewTransaction(
+					tranSendInstantMsg,
+					&[]byte{0, 1},
+					NewField(fieldData, []byte("hai")),
+					NewField(fieldUserID, []byte{0, 2}),
+				),
+			},
+			wantRes: []Transaction{
+				*NewTransaction(
+					tranServerMsg,
+					&[]byte{0, 2},
+					NewField(fieldData, []byte("hai")),
+					NewField(fieldUserName, []byte("User1")),
+					NewField(fieldUserID, []byte{0, 1}),
+					NewField(fieldOptions, []byte{0, 1}),
+				),
+				*NewTransaction(
+					tranServerMsg,
+					&[]byte{0, 1},
+					NewField(fieldData, []byte("autohai")),
+					NewField(fieldUserName, []byte("User2")),
+					NewField(fieldUserID, []byte{0, 2}),
+					NewField(fieldOptions, []byte{0, 1}),
+				),
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0x0, 0x6c},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields:    []Field(nil),
+				},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes, err := HandleSendInstantMsg(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleSendInstantMsg(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
+
+			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}

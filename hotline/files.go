@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+const incompleteFileSuffix = ".incomplete"
+
 func downcaseFileExtension(filename string) string {
 	splitStr := strings.Split(filename, ".")
 	ext := strings.ToLower(
@@ -176,8 +178,6 @@ func EncodeFilePath(filePath string) []byte {
 
 	return bytes
 }
-
-const incompleteFileSuffix = ".incomplete"
 
 // effectiveFile wraps os.Open to check for the presence of a partial file transfer as a fallback
 func effectiveFile(filePath string) (*os.File, error) {
