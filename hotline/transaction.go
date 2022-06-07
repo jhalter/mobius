@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/jhalter/mobius/concat"
 	"math/rand"
-	"net"
 )
 
 const (
@@ -129,29 +128,6 @@ func ReadTransaction(buf []byte) (*Transaction, int, error) {
 		ParamCount: buf[20:22],
 		Fields:     fields,
 	}, tranLen, nil
-}
-
-func readN(conn net.Conn, n int) ([]Transaction, error) {
-	buf := make([]byte, 1400)
-	i := 0
-	for {
-		readLen, err := conn.Read(buf)
-		if err != nil {
-			return nil, err
-		}
-
-		transactions, _, err := readTransactions(buf[:readLen])
-		//		spew.Fdump(os.Stderr, transactions)
-		if err != nil {
-			return nil, err
-		}
-
-		i += len(transactions)
-
-		if n == i {
-			return transactions, nil
-		}
-	}
 }
 
 func readTransactions(buf []byte) ([]Transaction, int, error) {

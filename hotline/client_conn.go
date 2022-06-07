@@ -3,8 +3,8 @@ package hotline
 import (
 	"encoding/binary"
 	"golang.org/x/crypto/bcrypt"
+	"io"
 	"math/big"
-	"net"
 )
 
 type byClientID []*ClientConn
@@ -21,9 +21,37 @@ func (s byClientID) Less(i, j int) bool {
 	return s[i].uint16ID() < s[j].uint16ID()
 }
 
+const template = `Nickname:   %s
+Name:       %s
+Account:    %s
+Address:    %s
+
+-------- File Downloads ---------
+
+%s
+
+------- Folder Downloads --------
+
+None.
+
+--------- File Uploads ----------
+
+None.
+
+-------- Folder Uploads ---------
+
+None.
+
+------- Waiting Downloads -------
+
+None.
+
+	`
+
 // ClientConn represents a client connected to a Server
 type ClientConn struct {
-	Connection net.Conn
+	Connection io.ReadWriteCloser
+	RemoteAddr string
 	ID         *[]byte
 	Icon       *[]byte
 	Flags      *[]byte
@@ -66,15 +94,6 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 				)
 				return nil
 			}
-		}
-		if !authorize(cc.Account.Access, handler.Access) {
-			cc.Server.Logger.Infow(
-				"Unauthorized Action",
-				"Account", cc.Account.Login, "UserName", string(cc.UserName), "RequestType", handler.Name,
-			)
-			cc.Server.outbox <- cc.NewErrReply(transaction, handler.DenyMsg)
-
-			return nil
 		}
 
 		cc.Server.Logger.Infow(
@@ -160,7 +179,7 @@ func (cc *ClientConn) Disconnect() {
 	cc.notifyOthers(*NewTransaction(tranNotifyDeleteUser, nil, NewField(fieldUserID, *cc.ID)))
 
 	if err := cc.Connection.Close(); err != nil {
-		cc.Server.Logger.Errorw("error closing client connection", "RemoteAddr", cc.Connection.RemoteAddr())
+		cc.Server.Logger.Errorw("error closing client connection", "RemoteAddr", cc.RemoteAddr)
 	}
 }
 

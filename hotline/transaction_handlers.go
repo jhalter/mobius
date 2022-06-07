@@ -16,8 +16,6 @@ import (
 )
 
 type TransactionType struct {
-	Access         int                                                    // Specifies access privilege required to perform the transaction
-	DenyMsg        string                                                 // The error reply message when user does not have access
 	Handler        func(*ClientConn, *Transaction) ([]Transaction, error) // function for handling the transaction type
 	Name           string                                                 // Name of transaction as it will appear in logging
 	RequiredFields []requiredField
@@ -45,14 +43,12 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Name: "tranNotifyDeleteUser",
 	},
 	tranAgreed: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranAgreed",
 		Handler: HandleTranAgreed,
 	},
 	tranChatSend: {
-		Access:  accessAlwaysAllow,
-		Handler: HandleChatSend,
 		Name:    "tranChatSend",
+		Handler: HandleChatSend,
 		RequiredFields: []requiredField{
 			{
 				ID:     fieldData,
@@ -61,181 +57,130 @@ var TransactionHandlers = map[uint16]TransactionType{
 		},
 	},
 	tranDelNewsArt: {
-		Access:  accessNewsDeleteArt,
-		DenyMsg: "You are not allowed to delete news articles.",
 		Name:    "tranDelNewsArt",
 		Handler: HandleDelNewsArt,
 	},
 	tranDelNewsItem: {
-		Access: accessAlwaysAllow, // Granular access enforced inside the handler
-		// Has multiple access flags: News Delete Folder (37) or News Delete Category (35)
-		// TODO: Implement inside the handler
 		Name:    "tranDelNewsItem",
 		Handler: HandleDelNewsItem,
 	},
 	tranDeleteFile: {
-		Access:  accessAlwaysAllow, // Granular access enforced inside the handler
 		Name:    "tranDeleteFile",
 		Handler: HandleDeleteFile,
 	},
 	tranDeleteUser: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranDeleteUser",
 		Handler: HandleDeleteUser,
 	},
 	tranDisconnectUser: {
-		Access:  accessDisconUser,
-		DenyMsg: "You are not allowed to disconnect users.",
 		Name:    "tranDisconnectUser",
 		Handler: HandleDisconnectUser,
 	},
 	tranDownloadFile: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranDownloadFile",
 		Handler: HandleDownloadFile,
 	},
 	tranDownloadFldr: {
-		Access:  accessDownloadFile, // There is no specific access flag for folder vs file download
-		DenyMsg: "You are not allowed to download files.",
 		Name:    "tranDownloadFldr",
 		Handler: HandleDownloadFolder,
 	},
 	tranGetClientInfoText: {
-		Access:  accessGetClientInfo,
-		DenyMsg: "You are not allowed to get client info",
 		Name:    "tranGetClientInfoText",
 		Handler: HandleGetClientConnInfoText,
 	},
 	tranGetFileInfo: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranGetFileInfo",
 		Handler: HandleGetFileInfo,
 	},
 	tranGetFileNameList: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranGetFileNameList",
 		Handler: HandleGetFileNameList,
 	},
 	tranGetMsgs: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranGetMsgs",
 		Handler: HandleGetMsgs,
 	},
 	tranGetNewsArtData: {
-		Access:  accessNewsReadArt,
-		DenyMsg: "You are not allowed to read news.",
 		Name:    "tranGetNewsArtData",
 		Handler: HandleGetNewsArtData,
 	},
 	tranGetNewsArtNameList: {
-		Access:  accessNewsReadArt,
-		DenyMsg: "You are not allowed to read news.",
 		Name:    "tranGetNewsArtNameList",
 		Handler: HandleGetNewsArtNameList,
 	},
 	tranGetNewsCatNameList: {
-		Access:  accessNewsReadArt,
-		DenyMsg: "You are not allowed to read news.",
 		Name:    "tranGetNewsCatNameList",
 		Handler: HandleGetNewsCatNameList,
 	},
 	tranGetUser: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranGetUser",
 		Handler: HandleGetUser,
 	},
 	tranGetUserNameList: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranHandleGetUserNameList",
 		Handler: HandleGetUserNameList,
 	},
 	tranInviteNewChat: {
-		Access:  accessOpenChat,
-		DenyMsg: "You are not allowed to request private chat.",
 		Name:    "tranInviteNewChat",
 		Handler: HandleInviteNewChat,
 	},
 	tranInviteToChat: {
-		Access:  accessOpenChat,
-		DenyMsg: "You are not allowed to request private chat.",
 		Name:    "tranInviteToChat",
 		Handler: HandleInviteToChat,
 	},
 	tranJoinChat: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranJoinChat",
 		Handler: HandleJoinChat,
 	},
 	tranKeepAlive: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranKeepAlive",
 		Handler: HandleKeepAlive,
 	},
 	tranLeaveChat: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranJoinChat",
 		Handler: HandleLeaveChat,
 	},
 	tranListUsers: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranListUsers",
 		Handler: HandleListUsers,
 	},
 	tranMoveFile: {
-		Access:  accessMoveFile,
-		DenyMsg: "You are not allowed to move files.",
 		Name:    "tranMoveFile",
 		Handler: HandleMoveFile,
 	},
 	tranNewFolder: {
-		Access:  accessCreateFolder,
-		DenyMsg: "You are not allow to create folders.",
 		Name:    "tranNewFolder",
 		Handler: HandleNewFolder,
 	},
 	tranNewNewsCat: {
-		Access:  accessNewsCreateCat,
-		DenyMsg: "You are not allowed to create news categories.",
 		Name:    "tranNewNewsCat",
 		Handler: HandleNewNewsCat,
 	},
 	tranNewNewsFldr: {
-		Access:  accessNewsCreateFldr,
-		DenyMsg: "You are not allowed to create news folders.",
 		Name:    "tranNewNewsFldr",
 		Handler: HandleNewNewsFldr,
 	},
 	tranNewUser: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranNewUser",
 		Handler: HandleNewUser,
 	},
 	tranUpdateUser: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranUpdateUser",
 		Handler: HandleUpdateUser,
 	},
 	tranOldPostNews: {
-		Access:  accessNewsPostArt,
-		DenyMsg: "You are not allowed to post news.",
 		Name:    "tranOldPostNews",
 		Handler: HandleTranOldPostNews,
 	},
 	tranPostNewsArt: {
-		Access:  accessNewsPostArt,
-		DenyMsg: "You are not allowed to post news articles.",
 		Name:    "tranPostNewsArt",
 		Handler: HandlePostNewsArt,
 	},
 	tranRejectChatInvite: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranRejectChatInvite",
 		Handler: HandleRejectChatInvite,
 	},
 	tranSendInstantMsg: {
-		Access: accessAlwaysAllow,
-		// Access: accessSendPrivMsg,
-		// DenyMsg: "You are not allowed to send private messages",
 		Name:    "tranSendInstantMsg",
 		Handler: HandleSendInstantMsg,
 		RequiredFields: []requiredField{
@@ -249,12 +194,10 @@ var TransactionHandlers = map[uint16]TransactionType{
 		},
 	},
 	tranSetChatSubject: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranSetChatSubject",
 		Handler: HandleSetChatSubject,
 	},
 	tranMakeFileAlias: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranMakeFileAlias",
 		Handler: HandleMakeAlias,
 		RequiredFields: []requiredField{
@@ -264,34 +207,26 @@ var TransactionHandlers = map[uint16]TransactionType{
 		},
 	},
 	tranSetClientUserInfo: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranSetClientUserInfo",
 		Handler: HandleSetClientUserInfo,
 	},
 	tranSetFileInfo: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranSetFileInfo",
 		Handler: HandleSetFileInfo,
 	},
 	tranSetUser: {
-		Access:  accessModifyUser,
-		DenyMsg: "You are not allowed to modify accounts.",
 		Name:    "tranSetUser",
 		Handler: HandleSetUser,
 	},
 	tranUploadFile: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranUploadFile",
 		Handler: HandleUploadFile,
 	},
 	tranUploadFldr: {
-		Access:  accessAlwaysAllow,
 		Name:    "tranUploadFldr",
 		Handler: HandleUploadFolder,
 	},
 	tranUserBroadcast: {
-		Access:  accessBroadcast,
-		DenyMsg: "You are not allowed to send broadcast messages.",
 		Name:    "tranUserBroadcast",
 		Handler: HandleUserBroadcast,
 	},
@@ -567,6 +502,10 @@ func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 }
 
 func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessCreateFolder) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to create folders."))
+		return res, err
+	}
 	newFolderPath := cc.Server.Config.FileRoot
 	folderName := string(t.GetField(fieldFileName).Data)
 
@@ -602,6 +541,11 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err err
 }
 
 func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessModifyUser) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to modify accounts."))
+		return res, err
+	}
+
 	login := DecodeUserString(t.GetField(fieldUserLogin).Data)
 	userName := string(t.GetField(fieldUserName).Data)
 
@@ -831,6 +775,11 @@ func HandleDeleteUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 // HandleUserBroadcast sends an Administrator Message to all connected clients of the server
 func HandleUserBroadcast(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessBroadcast) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to send broadcast messages."))
+		return res, err
+	}
+
 	cc.sendAll(
 		tranServerMsg,
 		NewField(fieldData, t.GetField(tranGetMsgs).Data),
@@ -853,6 +802,11 @@ func byteToInt(bytes []byte) (int, error) {
 }
 
 func HandleGetClientConnInfoText(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessGetClientInfo) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to get client info"))
+		return res, err
+	}
+
 	clientID, _ := byteToInt(t.GetField(fieldUserID).Data)
 
 	clientConn := cc.Server.Clients[uint16(clientID)]
@@ -899,7 +853,7 @@ None.
 		clientConn.UserName,
 		clientConn.Account.Name,
 		clientConn.Account.Login,
-		clientConn.Connection.RemoteAddr().String(),
+		clientConn.RemoteAddr,
 		activeDownloadList,
 	)
 	template = strings.Replace(template, "\n", "\r", -1)
@@ -974,6 +928,11 @@ __________________________________________________________`
 // Fields used in this request:
 // 101	Data
 func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessNewsPostArt) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to post news."))
+		return res, err
+	}
+
 	cc.Server.flatNewsMux.Lock()
 	defer cc.Server.flatNewsMux.Unlock()
 
@@ -1009,6 +968,11 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 }
 
 func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessDisconUser) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to disconnect users."))
+		return res, err
+	}
+
 	clientConn := cc.Server.Clients[binary.BigEndian.Uint16(t.GetField(fieldUserID).Data)]
 
 	if authorize(clientConn.Account.Access, accessCannotBeDiscon) {
@@ -1024,9 +988,14 @@ func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, er
 	return res, err
 }
 
+// HandleGetNewsCatNameList returns a list of news categories for a path
+// Fields used in the request:
+// 325	News path	(Optional)
 func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	// Fields used in the request:
-	// 325	News path	(Optional)
+	if !authorize(cc.Account.Access, accessNewsReadArt) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to read news."))
+		return res, err
+	}
 
 	newsPath := t.GetField(fieldNewsPath).Data
 	cc.Server.Logger.Infow("NewsPath: ", "np", string(newsPath))
@@ -1058,6 +1027,11 @@ func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) (res []Transaction
 }
 
 func HandleNewNewsCat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessNewsCreateCat) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to create news categories."))
+		return res, err
+	}
+
 	name := string(t.GetField(fieldNewsCatName).Data)
 	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
 
@@ -1076,10 +1050,15 @@ func HandleNewNewsCat(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	return res, err
 }
 
+// Fields used in the request:
+// 322	News category name
+// 325	News path
 func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	// Fields used in the request:
-	// 322	News category name
-	// 325	News path
+	if !authorize(cc.Account.Access, accessNewsCreateFldr) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to create news folders."))
+		return res, err
+	}
+
 	name := string(t.GetField(fieldFileName).Data)
 	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
 
@@ -1105,6 +1084,10 @@ func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction, err e
 // Reply fields:
 // 321	News article list data	Optional
 func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessNewsReadArt) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to read news."))
+		return res, err
+	}
 	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
 
 	var cat NewsCategoryListData15
@@ -1122,6 +1105,11 @@ func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction
 }
 
 func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessNewsReadArt) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to read news."))
+		return res, err
+	}
+
 	// Request fields
 	// 325	News fp
 	// 326	News article ID
@@ -1172,7 +1160,8 @@ func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, er
 }
 
 func HandleDelNewsItem(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	// Access:		News Delete Folder (37) or News Delete Category (35)
+	// Has multiple access flags: News Delete Folder (37) or News Delete Category (35)
+	// TODO: Implement
 
 	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
 
@@ -1203,6 +1192,11 @@ func HandleDelNewsItem(cc *ClientConn, t *Transaction) (res []Transaction, err e
 }
 
 func HandleDelNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessNewsDeleteArt) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to delete news articles."))
+		return res, err
+	}
+
 	// Request Fields
 	// 325	News path
 	// 326	News article ID
@@ -1227,14 +1221,18 @@ func HandleDelNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	return res, err
 }
 
+// Request fields
+// 325	News path
+// 326	News article ID	 						ID of the parent article?
+// 328	News article title
+// 334	News article flags
+// 327	News article data flavor		Currently “text/plain”
+// 333	News article data
 func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	// Request fields
-	// 325	News path
-	// 326	News article ID	 						ID of the parent article?
-	// 328	News article title
-	// 334	News article flags
-	// 327	News article data flavor		Currently “text/plain”
-	// 333	News article data
+	if !authorize(cc.Account.Access, accessNewsPostArt) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to post news articles."))
+		return res, err
+	}
 
 	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
 	cats := cc.Server.GetNewsCatByPath(pathStrs[:len(pathStrs)-1])
@@ -1347,7 +1345,9 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 
 	if resumeData != nil {
 		var frd FileResumeData
-		frd.UnmarshalBinary(t.GetField(fieldFileResumeData).Data)
+		if err := frd.UnmarshalBinary(t.GetField(fieldFileResumeData).Data); err != nil {
+			return res, err
+		}
 		ft.fileResumeData = &frd
 	}
 
@@ -1378,30 +1378,12 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 }
 
 // Download all files from the specified folder and sub-folders
-// response example
-//
-//	00
-//	01
-//	00 00
-//	00 00 00 11
-//	00 00 00 00
-//	00 00 00 18
-//	00 00 00 18
-//
-//	00 03
-//
-//	00 6c // transfer size
-//	00 04 // len
-//	00 0f d5 ae
-//
-//	00 dc // field Folder item count
-//	00 02 // len
-//	00 02
-//
-//	00 6b // ref number
-//	00 04 // len
-//	00 03 64 b1
 func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessDownloadFile) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to download folders."))
+		return res, err
+	}
+
 	transactionRef := cc.Server.NewTransactionRef()
 	data := binary.BigEndian.Uint32(transactionRef)
 
@@ -1661,6 +1643,11 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 
 // HandleInviteNewChat invites users to new private chat
 func HandleInviteNewChat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessOpenChat) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to request private chat."))
+		return res, err
+	}
+
 	// Client to Invite
 	targetID := t.GetField(fieldUserID).Data
 	newChatID := cc.Server.NewPrivateChat(cc)
@@ -1689,6 +1676,11 @@ func HandleInviteNewChat(cc *ClientConn, t *Transaction) (res []Transaction, err
 }
 
 func HandleInviteToChat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !authorize(cc.Account.Access, accessOpenChat) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to request private chat."))
+		return res, err
+	}
+
 	// Client to Invite
 	targetID := t.GetField(fieldUserID).Data
 	chatID := t.GetField(fieldChatID).Data

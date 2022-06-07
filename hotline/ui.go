@@ -2,7 +2,6 @@ package hotline
 
 import (
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"gopkg.in/yaml.v3"
@@ -108,7 +107,7 @@ func (ui *UI) showBookmarks() *tview.List {
 func (ui *UI) getTrackerList() *tview.List {
 	listing, err := GetListing(ui.HLClient.pref.Tracker)
 	if err != nil {
-		spew.Dump(err)
+		// TODO
 	}
 
 	list := tview.NewList()

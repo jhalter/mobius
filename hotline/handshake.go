@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"net"
+	"io"
 )
 
 type handshake struct {
@@ -33,9 +33,14 @@ type handshake struct {
 // Description		Size 	Data	Note
 // Protocol ID		4		TRTP
 // Error code		4				Error code returned by the server (0 = no error)
-func Handshake(conn net.Conn, buf []byte) error {
+func Handshake(conn io.ReadWriter) error {
+	handshakeBuf := make([]byte, 12)
+	if _, err := io.ReadFull(conn, handshakeBuf); err != nil {
+		return err
+	}
+
 	var h handshake
-	r := bytes.NewReader(buf)
+	r := bytes.NewReader(handshakeBuf)
 	if err := binary.Read(r, binary.BigEndian, &h); err != nil {
 		return err
 	}

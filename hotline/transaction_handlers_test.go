@@ -696,9 +696,49 @@ func TestHandleNewFolder(t *testing.T) {
 		wantErr bool
 	}{
 		{
+			name:  "without required permission",
+			setup: func() {},
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							access := bits[:]
+							return &access
+						}(),
+					},
+				},
+				t: NewTransaction(
+					accessCreateFolder,
+					&[]byte{0, 0},
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to create folders.")),
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
 			name: "when path is nested",
 			args: args{
 				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessCreateFolder)
+							access := bits[:]
+							return &access
+						}(),
+					},
 					ID: &[]byte{0, 1},
 					Server: &Server{
 						Config: &Config{
@@ -739,6 +779,14 @@ func TestHandleNewFolder(t *testing.T) {
 			name: "when path is not nested",
 			args: args{
 				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessCreateFolder)
+							access := bits[:]
+							return &access
+						}(),
+					},
 					ID: &[]byte{0, 1},
 					Server: &Server{
 						Config: &Config{
@@ -773,6 +821,14 @@ func TestHandleNewFolder(t *testing.T) {
 			name: "when UnmarshalBinary returns an err",
 			args: args{
 				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessCreateFolder)
+							access := bits[:]
+							return &access
+						}(),
+					},
 					ID: &[]byte{0, 1},
 					Server: &Server{
 						Config: &Config{
@@ -801,6 +857,14 @@ func TestHandleNewFolder(t *testing.T) {
 			name: "fieldFileName does not allow directory traversal",
 			args: args{
 				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessCreateFolder)
+							access := bits[:]
+							return &access
+						}(),
+					},
 					ID: &[]byte{0, 1},
 					Server: &Server{
 						Config: &Config{
@@ -834,6 +898,14 @@ func TestHandleNewFolder(t *testing.T) {
 			name: "fieldFilePath does not allow directory traversal",
 			args: args{
 				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessCreateFolder)
+							access := bits[:]
+							return &access
+						}(),
+					},
 					ID: &[]byte{0, 1},
 					Server: &Server{
 						Config: &Config{
@@ -882,6 +954,7 @@ func TestHandleNewFolder(t *testing.T) {
 				t.Errorf("HandleNewFolder() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
 			if !tranAssertEqual(t, tt.wantRes, gotRes) {
 				t.Errorf("HandleNewFolder() gotRes = %v, want %v", gotRes, tt.wantRes)
 			}
@@ -1903,6 +1976,162 @@ func TestHandleUpdateUser(t *testing.T) {
 				return
 			}
 
+			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}
+
+func TestHandleDelNewsArt(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "without required permission",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							access := bits[:]
+							return &access
+						}(),
+					},
+				},
+				t: NewTransaction(
+					tranDelNewsArt,
+					&[]byte{0, 0},
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to delete news articles.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes, err := HandleDelNewsArt(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleDelNewsArt(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
+			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}
+
+func TestHandleDisconnectUser(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "without required permission",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							access := bits[:]
+							return &access
+						}(),
+					},
+				},
+				t: NewTransaction(
+					tranDelNewsArt,
+					&[]byte{0, 0},
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to disconnect users.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "when target user has 'cannot be disconnected' priv",
+			args: args{
+				cc: &ClientConn{
+					Server: &Server{
+						Clients: map[uint16]*ClientConn{
+							uint16(1): {
+								Account: &Account{
+									Login: "unnamed",
+									Access: func() *[]byte {
+										var bits accessBitmap
+										bits.Set(accessCannotBeDiscon)
+										access := bits[:]
+										return &access
+									}(),
+								},
+							},
+						},
+					},
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessDisconUser)
+							access := bits[:]
+							return &access
+						}(),
+					},
+				},
+				t: NewTransaction(
+					tranDelNewsArt,
+					&[]byte{0, 0},
+					NewField(fieldUserID, []byte{0, 1}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("unnamed is not allowed to be disconnected.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes, err := HandleDisconnectUser(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleDisconnectUser(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}

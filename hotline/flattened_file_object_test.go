@@ -2,7 +2,6 @@ package hotline
 
 import (
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
@@ -99,8 +98,6 @@ func TestFlatFileInformationFork_UnmarshalBinary(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ffif := &FlatFileInformationFork{}
 			tt.wantErr(t, ffif.UnmarshalBinary(tt.args.b), fmt.Sprintf("UnmarshalBinary(%v)", tt.args.b))
-
-			spew.Dump(ffif)
 		})
 	}
 }
