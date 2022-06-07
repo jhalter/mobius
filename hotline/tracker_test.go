@@ -7,7 +7,7 @@ import (
 
 func TestTrackerRegistration_Payload(t *testing.T) {
 	type fields struct {
-		Port        []byte
+		Port        [2]byte
 		UserCount   int
 		PassID      []byte
 		Name        string
@@ -21,7 +21,7 @@ func TestTrackerRegistration_Payload(t *testing.T) {
 		{
 			name: "returns expected payload bytes",
 			fields: fields{
-				Port:        []byte{0x00, 0x10},
+				Port:        [2]byte{0x00, 0x10},
 				UserCount:   2,
 				PassID:      []byte{0x00, 0x00, 0x00, 0x01},
 				Name:        "Test Serv",

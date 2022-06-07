@@ -44,7 +44,7 @@ type Server struct {
 	Logger        *zap.SugaredLogger
 	PrivateChats  map[uint32]*PrivateChat
 	NextGuestID   *uint16
-	TrackerPassID []byte
+	TrackerPassID [4]byte
 	Stats         *Stats
 
 	APIListener  net.Listener
@@ -187,7 +187,6 @@ func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredL
 		outbox:        make(chan Transaction),
 		Stats:         &Stats{StartTime: time.Now()},
 		ThreadedNews:  &ThreadedNews{},
-		TrackerPassID: make([]byte, 4),
 	}
 
 	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", netInterface, netPort))
@@ -207,7 +206,7 @@ func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredL
 	}
 
 	// generate a new random passID for tracker registration
-	if _, err := rand.Read(server.TrackerPassID); err != nil {
+	if _, err := rand.Read(server.TrackerPassID[:]); err != nil {
 		return nil, err
 	}
 
@@ -246,12 +245,12 @@ func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredL
 		go func() {
 			for {
 				tr := &TrackerRegistration{
-					Port:        []byte{0x15, 0x7c},
 					UserCount:   server.userCount(),
-					PassID:      server.TrackerPassID,
+					PassID:      server.TrackerPassID[:],
 					Name:        server.Config.Name,
 					Description: server.Config.Description,
 				}
+				binary.BigEndian.PutUint16(tr.Port[:], uint16(server.Port))
 				for _, t := range server.Config.Trackers {
 					if err := register(t, tr); err != nil {
 						server.Logger.Errorw("unable to register with tracker %v", "error", err)
