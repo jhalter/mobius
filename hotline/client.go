@@ -633,7 +633,6 @@ func (c *Client) LogIn(login string, password string) error {
 			NewField(fieldUserIconID, c.pref.IconBytes()),
 			NewField(fieldUserLogin, negateString([]byte(login))),
 			NewField(fieldUserPassword, negateString([]byte(password))),
-			NewField(fieldVersion, []byte{0, 2}),
 		),
 	)
 }
