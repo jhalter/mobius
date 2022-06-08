@@ -1,6 +1,7 @@
 package hotline
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -30,6 +31,8 @@ const (
 	idleCheckInterval      = 10  // time in seconds to check for idle users
 	trackerUpdateFrequency = 300 // time in seconds between tracker re-registration
 )
+
+var nostalgiaVersion = []byte{0, 0, 2, 0x2c} // version ID used by the Nostalgia client
 
 type Server struct {
 	Port          int
@@ -569,8 +572,8 @@ func (s *Server) handleNewConnection(conn net.Conn, remoteAddr string) error {
 	// Show agreement to client
 	c.Server.outbox <- *NewTransaction(tranShowAgreement, c.ID, NewField(fieldData, s.Agreement))
 
-	// assume simplified hotline v1.2.3 login flow that does not require agreement
-	if *c.Version == nil {
+	// Used simplified hotline v1.2.3 login flow for clients that do not send login info in tranAgreed
+	if *c.Version == nil || bytes.Equal(*c.Version, nostalgiaVersion) {
 		c.Agreed = true
 
 		c.notifyOthers(
