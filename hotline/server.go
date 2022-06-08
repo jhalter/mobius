@@ -362,8 +362,6 @@ func (s *Server) UpdateUser(login, newLogin, name, password string, access []byt
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
-	fmt.Printf("login: %v, newLogin: %v: ", login, newLogin)
-
 	// update renames the user login
 	if login != newLogin {
 		err := os.Rename(s.ConfigDir+"Users/"+login+".yaml", s.ConfigDir+"Users/"+newLogin+".yaml")
