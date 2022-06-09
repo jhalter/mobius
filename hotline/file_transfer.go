@@ -38,38 +38,6 @@ func (ft *FileTransfer) ItemCount() int {
 	return int(binary.BigEndian.Uint16(ft.FolderItemCount))
 }
 
-// 00 28 // DataSize
-// 00 00 // IsFolder
-// 00 02 // PathItemCount
-//
-// 00 00
-// 09
-// 73 75 62 66 6f 6c 64 65 72 // "subfolder"
-//
-// 00 00
-// 15
-// 73 75 62 66 6f 6c 64 65 72 2d 74 65 73 74 66 69 6c 65 2d 35 6b // "subfolder-testfile-5k"
-func readFolderUpload(buf []byte) folderUpload {
-	dataLen := binary.BigEndian.Uint16(buf[0:2])
-
-	fu := folderUpload{
-		DataSize:      [2]byte{buf[0], buf[1]}, // Size of this structure (not including data size element itself)
-		IsFolder:      [2]byte{buf[2], buf[3]},
-		PathItemCount: [2]byte{buf[4], buf[5]},
-		FileNamePath:  buf[6 : dataLen+2],
-	}
-
-	return fu
-}
-
-func (fu *folderUpload) UnmarshalBinary(b []byte) error {
-	fu.DataSize = [2]byte{b[0], b[1]}
-	fu.IsFolder = [2]byte{b[2], b[3]}
-	fu.PathItemCount = [2]byte{b[4], b[5]}
-
-	return nil
-}
-
 type folderUpload struct {
 	DataSize      [2]byte
 	IsFolder      [2]byte

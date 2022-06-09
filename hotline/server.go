@@ -978,15 +978,26 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 		}
 
 		fileSize := make([]byte, 4)
-		readBuffer := make([]byte, 1024)
 
 		for i := 0; i < fileTransfer.ItemCount(); i++ {
-			// TODO: fix potential short read with io.ReadFull
-			_, err := conn.Read(readBuffer)
-			if err != nil {
+			s.Stats.UploadCounter += 1
+
+			var fu folderUpload
+			if _, err := io.ReadFull(conn, fu.DataSize[:]); err != nil {
 				return err
 			}
-			fu := readFolderUpload(readBuffer)
+
+			if _, err := io.ReadFull(conn, fu.IsFolder[:]); err != nil {
+				return err
+			}
+			if _, err := io.ReadFull(conn, fu.PathItemCount[:]); err != nil {
+				return err
+			}
+			fu.FileNamePath = make([]byte, binary.BigEndian.Uint16(fu.DataSize[:])-4)
+
+			if _, err := io.ReadFull(conn, fu.FileNamePath); err != nil {
+				return err
+			}
 
 			s.Logger.Infow(
 				"Folder upload continued",
@@ -1073,7 +1084,7 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 					}
 
 				case dlFldrActionSendFile:
-					if _, err := conn.Read(fileSize); err != nil {
+					if _, err := io.ReadFull(conn, fileSize); err != nil {
 						return err
 					}
 
