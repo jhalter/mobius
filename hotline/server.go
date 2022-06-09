@@ -693,6 +693,8 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 
 	switch fileTransfer.Type {
 	case FileDownload:
+		s.Stats.DownloadCounter += 1
+
 		fullFilePath, err := readPath(s.Config.FileRoot, fileTransfer.FilePath, fileTransfer.FileName)
 		if err != nil {
 			return err
@@ -744,6 +746,8 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 			}
 		}
 	case FileUpload:
+		s.Stats.UploadCounter += 1
+
 		destinationFile := s.Config.FileRoot + ReadFilePath(fileTransfer.FilePath) + "/" + string(fileTransfer.FileName)
 
 		var file *os.File
@@ -829,6 +833,8 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 
 		i := 0
 		err = filepath.Walk(fullFilePath+"/", func(path string, info os.FileInfo, err error) error {
+			s.Stats.DownloadCounter += 1
+
 			if err != nil {
 				return err
 			}
@@ -1038,8 +1044,6 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 				if err == nil {
 					nextAction = dlFldrActionResumeFile
 				}
-
-				fmt.Printf("Next Action: %v\n", nextAction)
 
 				if _, err := conn.Write([]byte{0, uint8(nextAction)}); err != nil {
 					return err

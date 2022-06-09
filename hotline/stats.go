@@ -6,9 +6,10 @@ import (
 )
 
 type Stats struct {
-	LoginCount int           `yaml:"login count"`
-	StartTime  time.Time     `yaml:"start time"`
-	Uptime     time.Duration `yaml:"uptime"`
+	LoginCount      int       `yaml:"login count"`
+	StartTime       time.Time `yaml:"start time"`
+	DownloadCounter int
+	UploadCounter   int
 }
 
 func (s *Stats) String() string {

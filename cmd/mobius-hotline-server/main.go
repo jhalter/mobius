@@ -2,12 +2,16 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/jhalter/mobius/hotline"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"io"
+	"log"
 	"math/rand"
+	"net/http"
 	"os"
 	"runtime"
 	"time"
@@ -23,6 +27,7 @@ func main() {
 	ctx, cancelRoot := context.WithCancel(context.Background())
 
 	basePort := flag.Int("bind", defaultPort, "Bind address and port")
+	statsPort := flag.String("stats-port", "", "Enable stats HTTP endpoint on address and port")
 	configDir := flag.String("config", defaultConfigPath(), "Path to config root")
 	version := flag.Bool("version", false, "print version and exit")
 	logLevel := flag.String("log-level", "info", "Log level")
@@ -53,8 +58,34 @@ func main() {
 		logger.Fatal(err)
 	}
 
+	sh := statHandler{hlServer: srv}
+	if *statsPort != "" {
+		http.HandleFunc("/", sh.RenderStats)
+
+		go func(srv *hotline.Server) {
+			// Use the default DefaultServeMux.
+			err = http.ListenAndServe(":"+*statsPort, nil)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}(srv)
+	}
+
 	// Serve Hotline requests until program exit
 	logger.Fatal(srv.ListenAndServe(ctx, cancelRoot))
+}
+
+type statHandler struct {
+	hlServer *hotline.Server
+}
+
+func (sh *statHandler) RenderStats(w http.ResponseWriter, _ *http.Request) {
+	u, err := json.Marshal(sh.hlServer.Stats)
+	if err != nil {
+		panic(err)
+	}
+
+	_, _ = io.WriteString(w, string(u))
 }
 
 func newStdoutCore(level zapcore.Level) zapcore.Core {
