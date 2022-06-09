@@ -391,7 +391,7 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	fileNewName := t.GetField(fieldFileNewName).Data
 
 	if fileNewName != nil {
-		fi, err := FS.Stat(fullFilePath)
+		fi, err := cc.Server.FS.Stat(fullFilePath)
 		if err != nil {
 			return res, err
 		}
@@ -524,14 +524,14 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err err
 
 	// TODO: check path and folder name lengths
 
-	if _, err := FS.Stat(newFolderPath); !os.IsNotExist(err) {
+	if _, err := cc.Server.FS.Stat(newFolderPath); !os.IsNotExist(err) {
 		msg := fmt.Sprintf("Cannot create folder \"%s\" because there is already a file or folder with that name.", folderName)
 		return []Transaction{cc.NewErrReply(t, msg)}, nil
 	}
 
 	// TODO: check for disallowed characters to maintain compatibility for original client
 
-	if err := FS.Mkdir(newFolderPath, 0777); err != nil {
+	if err := cc.Server.FS.Mkdir(newFolderPath, 0777); err != nil {
 		msg := fmt.Sprintf("Cannot create folder \"%s\" because an error occurred.", folderName)
 		return []Transaction{cc.NewErrReply(t, msg)}, nil
 	}
@@ -1523,7 +1523,7 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			return res, err
 		}
 
-		fileInfo, err := FS.Stat(fullFilePath + incompleteFileSuffix)
+		fileInfo, err := cc.Server.FS.Stat(fullFilePath + incompleteFileSuffix)
 		if err != nil {
 			return res, err
 		}
@@ -1856,7 +1856,7 @@ func HandleMakeAlias(cc *ClientConn, t *Transaction) (res []Transaction, err err
 
 	cc.Server.Logger.Debugw("Make alias", "src", fullFilePath, "dst", fullNewFilePath)
 
-	if err := FS.Symlink(fullFilePath, fullNewFilePath); err != nil {
+	if err := cc.Server.FS.Symlink(fullFilePath, fullNewFilePath); err != nil {
 		res = append(res, cc.NewErrReply(t, "Error creating alias"))
 		return res, nil
 	}

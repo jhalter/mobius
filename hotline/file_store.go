@@ -6,8 +6,6 @@ import (
 	"os"
 )
 
-var FS FileStore
-
 type FileStore interface {
 	Mkdir(name string, perm os.FileMode) error
 	Stat(name string) (os.FileInfo, error)

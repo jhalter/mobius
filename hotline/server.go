@@ -50,6 +50,7 @@ type Server struct {
 	TrackerPassID [4]byte
 	Stats         *Stats
 
+	FS FileStore
 
 	// newsReader io.Reader
 	// newsWriter io.WriteCloser
@@ -187,7 +188,7 @@ const (
 )
 
 // NewServer constructs a new Server from a config dir
-func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredLogger) (*Server, error) {
+func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredLogger, FS FileStore) (*Server, error) {
 	server := Server{
 		Port:          netPort,
 		Accounts:      make(map[string]*Account),
@@ -201,6 +202,7 @@ func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredL
 		outbox:        make(chan Transaction),
 		Stats:         &Stats{StartTime: time.Now()},
 		ThreadedNews:  &ThreadedNews{},
+		FS:            FS,
 	}
 
 	var err error
@@ -210,7 +212,8 @@ func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredL
 		return nil, err
 	}
 
-	if server.Agreement, err = os.ReadFile(configDir + agreementFile); err != nil {
+	server.Agreement, err = os.ReadFile(configDir + agreementFile)
+	if err != nil {
 		return nil, err
 	}
 
@@ -361,7 +364,7 @@ func (s *Server) NewUser(login, name, password string, access []byte) error {
 	}
 	s.Accounts[login] = &account
 
-	return FS.WriteFile(s.ConfigDir+"Users/"+login+".yaml", out, 0666)
+	return s.FS.WriteFile(s.ConfigDir+"Users/"+login+".yaml", out, 0666)
 }
 
 func (s *Server) UpdateUser(login, newLogin, name, password string, access []byte) error {
@@ -401,7 +404,7 @@ func (s *Server) DeleteUser(login string) error {
 
 	delete(s.Accounts, login)
 
-	return FS.Remove(s.ConfigDir + "Users/" + login + ".yaml")
+	return s.FS.Remove(s.ConfigDir + "Users/" + login + ".yaml")
 }
 
 func (s *Server) connectedUsers() []Field {
@@ -447,7 +450,7 @@ func (s *Server) loadAccounts(userDir string) error {
 	}
 
 	for _, file := range matches {
-		fh, err := FS.Open(file)
+		fh, err := s.FS.Open(file)
 		if err != nil {
 			return err
 		}
@@ -464,7 +467,7 @@ func (s *Server) loadAccounts(userDir string) error {
 }
 
 func (s *Server) loadConfig(path string) error {
-	fh, err := FS.Open(path)
+	fh, err := s.FS.Open(path)
 	if err != nil {
 		return err
 	}
@@ -714,7 +717,7 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 			}
 		}
 
-		file, err := FS.Open(fullFilePath)
+		file, err := s.FS.Open(fullFilePath)
 		if err != nil {
 			return err
 		}
@@ -906,7 +909,7 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 				return err
 			}
 
-			file, err := FS.Open(path)
+			file, err := s.FS.Open(path)
 			if err != nil {
 				return err
 			}
@@ -963,8 +966,8 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 		)
 
 		// Check if the target folder exists.  If not, create it.
-		if _, err := FS.Stat(dstPath); os.IsNotExist(err) {
-			if err := FS.Mkdir(dstPath, 0777); err != nil {
+		if _, err := s.FS.Stat(dstPath); os.IsNotExist(err) {
+			if err := s.FS.Mkdir(dstPath, 0777); err != nil {
 				return err
 			}
 		}
@@ -1077,7 +1080,7 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 					filePath := dstPath + "/" + fu.FormattedPath()
 					s.Logger.Infow("Starting file transfer", "path", filePath, "fileNum", i+1, "totalFiles", "zz", "fileSize", binary.BigEndian.Uint32(fileSize))
 
-					newFile, err := FS.Create(filePath + ".incomplete")
+					newFile, err := s.FS.Create(filePath + ".incomplete")
 					if err != nil {
 						return err
 					}

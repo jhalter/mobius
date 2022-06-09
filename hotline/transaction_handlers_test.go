@@ -689,15 +689,13 @@ func TestHandleNewFolder(t *testing.T) {
 		t  *Transaction
 	}
 	tests := []struct {
-		setup   func()
 		name    string
 		args    args
 		wantRes []Transaction
 		wantErr bool
 	}{
 		{
-			name:  "without required permission",
-			setup: func() {},
+			name: "without required permission",
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
@@ -744,6 +742,12 @@ func TestHandleNewFolder(t *testing.T) {
 						Config: &Config{
 							FileRoot: "/Files/",
 						},
+						FS: func() *MockFileStore {
+							mfs := &MockFileStore{}
+							mfs.On("Mkdir", "/Files/aaa/testFolder", fs.FileMode(0777)).Return(nil)
+							mfs.On("Stat", "/Files/aaa/testFolder").Return(nil, os.ErrNotExist)
+							return mfs
+						}(),
 					},
 				},
 				t: NewTransaction(
@@ -756,12 +760,6 @@ func TestHandleNewFolder(t *testing.T) {
 						0x61, 0x61, 0x61,
 					}),
 				),
-			},
-			setup: func() {
-				mfs := &MockFileStore{}
-				mfs.On("Mkdir", "/Files/aaa/testFolder", fs.FileMode(0777)).Return(nil)
-				mfs.On("Stat", "/Files/aaa/testFolder").Return(nil, os.ErrNotExist)
-				FS = mfs
 			},
 			wantRes: []Transaction{
 				{
@@ -792,18 +790,18 @@ func TestHandleNewFolder(t *testing.T) {
 						Config: &Config{
 							FileRoot: "/Files",
 						},
+						FS: func() *MockFileStore {
+							mfs := &MockFileStore{}
+							mfs.On("Mkdir", "/Files/testFolder", fs.FileMode(0777)).Return(nil)
+							mfs.On("Stat", "/Files/testFolder").Return(nil, os.ErrNotExist)
+							return mfs
+						}(),
 					},
 				},
 				t: NewTransaction(
 					tranNewFolder, &[]byte{0, 1},
 					NewField(fieldFileName, []byte("testFolder")),
 				),
-			},
-			setup: func() {
-				mfs := &MockFileStore{}
-				mfs.On("Mkdir", "/Files/testFolder", fs.FileMode(0777)).Return(nil)
-				mfs.On("Stat", "/Files/testFolder").Return(nil, os.ErrNotExist)
-				FS = mfs
 			},
 			wantRes: []Transaction{
 				{
@@ -834,6 +832,12 @@ func TestHandleNewFolder(t *testing.T) {
 						Config: &Config{
 							FileRoot: "/Files/",
 						},
+						FS: func() *MockFileStore {
+							mfs := &MockFileStore{}
+							mfs.On("Mkdir", "/Files/aaa/testFolder", fs.FileMode(0777)).Return(nil)
+							mfs.On("Stat", "/Files/aaa/testFolder").Return(nil, os.ErrNotExist)
+							return mfs
+						}(),
 					},
 				},
 				t: NewTransaction(
@@ -843,12 +847,6 @@ func TestHandleNewFolder(t *testing.T) {
 						0x00,
 					}),
 				),
-			},
-			setup: func() {
-				mfs := &MockFileStore{}
-				mfs.On("Mkdir", "/Files/aaa/testFolder", fs.FileMode(0777)).Return(nil)
-				mfs.On("Stat", "/Files/aaa/testFolder").Return(nil, os.ErrNotExist)
-				FS = mfs
 			},
 			wantRes: []Transaction{},
 			wantErr: true,
@@ -870,18 +868,18 @@ func TestHandleNewFolder(t *testing.T) {
 						Config: &Config{
 							FileRoot: "/Files/",
 						},
+						FS: func() *MockFileStore {
+							mfs := &MockFileStore{}
+							mfs.On("Mkdir", "/Files/testFolder", fs.FileMode(0777)).Return(nil)
+							mfs.On("Stat", "/Files/testFolder").Return(nil, os.ErrNotExist)
+							return mfs
+						}(),
 					},
 				},
 				t: NewTransaction(
 					tranNewFolder, &[]byte{0, 1},
 					NewField(fieldFileName, []byte("../../testFolder")),
 				),
-			},
-			setup: func() {
-				mfs := &MockFileStore{}
-				mfs.On("Mkdir", "/Files/testFolder", fs.FileMode(0777)).Return(nil)
-				mfs.On("Stat", "/Files/testFolder").Return(nil, os.ErrNotExist)
-				FS = mfs
 			},
 			wantRes: []Transaction{
 				{
@@ -911,6 +909,12 @@ func TestHandleNewFolder(t *testing.T) {
 						Config: &Config{
 							FileRoot: "/Files/",
 						},
+						FS: func() *MockFileStore {
+							mfs := &MockFileStore{}
+							mfs.On("Mkdir", "/Files/foo/testFolder", fs.FileMode(0777)).Return(nil)
+							mfs.On("Stat", "/Files/foo/testFolder").Return(nil, os.ErrNotExist)
+							return mfs
+						}(),
 					},
 				},
 				t: NewTransaction(
@@ -927,12 +931,6 @@ func TestHandleNewFolder(t *testing.T) {
 					}),
 				),
 			},
-			setup: func() {
-				mfs := &MockFileStore{}
-				mfs.On("Mkdir", "/Files/foo/testFolder", fs.FileMode(0777)).Return(nil)
-				mfs.On("Stat", "/Files/foo/testFolder").Return(nil, os.ErrNotExist)
-				FS = mfs
-			},
 			wantRes: []Transaction{
 				{
 					clientID:  &[]byte{0, 1},
@@ -947,7 +945,6 @@ func TestHandleNewFolder(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
 
 			gotRes, err := HandleNewFolder(tt.args.cc, tt.args.t)
 			if (err != nil) != tt.wantErr {
@@ -1078,23 +1075,12 @@ func TestHandleMakeAlias(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		setup   func()
 		args    args
 		wantRes []Transaction
 		wantErr bool
 	}{
 		{
 			name: "with valid input and required permissions",
-			setup: func() {
-				mfs := &MockFileStore{}
-				path, _ := os.Getwd()
-				mfs.On(
-					"Symlink",
-					path+"/test/config/Files/foo/testFile",
-					path+"/test/config/Files/bar/testFile",
-				).Return(nil)
-				FS = mfs
-			},
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
@@ -1113,6 +1099,16 @@ func TestHandleMakeAlias(t *testing.T) {
 							}(),
 						},
 						Logger: NewTestLogger(),
+						FS: func() *MockFileStore {
+							mfs := &MockFileStore{}
+							path, _ := os.Getwd()
+							mfs.On(
+								"Symlink",
+								path+"/test/config/Files/foo/testFile",
+								path+"/test/config/Files/bar/testFile",
+							).Return(nil)
+							return mfs
+						}(),
 					},
 				},
 				t: NewTransaction(
@@ -1136,16 +1132,6 @@ func TestHandleMakeAlias(t *testing.T) {
 		},
 		{
 			name: "when symlink returns an error",
-			setup: func() {
-				mfs := &MockFileStore{}
-				path, _ := os.Getwd()
-				mfs.On(
-					"Symlink",
-					path+"/test/config/Files/foo/testFile",
-					path+"/test/config/Files/bar/testFile",
-				).Return(errors.New("ohno"))
-				FS = mfs
-			},
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
@@ -1164,6 +1150,16 @@ func TestHandleMakeAlias(t *testing.T) {
 							}(),
 						},
 						Logger: NewTestLogger(),
+						FS: func() *MockFileStore {
+							mfs := &MockFileStore{}
+							path, _ := os.Getwd()
+							mfs.On(
+								"Symlink",
+								path+"/test/config/Files/foo/testFile",
+								path+"/test/config/Files/bar/testFile",
+							).Return(errors.New("ohno"))
+							return mfs
+						}(),
 					},
 				},
 				t: NewTransaction(
@@ -1188,8 +1184,7 @@ func TestHandleMakeAlias(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:  "when user does not have required permission",
-			setup: func() {},
+			name: "when user does not have required permission",
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
@@ -1242,8 +1237,6 @@ func TestHandleMakeAlias(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
-
 			gotRes, err := HandleMakeAlias(tt.args.cc, tt.args.t)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("HandleMakeAlias(%v, %v)", tt.args.cc, tt.args.t)
@@ -1400,18 +1393,12 @@ func TestHandleDeleteUser(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		setup   func()
 		args    args
 		wantRes []Transaction
 		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when user exists",
-			setup: func() {
-				mfs := &MockFileStore{}
-				mfs.On("Remove", "Users/testuser.yaml").Return(nil)
-				FS = mfs
-			},
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
@@ -1431,6 +1418,11 @@ func TestHandleDeleteUser(t *testing.T) {
 								Access:   &[]byte{1},
 							},
 						},
+						FS: func() *MockFileStore {
+							mfs := &MockFileStore{}
+							mfs.On("Remove", "Users/testuser.yaml").Return(nil)
+							return mfs
+						}(),
 					},
 				},
 				t: NewTransaction(
@@ -1451,8 +1443,7 @@ func TestHandleDeleteUser(t *testing.T) {
 			wantErr: assert.NoError,
 		},
 		{
-			name:  "when user does not have required permission",
-			setup: func() {},
+			name: "when user does not have required permission",
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
@@ -1488,7 +1479,6 @@ func TestHandleDeleteUser(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setup()
 			gotRes, err := HandleDeleteUser(tt.args.cc, tt.args.t)
 			if !tt.wantErr(t, err, fmt.Sprintf("HandleDeleteUser(%v, %v)", tt.args.cc, tt.args.t)) {
 				return
