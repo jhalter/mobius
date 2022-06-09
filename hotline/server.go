@@ -50,8 +50,6 @@ type Server struct {
 	TrackerPassID [4]byte
 	Stats         *Stats
 
-	APIListener  net.Listener
-	FileListener net.Listener
 
 	// newsReader io.Reader
 	// newsWriter io.WriteCloser
@@ -77,10 +75,25 @@ func (s *Server) ListenAndServe(ctx context.Context, cancelRoot context.CancelFu
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	go func() { s.Logger.Fatal(s.Serve(ctx, cancelRoot, s.APIListener)) }()
+	go func() {
+		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", "", s.Port))
+		if err != nil {
+			s.Logger.Fatal(err)
+		}
+
+		s.Logger.Fatal(s.Serve(ctx, cancelRoot, ln))
+	}()
 
 	wg.Add(1)
-	go func() { s.Logger.Fatal(s.ServeFileTransfers(s.FileListener)) }()
+	go func() {
+		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", "", s.Port+1))
+		if err != nil {
+			s.Logger.Fatal(err)
+
+		}
+
+		s.Logger.Fatal(s.ServeFileTransfers(ln))
+	}()
 
 	wg.Wait()
 
@@ -190,17 +203,7 @@ func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredL
 		ThreadedNews:  &ThreadedNews{},
 	}
 
-	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", netInterface, netPort))
-	if err != nil {
-		return nil, err
-	}
-	server.APIListener = ln
-
-	ln2, err := net.Listen("tcp", fmt.Sprintf("%s:%v", netInterface, netPort+1))
-	server.FileListener = ln2
-	if err != nil {
-		return nil, err
-	}
+	var err error
 
 	// generate a new random passID for tracker registration
 	if _, err := rand.Read(server.TrackerPassID[:]); err != nil {
