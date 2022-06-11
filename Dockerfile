@@ -13,4 +13,5 @@ COPY --from=builder /app/cmd/mobius-hotline-server/mobius/config /usr/local/var/
 
 EXPOSE 5500 5501
 
+ENTRYPOINT ["/app/server"]
 CMD ["/app/server"]

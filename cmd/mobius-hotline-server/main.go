@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -17,6 +18,9 @@ import (
 	"time"
 )
 
+//go:embed mobius/config
+var cfgTemplate embed.FS
+
 const (
 	defaultPort = 5500
 )
@@ -31,6 +35,8 @@ func main() {
 	configDir := flag.String("config", defaultConfigPath(), "Path to config root")
 	version := flag.Bool("version", false, "print version and exit")
 	logLevel := flag.String("log-level", "info", "Log level")
+	init := flag.Bool("init", false, "Populate the config dir with default configuration")
+
 	flag.Parse()
 
 	if *version {
@@ -48,6 +54,20 @@ func main() {
 	l := zap.New(zapcore.NewTee(cores...))
 	defer func() { _ = l.Sync() }()
 	logger := l.Sugar()
+
+	if *init {
+		if _, err := os.Stat(*configDir + "/config.yaml"); !os.IsNotExist(err) {
+			logger.Fatalw("Init failed.  Existing config directory found: " + *configDir)
+		}
+
+		if err := os.MkdirAll(*configDir, 0750); err != nil {
+			logger.Fatal(err)
+		}
+
+		if err := copyDir("mobius/config", *configDir); err != nil {
+			logger.Fatal(err)
+		}
+	}
 
 	if _, err := os.Stat(*configDir); os.IsNotExist(err) {
 		logger.Fatalw("Configuration directory not found", "path", configDir)
@@ -124,4 +144,54 @@ func defaultConfigPath() (cfgPath string) {
 	}
 
 	return cfgPath
+}
+
+// TODO: Simplify this mess.  Why is it so difficult to recursively copy a directory?
+func copyDir(src, dst string) error {
+	entries, err := cfgTemplate.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, dirEntry := range entries {
+		if dirEntry.IsDir() {
+			if err := os.MkdirAll(dst+"/"+dirEntry.Name(), 0777); err != nil {
+				panic(err)
+			}
+			subdirEntries, _ := cfgTemplate.ReadDir(src + "/" + dirEntry.Name())
+			for _, subDirEntry := range subdirEntries {
+				f, err := os.Create(dst + "/" + dirEntry.Name() + "/" + subDirEntry.Name())
+				if err != nil {
+					return err
+				}
+
+				srcFile, err := cfgTemplate.Open(src + "/" + dirEntry.Name() + "/" + subDirEntry.Name())
+				if err != nil {
+					return err
+				}
+				_, err = io.Copy(f, srcFile)
+				if err != nil {
+					return err
+				}
+				f.Close()
+			}
+		} else {
+			f, err := os.Create(dst + "/" + dirEntry.Name())
+			if err != nil {
+				return err
+			}
+
+			srcFile, err := cfgTemplate.Open(src + "/" + dirEntry.Name())
+			if err != nil {
+				return err
+			}
+			_, err = io.Copy(f, srcFile)
+			if err != nil {
+				return err
+			}
+			f.Close()
+		}
+
+	}
+
+	return nil
 }
