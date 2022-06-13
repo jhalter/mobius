@@ -56,16 +56,18 @@ func main() {
 	logger := l.Sugar()
 
 	if *init {
-		if _, err := os.Stat(*configDir + "/config.yaml"); !os.IsNotExist(err) {
-			logger.Fatalw("Init failed.  Existing config directory found: " + *configDir)
-		}
+		if _, err := os.Stat(*configDir + "/config.yaml"); os.IsNotExist(err) {
+			if err := os.MkdirAll(*configDir, 0750); err != nil {
+				logger.Fatal(err)
+			}
 
-		if err := os.MkdirAll(*configDir, 0750); err != nil {
-			logger.Fatal(err)
-		}
+			if err := copyDir("mobius/config", *configDir); err != nil {
+				logger.Fatal(err)
+			}
+			logger.Infow("Config dir initialized at " + *configDir)
 
-		if err := copyDir("mobius/config", *configDir); err != nil {
-			logger.Fatal(err)
+		} else {
+			logger.Infow("Existing config dir found.  Skipping initialization.")
 		}
 	}
 
