@@ -1,49 +1,72 @@
 # Mobius
 
-Mobius is a cross-platform command line [Hotline](https://en.wikipedia.org/wiki/Hotline_Communications) server, client, and library developed in Golang.
+Mobius is a cross-platform command line [Hotline](https://en.wikipedia.org/wiki/Hotline_Communications) client and server implemented in Golang.
 
-The project aims to support Hotline functionality from versions v1.2.3 and >v1.5 (e.g. threaded news and folder transfers).
+The goal of Mobius server is to make it simple to run a Hotline server on macOS, Linux, and Windows, with full compatibility for all popular Hotline clients.
 
-## Project status
+The goal of the Mobius client is to make it fun and easy to connect to multiple Hotline servers through a [cool retro terminal UI](https://github.com/jhalter/mobius/wiki/Mobius-Client-Screenshot-Gallery).
 
-### Server
+## Getting started
 
-* Near feature complete
+### Docker
 
-### Client
+If you run Docker, you can quickly try out the Mobius server with the official image from Docker hub:
 
-* Early stage with functionality for chat and news posting only
+    docker run --rm -p 5500:5500 -p 5501:5501 jhalter/mobius-hotline-server:latest -init
 
-# Getting started
+This will start the Mobius server with the Hotline ports 5500 and 5501 exposed on localhost using a default configuration from the image.
+
+To edit the configuration and serve files from your host OS, include the `-v` option to setup a Docker [bind mount](https://docs.docker.com/storage/bind-mounts/):
+
+	export HLFILES=/Users/foo/HotlineFiles #
+ 	docker run --rm -p 5500:5500 -p 5501:5501 -v $HLFILES:/usr/local/var/mobius/config jhalter/mobius-hotline-server:latest -init
+
+You'll now find a configuration directory on your host OS populated with a default configuration:
+
+```
+❯ ls -al $HLFILES
+total 32
+drwxr-xr-x   8 jhalter  staff   256 Jun 12 17:11 .
+drwxr-x---+ 49 jhalter  staff  1568 Jun 12 17:11 ..
+-rw-r--r--   1 jhalter  staff    38 Jun 12 17:11 Agreement.txt
+drwxr-xr-x   3 jhalter  staff    96 Jun 12 17:11 Files
+-rw-r--r--   1 jhalter  staff    19 Jun 12 17:11 MessageBoard.txt
+-rw-r--r--   1 jhalter  staff    15 Jun 12 17:11 ThreadedNews.yaml
+drwxr-xr-x   4 jhalter  staff   128 Jun 12 17:11 Users
+-rw-r--r--   1 jhalter  staff   313 Jun 12 17:11 config.yaml
+```
+
+Edit `config.yaml` to get started personalizing your server.
+
 
 ### Mac OS
 
-For Mac OS the easiest path to installation is to install through Homebrew.
+For Mac OS the easiest path to installation is through Homebrew.
 
 #### Client
 
+To install the client:
+
     brew install jhalter/mobius-hotline-client/mobius-hotline-client
 
-After installation `mobius-hotline-client` installed to `/usr/local/bin/mobius-hotline-client` and should be in your $PATH. 
-
-The client config file is in `/usr/local/etc/mobius-client-config.yaml`
-
-Run `mobius-hotline-client -help` for usage options.
+Then run `mobius-hotline-client` to get started.
 
 #### Server
 
+To install the server:
+
     brew install jhalter/mobius-hotline-server/mobius-hotline-server
 
-After installation `mobius-hotline-server` installed to `/usr/local/bin/mobius-hotline-server` and should be in your $PATH.
+After installation `mobius-hotline-server` will be installed at `$HOMEBREW_PREFIX/bin/mobius-hotline-server` and should be in your $PATH.
 
-The server config file directory is under `/usr/local/var/mobius` which by default contains:
+The server config file directory is under `$HOMEBREW_PREFIX/var/mobius` which by default contains:
 
-    /usr/local/var/mobius/config/MessageBoard.txt
-    /usr/local/var/mobius/config/config.yaml
-    /usr/local/var/mobius/config/ThreadedNews.yaml
-    /usr/local/var/mobius/config/Agreement.txt
-    /usr/local/var/mobius/config/Users/guest.yaml
-    /usr/local/var/mobius/config/Users/admin.yaml
+    /opt/homebrew/mobius/config/MessageBoard.txt
+    /opt/homebrew/var/mobius/config/config.yaml
+    /opt/homebrew/var/mobius/config/ThreadedNews.yaml
+    /opt/homebrew/var/mobius/config/Agreement.txt
+    /opt/homebrew/var/mobius/config/Users/guest.yaml
+    /opt/homebrew/var/mobius/config/Users/admin.yaml
 
 Edit `/usr/local/var/mobius/config/config.yaml` to change your server name and other settings.
 
@@ -59,19 +82,10 @@ Download a compiled release for your architecture from the Releases page or foll
 
     TODO
 
-### Docker
-
-To run the Mobius server from Docker with a local directory mounted for config and files, follow these steps:
-
-1. Clone this repo: `git clone https://github.com/jhalter/mobius.git`
-2. Copy the config dir somewhere `cp -r cmd/mobius-hotline-server/mobius/config ~/mobius-config` 
-4. Run the image:
-    `docker run -p 5500:5500 -p 5501:5501 -v ~/mobius-config:/usr/local/var/mobius/config jhalter/mobius-hotline-server:latest`
-
-
 ### Build from source
 
 To build from source, run:
 
-    make build-client
-    make build-server
+    make all
+
+Then grab your desired build from `dist`
