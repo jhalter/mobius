@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://user-images.githubusercontent.com/190136/173893691-349dcf82-4fbe-431f-966b-c54817770f66.png">
+  <source media="(prefers-color-scheme: light)" srcset="https://user-images.githubusercontent.com/190136/173893686-d07f72a6-2822-4e4b-9d61-7ba7019ba706.png">
+</picture>
+
 # Mobius
 
 Mobius is a cross-platform command line [Hotline](https://en.wikipedia.org/wiki/Hotline_Communications) client and server implemented in Golang.
