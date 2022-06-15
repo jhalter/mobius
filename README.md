@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="dark_logo.png">
-  <source media="(prefers-color-scheme: light)" srcset="light_logo.png">
+  <source media="(prefers-color-scheme: dark)" srcset="/dark_logo.png">
+  <source media="(prefers-color-scheme: light)" srcset="/light_logo.png">
 </picture>
 
 # Mobius
