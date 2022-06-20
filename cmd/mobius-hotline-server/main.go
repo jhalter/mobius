@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -54,6 +55,10 @@ func main() {
 	l := zap.New(zapcore.NewTee(cores...))
 	defer func() { _ = l.Sync() }()
 	logger := l.Sugar()
+
+	if !(strings.HasSuffix(*configDir, "/") || strings.HasSuffix(*configDir, "\\")) {
+		*configDir = *configDir + "/"
+	}
 
 	if *init {
 		if _, err := os.Stat(*configDir + "/config.yaml"); os.IsNotExist(err) {
@@ -132,7 +137,7 @@ var zapLogLevel = map[string]zapcore.Level{
 func defaultConfigPath() (cfgPath string) {
 	switch runtime.GOOS {
 	case "windows":
-		cfgPath = "config"
+		cfgPath = "config/"
 	case "darwin":
 		if _, err := os.Stat("/usr/local/var/mobius/config/"); err == nil {
 			cfgPath = "/usr/local/var/mobius/config/"
