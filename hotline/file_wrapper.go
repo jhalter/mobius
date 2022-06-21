@@ -105,20 +105,6 @@ func (f *fileWrapper) infoForkName() string {
 	return fmt.Sprintf(infoForkNameTemplate, f.name)
 }
 
-func (f *fileWrapper) creatorCode() []byte {
-	if f.ffo.FlatFileInformationFork.CreatorSignature != nil {
-		return f.infoFork.CreatorSignature
-	}
-	return []byte(fileTypeFromFilename(f.name).CreatorCode)
-}
-
-func (f *fileWrapper) typeCode() []byte {
-	if f.infoFork != nil {
-		return f.infoFork.TypeSignature
-	}
-	return []byte(fileTypeFromFilename(f.name).TypeCode)
-}
-
 func (f *fileWrapper) rsrcForkWriter() (io.Writer, error) {
 	file, err := os.OpenFile(f.rsrcPath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {

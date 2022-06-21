@@ -2,6 +2,7 @@ package hotline
 
 import (
 	"encoding/binary"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 	"io"
 	"math/big"
@@ -65,6 +66,7 @@ type ClientConn struct {
 	AutoReply  []byte
 	Transfers  map[int][]*FileTransfer
 	Agreed     bool
+	logger     *zap.SugaredLogger
 }
 
 func (cc *ClientConn) sendAll(t int, fields ...Field) {
@@ -97,10 +99,8 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 			}
 		}
 
-		cc.Server.Logger.Infow(
+		cc.logger.Infow(
 			"Received Transaction",
-			"login", cc.Account.Login,
-			"name", string(cc.UserName),
 			"RequestType", handler.Name,
 		)
 

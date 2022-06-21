@@ -167,25 +167,31 @@ func (s *Server) sendTransaction(t Transaction) error {
 	return nil
 }
 
+func (s *Server) processOutbox() {
+	for {
+		t := <-s.outbox
+		go func() {
+			if err := s.sendTransaction(t); err != nil {
+				s.Logger.Errorw("error sending transaction", "err", err)
+			}
+		}()
+	}
+}
+
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
+	go s.processOutbox()
+
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
 			s.Logger.Errorw("error accepting connection", "err", err)
 		}
+		connCtx := context.WithValue(ctx, contextKeyReq, requestCtx{
+			remoteAddr: conn.RemoteAddr().String(),
+		})
 
 		go func() {
-			for {
-				t := <-s.outbox
-				go func() {
-					if err := s.sendTransaction(t); err != nil {
-						s.Logger.Errorw("error sending transaction", "err", err)
-					}
-				}()
-			}
-		}()
-		go func() {
-			if err := s.handleNewConnection(ctx, conn, conn.RemoteAddr().String()); err != nil {
+			if err := s.handleNewConnection(connCtx, conn, conn.RemoteAddr().String()); err != nil {
 				s.Logger.Infow("New client connection established", "RemoteAddr", conn.RemoteAddr())
 				if err == io.EOF {
 					s.Logger.Infow("Client disconnected", "RemoteAddr", conn.RemoteAddr())
@@ -335,7 +341,7 @@ func (s *Server) writeThreadedNews() error {
 	return err
 }
 
-func (s *Server) NewClientConn(conn net.Conn, remoteAddr string) *ClientConn {
+func (s *Server) NewClientConn(conn io.ReadWriteCloser, remoteAddr string) *ClientConn {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
@@ -579,7 +585,9 @@ func (s *Server) handleNewConnection(ctx context.Context, conn net.Conn, remoteA
 		*c.Flags = []byte{0, 2}
 	}
 
-	s.Logger.Infow("Client connection received", "login", login, "version", *c.Version, "RemoteAddr", remoteAddr)
+	c.logger = s.Logger.With("remoteAddr", remoteAddr, "login", login)
+
+	c.logger.Infow("Client connection received", "version", fmt.Sprintf("%x", *c.Version))
 
 	s.outbox <- c.NewReply(clientLogin,
 		NewField(fieldVersion, []byte{0x00, 0xbe}),
@@ -596,6 +604,8 @@ func (s *Server) handleNewConnection(ctx context.Context, conn net.Conn, remoteA
 	// Used simplified hotline v1.2.3 login flow for clients that do not send login info in tranAgreed
 	if *c.Version == nil || bytes.Equal(*c.Version, nostalgiaVersion) {
 		c.Agreed = true
+
+		c.logger = c.logger.With("name", string(c.UserName))
 
 		c.notifyOthers(
 			*NewTransaction(
@@ -765,6 +775,9 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 		}
 
 		err = sendFile(wr, rFile, int(dataOffset))
+		if err != nil {
+			return err
+		}
 
 		if err := wr.Flush(); err != nil {
 			return err
@@ -831,7 +844,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 		if err := file.Close(); err != nil {
 			return err
 		}
-		
+
 		if err := s.FS.Rename(destinationFile+".incomplete", destinationFile); err != nil {
 			return err
 		}
@@ -1003,6 +1016,10 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 
 			return nil
 		})
+
+		if err != nil {
+			return err
+		}
 
 	case FolderUpload:
 		dstPath, err := readPath(s.Config.FileRoot, fileTransfer.FilePath, fileTransfer.FileName)

@@ -406,7 +406,9 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 			}
 		}
 
-		hlFile.ffo.FlatFileInformationFork.setComment(t.GetField(fieldFileComment).Data)
+		if err := hlFile.ffo.FlatFileInformationFork.setComment(t.GetField(fieldFileComment).Data); err != nil {
+			return res, err
+		}
 		w, err := hlFile.infoForkWriter()
 		if err != nil {
 			return res, err
@@ -521,9 +523,12 @@ func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 		return res, err
 	}
 
-	cc.Server.Logger.Debugw("Move file", "src", filePath+"/"+fileName, "dst", fileNewPath+"/"+fileName)
+	cc.logger.Infow("Move file", "src", filePath+"/"+fileName, "dst", fileNewPath+"/"+fileName)
 
 	hlFile, err := newFileWrapper(cc.Server.FS, filePath, 0)
+	if err != nil {
+		return res, err
+	}
 
 	fi, err := hlFile.dataFile()
 	if err != nil {
@@ -715,7 +720,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 		if len(subFields) == 1 {
 			login := DecodeUserString(getField(fieldData, &subFields).Data)
-			cc.Server.Logger.Infow("DeleteUser", "login", login)
+			cc.logger.Infow("DeleteUser", "login", login)
 
 			if !authorize(cc.Account.Access, accessDeleteUser) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to delete accounts."))
@@ -732,7 +737,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 		// check if the login dataFile; if so, we know we are updating an existing user
 		if acc, ok := cc.Server.Accounts[login]; ok {
-			cc.Server.Logger.Infow("UpdateUser", "login", login)
+			cc.logger.Infow("UpdateUser", "login", login)
 
 			// account dataFile, so this is an update action
 			if !authorize(cc.Account.Access, accessModifyUser) {
@@ -762,7 +767,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 				return res, err
 			}
 		} else {
-			cc.Server.Logger.Infow("CreateUser", "login", login)
+			cc.logger.Infow("CreateUser", "login", login)
 
 			if !authorize(cc.Account.Access, accessCreateUser) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to create new accounts."))
@@ -933,6 +938,8 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	cc.UserName = t.GetField(fieldUserName).Data
 	*cc.Icon = t.GetField(fieldUserIconID).Data
 
+	cc.logger = cc.logger.With("name", string(cc.UserName))
+
 	options := t.GetField(fieldOptions).Data
 	optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
 
@@ -1054,9 +1061,6 @@ func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) (res []Transaction
 		return res, err
 	}
 
-	newsPath := t.GetField(fieldNewsPath).Data
-	cc.Server.Logger.Infow("NewsPath: ", "np", string(newsPath))
-
 	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
 	cats := cc.Server.GetNewsCatByPath(pathStrs)
 
@@ -1119,7 +1123,7 @@ func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	name := string(t.GetField(fieldFileName).Data)
 	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
 
-	cc.Server.Logger.Infof("Creating new news folder %s", name)
+	cc.logger.Infof("Creating new news folder %s", name)
 
 	cats := cc.Server.GetNewsCatByPath(pathStrs)
 	cats[name] = NewsCategoryListData15{
@@ -1224,7 +1228,7 @@ func HandleDelNewsItem(cc *ClientConn, t *Transaction) (res []Transaction, err e
 
 	// TODO: determine if path is a Folder (Bundle) or Category and check for permission
 
-	cc.Server.Logger.Infof("DelNewsItem %v", pathStrs)
+	cc.logger.Infof("DelNewsItem %v", pathStrs)
 
 	cats := cc.Server.ThreadedNews.Categories
 
@@ -1911,7 +1915,7 @@ func HandleMakeAlias(cc *ClientConn, t *Transaction) (res []Transaction, err err
 		return res, err
 	}
 
-	cc.Server.Logger.Debugw("Make alias", "src", fullFilePath, "dst", fullNewFilePath)
+	cc.logger.Debugw("Make alias", "src", fullFilePath, "dst", fullNewFilePath)
 
 	if err := cc.Server.FS.Symlink(fullFilePath, fullNewFilePath); err != nil {
 		res = append(res, cc.NewErrReply(t, "Error creating alias"))
