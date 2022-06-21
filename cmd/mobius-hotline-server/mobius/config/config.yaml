@@ -1,14 +1,40 @@
+# Name of the server as it appears on the Tracker
 Name: My Hotline server
+
+# Description of the server as it appears on the tracker
 Description: A default configured Hotline server running Mobius
+
+# Server banner ID; currently implemented
 BannerID: 0
-FileRoot: Files/
+
+# Path to the Files directory, by default in a subdirectory of the config root named Files
+FileRoot: Files
+
+# Enable tracker registration.  Must be "true" or "false".
 EnableTrackerRegistration: false
+
+# List of trackers to register with
 Trackers:
 - hltracker.com:5499
 - tracker.preterhuman.net:5499
-NewsDelimiter: ""
+
+# Preserve resource forks and file type/creator codes for files uploaded by Macintosh clients.
+# This comes with trade-offs.  For more details, see:
+# https://github.com/jhalter/mobius/wiki/Resource-fork-support-in-Mobius
+# Must be "true" or "false".
+PreserveResourceForks: false
+
+# Optional custom date format for flat news postings
 NewsDateFormat: ""
+
+# Optional custom delimiter between flat news postings
+NewsDelimiter: ""
+
+# Maximum simultaneous downloads; currently unimplemented
 MaxDownloads: 0
+
+# Maximum simultaneous downloads per client; currently unimplemented
 MaxDownloadsPerClient: 0
+
+# Maximum simultaneous connections/IP; currently unimplemented
 MaxConnectionsPerIP: 0
-PreserveResourceForks: true
