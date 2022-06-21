@@ -2485,3 +2485,124 @@ func TestHandleDeleteFile(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleGetFileNameList(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "when fieldFilePath is a drop box, but user does not have accessViewDropBoxes ",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							access := bits[:]
+							return &access
+						}(),
+					},
+					Server: &Server{
+
+						Config: &Config{
+							FileRoot: func() string {
+								path, _ := os.Getwd()
+								return filepath.Join(path, "/test/config/Files/getFileNameListTestDir")
+							}(),
+						},
+					},
+				},
+				t: NewTransaction(
+					tranGetFileNameList, &[]byte{0, 1},
+					NewField(fieldFilePath, []byte{
+						0x00, 0x01,
+						0x00, 0x00,
+						0x08,
+						0x64, 0x72, 0x6f, 0x70, 0x20, 0x62, 0x6f, 0x78, // "drop box"
+					}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to view drop boxes.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "with file root",
+			args: args{
+				cc: &ClientConn{
+					Server: &Server{
+						Config: &Config{
+							FileRoot: func() string {
+								path, _ := os.Getwd()
+								return filepath.Join(path, "/test/config/Files/getFileNameListTestDir")
+							}(),
+						},
+					},
+				},
+				t: NewTransaction(
+					tranGetFileNameList, &[]byte{0, 1},
+					NewField(fieldFilePath, []byte{
+						0x00, 0x00,
+						0x00, 0x00,
+					}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0xc8},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(
+							fieldFileNameWithInfo,
+							func() []byte {
+								fnwi := FileNameWithInfo{
+									fileNameWithInfoHeader: fileNameWithInfoHeader{
+										Type:       [4]byte{0x54, 0x45, 0x58, 0x54},
+										Creator:    [4]byte{0x54, 0x54, 0x58, 0x54},
+										FileSize:   [4]byte{0, 0, 0x04, 0},
+										RSVD:       [4]byte{},
+										NameScript: [2]byte{},
+										NameSize:   [2]byte{0, 0x0b},
+									},
+									name: []byte("testfile-1k"),
+								}
+								b, _ := fnwi.MarshalBinary()
+								return b
+							}(),
+						),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes, err := HandleGetFileNameList(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleGetFileNameList(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
+
+			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}

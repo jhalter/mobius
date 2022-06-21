@@ -76,15 +76,6 @@ func (fp *FilePath) Len() uint16 {
 	return binary.BigEndian.Uint16(fp.ItemCount[:])
 }
 
-func (fp *FilePath) String() string {
-	out := []string{"/"}
-	for _, i := range fp.Items {
-		out = append(out, string(i.Name))
-	}
-
-	return filepath.Join(out...)
-}
-
 func readPath(fileRoot string, filePath, fileName []byte) (fullPath string, err error) {
 	var fp FilePath
 	if filePath != nil {
@@ -93,9 +84,14 @@ func readPath(fileRoot string, filePath, fileName []byte) (fullPath string, err 
 		}
 	}
 
+	var subPath string
+	for _, pathItem := range fp.Items {
+		subPath = filepath.Join("/", subPath, string(pathItem.Name))
+	}
+
 	fullPath = filepath.Join(
 		fileRoot,
-		fp.String(),
+		subPath,
 		filepath.Join("/", string(fileName)),
 	)
 

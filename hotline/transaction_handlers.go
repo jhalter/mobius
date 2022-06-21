@@ -5,12 +5,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"gopkg.in/yaml.v3"
 	"io/ioutil"
 	"math/big"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -559,10 +559,11 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err err
 		res = append(res, cc.NewErrReply(t, "You are not allowed to create folders."))
 		return res, err
 	}
-	newFolderPath := cc.Server.Config.FileRoot
 	folderName := string(t.GetField(fieldFileName).Data)
 
 	folderName = path.Join("/", folderName)
+
+	var subPath string
 
 	// fieldFilePath is only present for nested paths
 	if t.GetField(fieldFilePath).Data != nil {
@@ -571,9 +572,12 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err err
 		if err != nil {
 			return nil, err
 		}
-		newFolderPath += newFp.String()
+
+		for _, pathItem := range newFp.Items {
+			subPath = filepath.Join("/", subPath, string(pathItem.Name))
+		}
 	}
-	newFolderPath = path.Join(newFolderPath, folderName)
+	newFolderPath := path.Join(cc.Server.Config.FileRoot, subPath, folderName)
 
 	// TODO: check path and folder name lengths
 
@@ -1659,8 +1663,6 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 		return res, err
 	}
 
-	spew.Dump(fullPath)
-
 	var fp FilePath
 	if t.GetField(fieldFilePath).Data != nil {
 		if err = fp.UnmarshalBinary(t.GetField(fieldFilePath).Data); err != nil {
@@ -1670,7 +1672,7 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 
 	// Handle special case for drop box folders
 	if fp.IsDropbox() && !authorize(cc.Account.Access, accessViewDropBoxes) {
-		res = append(res, cc.NewReply(t))
+		res = append(res, cc.NewErrReply(t, "You are not allowed to view drop boxes."))
 		return res, err
 	}
 
