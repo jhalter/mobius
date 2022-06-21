@@ -1086,6 +1086,7 @@ func TestHandleMakeAlias(t *testing.T) {
 			name: "with valid input and required permissions",
 			args: args{
 				cc: &ClientConn{
+					logger: NewTestLogger(),
 					Account: &Account{
 						Access: func() *[]byte {
 							var bits accessBitmap
@@ -1137,6 +1138,7 @@ func TestHandleMakeAlias(t *testing.T) {
 			name: "when symlink returns an error",
 			args: args{
 				cc: &ClientConn{
+					logger: NewTestLogger(),
 					Account: &Account{
 						Access: func() *[]byte {
 							var bits accessBitmap
@@ -1190,6 +1192,7 @@ func TestHandleMakeAlias(t *testing.T) {
 			name: "when user does not have required permission",
 			args: args{
 				cc: &ClientConn{
+					logger: NewTestLogger(),
 					Account: &Account{
 						Access: func() *[]byte {
 							var bits accessBitmap
@@ -1901,6 +1904,7 @@ func TestHandleUpdateUser(t *testing.T) {
 			name: "when action is create user without required permission",
 			args: args{
 				cc: &ClientConn{
+					logger: NewTestLogger(),
 					Server: &Server{
 						Logger: NewTestLogger(),
 					},
@@ -1954,6 +1958,7 @@ func TestHandleUpdateUser(t *testing.T) {
 			name: "when action is modify user without required permission",
 			args: args{
 				cc: &ClientConn{
+					logger: NewTestLogger(),
 					Server: &Server{
 						Logger: NewTestLogger(),
 						Accounts: map[string]*Account{
@@ -2010,8 +2015,8 @@ func TestHandleUpdateUser(t *testing.T) {
 			name: "when action is delete user without required permission",
 			args: args{
 				cc: &ClientConn{
+					logger: NewTestLogger(),
 					Server: &Server{
-						Logger: NewTestLogger(),
 						Accounts: map[string]*Account{
 							"bbb": {},
 						},
