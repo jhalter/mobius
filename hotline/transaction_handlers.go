@@ -231,6 +231,10 @@ var TransactionHandlers = map[uint16]TransactionType{
 		Name:    "tranUserBroadcast",
 		Handler: HandleUserBroadcast,
 	},
+	tranDownloadBanner: {
+		Name:    "tranDownloadBanner",
+		Handler: HandleDownloadBanner,
+	},
 }
 
 func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
@@ -974,6 +978,10 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		),
 	) {
 		cc.Server.outbox <- t
+	}
+
+	if cc.Server.Config.BannerFile != "" {
+		cc.Server.outbox <- *NewTransaction(tranServerBanner, cc.ID, NewField(fieldBannerType, []byte("JPEG")))
 	}
 
 	res = append(res, cc.NewReply(t))
@@ -1923,6 +1931,36 @@ func HandleMakeAlias(cc *ClientConn, t *Transaction) (res []Transaction, err err
 		res = append(res, cc.NewErrReply(t, "Error creating alias"))
 		return res, nil
 	}
+
+	res = append(res, cc.NewReply(t))
+	return res, err
+}
+
+func HandleDownloadBanner(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	transactionRef := cc.Server.NewTransactionRef()
+	data := binary.BigEndian.Uint32(transactionRef)
+
+	ft := &FileTransfer{
+		ReferenceNumber: transactionRef,
+		Type:            bannerDownload,
+	}
+
+	fi, err := cc.Server.FS.Stat(filepath.Join(cc.Server.ConfigDir, cc.Server.Config.BannerFile))
+	if err != nil {
+		return res, err
+	}
+
+	size := make([]byte, 4)
+	binary.BigEndian.PutUint32(size, uint32(fi.Size()))
+
+	cc.Server.mux.Lock()
+	defer cc.Server.mux.Unlock()
+	cc.Server.FileTransfers[data] = ft
+
+	res = append(res, cc.NewReply(t,
+		NewField(fieldRefNum, transactionRef),
+		NewField(fieldTransferSize, size),
+	))
 
 	res = append(res, cc.NewReply(t))
 	return res, err

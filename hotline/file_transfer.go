@@ -12,6 +12,7 @@ const (
 	FileUpload     = 1
 	FolderDownload = 2
 	FolderUpload   = 3
+	bannerDownload = 4
 )
 
 type FileTransfer struct {

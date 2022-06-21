@@ -31,6 +31,7 @@ const (
 	tranNotifyChatSubject    = 119
 	tranSetChatSubject       = 120
 	tranAgreed               = 121
+	tranServerBanner         = 122
 	tranGetFileNameList      = 200
 	tranDownloadFile         = 202
 	tranUploadFile           = 203
@@ -42,7 +43,7 @@ const (
 	tranMakeFileAlias        = 209
 	tranDownloadFldr         = 210
 	// tranDownloadInfo         = 211 TODO: implement file transfer queue
-	// tranDownloadBanner     = 212 TODO: figure out what this is used for
+	tranDownloadBanner     = 212
 	tranUploadFldr         = 213
 	tranGetUserNameList    = 300
 	tranNotifyChangeUser   = 301

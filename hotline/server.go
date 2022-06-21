@@ -591,7 +591,7 @@ func (s *Server) handleNewConnection(ctx context.Context, conn io.ReadWriteClose
 
 	s.outbox <- c.NewReply(clientLogin,
 		NewField(fieldVersion, []byte{0x00, 0xbe}),
-		NewField(fieldCommunityBannerID, []byte{0x00, 0x01}),
+		NewField(fieldCommunityBannerID, []byte{0, 0}),
 		NewField(fieldServerName, []byte(s.Config.Name)),
 	)
 
@@ -716,6 +716,10 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 	)
 
 	switch fileTransfer.Type {
+	case bannerDownload:
+		if err := s.bannerDownload(rwc); err != nil {
+			return err
+		}
 	case FileDownload:
 		s.Stats.DownloadCounter += 1
 

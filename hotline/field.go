@@ -23,6 +23,7 @@ const fieldOptions = 113
 const fieldChatID = 114
 const fieldChatSubject = 115
 const fieldWaitingCount = 116
+const fieldBannerType = 152
 const fieldVersion = 160
 const fieldCommunityBannerID = 161
 const fieldServerName = 162

@@ -6,6 +6,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 )
 
 type transfer struct {
@@ -96,5 +98,14 @@ func sendFile(w io.Writer, r io.Reader, offset int) (err error) {
 			return err
 		}
 	}
+}
 
+func (s *Server) bannerDownload(w io.Writer) error {
+	bannerBytes, err := os.ReadFile(filepath.Join(s.ConfigDir, s.Config.BannerFile))
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(bannerBytes)
+
+	return err
 }

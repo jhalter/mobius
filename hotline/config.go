@@ -3,7 +3,7 @@ package hotline
 type Config struct {
 	Name                      string   `yaml:"Name" validate:"required,max=50"`         // Name used for Tracker registration
 	Description               string   `yaml:"Description" validate:"required,max=200"` // Description used for Tracker registration
-	BannerID                  int      `yaml:"BannerID"`                                // Unimplemented
+	BannerFile                string   `yaml:"BannerFile"`                              // Path to banner jpg
 	FileRoot                  string   `yaml:"FileRoot" validate:"required"`            // Path to Files
 	EnableTrackerRegistration bool     `yaml:"EnableTrackerRegistration"`               // Toggle Tracker Registration
 	Trackers                  []string `yaml:"Trackers" validate:"dive,hostname_port"`  // List of trackers that the server should register with
