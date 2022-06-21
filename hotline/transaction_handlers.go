@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"gopkg.in/yaml.v3"
 	"io/ioutil"
 	"math/big"
@@ -1657,6 +1658,8 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 	if err != nil {
 		return res, err
 	}
+
+	spew.Dump(fullPath)
 
 	var fp FilePath
 	if t.GetField(fieldFilePath).Data != nil {

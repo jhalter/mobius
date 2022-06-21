@@ -808,8 +808,6 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 			return err
 		}
 
-		defer func() { _ = file.Close() }()
-
 		s.Logger.Infow("File upload started", "transactionRef", fileTransfer.ReferenceNumber, "dstFile", destinationFile)
 
 		rForkWriter := io.Discard
@@ -830,6 +828,10 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 			return err
 		}
 
+		if err := file.Close(); err != nil {
+			return err
+		}
+		
 		if err := s.FS.Rename(destinationFile+".incomplete", destinationFile); err != nil {
 			return err
 		}

@@ -94,7 +94,6 @@ func readPath(fileRoot string, filePath, fileName []byte) (fullPath string, err 
 	}
 
 	fullPath = filepath.Join(
-		"/",
 		fileRoot,
 		fp.String(),
 		filepath.Join("/", string(fileName)),
