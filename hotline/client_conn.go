@@ -172,7 +172,9 @@ func (cc *ClientConn) Disconnect() {
 
 	delete(cc.Server.Clients, binary.BigEndian.Uint16(*cc.ID))
 
-	cc.notifyOthers(*NewTransaction(tranNotifyDeleteUser, nil, NewField(fieldUserID, *cc.ID)))
+	for _, t := range cc.notifyOthers(*NewTransaction(tranNotifyDeleteUser, nil, NewField(fieldUserID, *cc.ID))) {
+		cc.Server.outbox <- t
+	}
 
 	if err := cc.Connection.Close(); err != nil {
 		cc.Server.Logger.Errorw("error closing client connection", "RemoteAddr", cc.RemoteAddr)
@@ -180,13 +182,14 @@ func (cc *ClientConn) Disconnect() {
 }
 
 // notifyOthers sends transaction t to other clients connected to the server
-func (cc *ClientConn) notifyOthers(t Transaction) {
+func (cc *ClientConn) notifyOthers(t Transaction) (trans []Transaction) {
 	for _, c := range sortedClients(cc.Server.Clients) {
 		if c.ID != cc.ID && c.Agreed {
 			t.clientID = c.ID
-			cc.Server.outbox <- t
+			trans = append(trans, t)
 		}
 	}
+	return trans
 }
 
 // NewReply returns a reply Transaction with fields for the ClientConn

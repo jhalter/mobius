@@ -521,7 +521,7 @@ func dontPanic(logger *zap.SugaredLogger) {
 }
 
 // handleNewConnection takes a new net.Conn and performs the initial login sequence
-func (s *Server) handleNewConnection(ctx context.Context, conn net.Conn, remoteAddr string) error {
+func (s *Server) handleNewConnection(ctx context.Context, conn io.ReadWriteCloser, remoteAddr string) error {
 	defer dontPanic(s.Logger)
 
 	if err := Handshake(conn); err != nil {
@@ -604,10 +604,9 @@ func (s *Server) handleNewConnection(ctx context.Context, conn net.Conn, remoteA
 	// Used simplified hotline v1.2.3 login flow for clients that do not send login info in tranAgreed
 	if *c.Version == nil || bytes.Equal(*c.Version, nostalgiaVersion) {
 		c.Agreed = true
-
 		c.logger = c.logger.With("name", string(c.UserName))
 
-		c.notifyOthers(
+		for _, t := range c.notifyOthers(
 			*NewTransaction(
 				tranNotifyChangeUser, nil,
 				NewField(fieldUserName, c.UserName),
@@ -615,7 +614,9 @@ func (s *Server) handleNewConnection(ctx context.Context, conn net.Conn, remoteA
 				NewField(fieldUserIconID, *c.Icon),
 				NewField(fieldUserFlags, *c.Flags),
 			),
-		)
+		) {
+			c.Server.outbox <- t
+		}
 	}
 
 	c.Server.Stats.LoginCount += 1
@@ -644,7 +645,7 @@ func (s *Server) handleNewConnection(ctx context.Context, conn net.Conn, remoteA
 		// iterate over all the transactions that were parsed from the byte slice and handle them
 		for _, t := range transactions {
 			if err := c.handleTransaction(&t); err != nil {
-				c.Server.Logger.Errorw("Error handling transaction", "err", err)
+				c.logger.Errorw("Error handling transaction", "err", err)
 			}
 		}
 	}

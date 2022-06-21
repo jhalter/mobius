@@ -964,7 +964,7 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		cc.AutoReply = []byte{}
 	}
 
-	cc.notifyOthers(
+	for _, t := range cc.notifyOthers(
 		*NewTransaction(
 			tranNotifyChangeUser, nil,
 			NewField(fieldUserName, cc.UserName),
@@ -972,7 +972,9 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			NewField(fieldUserIconID, *cc.Icon),
 			NewField(fieldUserFlags, *cc.Flags),
 		),
-	)
+	) {
+		cc.Server.outbox <- t
+	}
 
 	res = append(res, cc.NewReply(t))
 
