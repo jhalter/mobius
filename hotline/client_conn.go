@@ -83,26 +83,23 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 
 			// Validate that required field is present
 			if field.ID == nil {
-				cc.Server.Logger.Errorw(
+				cc.logger.Errorw(
 					"Missing required field",
-					"Account", cc.Account.Login, "UserName", string(cc.UserName), "RequestType", handler.Name, "FieldID", reqField.ID,
+					"RequestType", handler.Name, "FieldID", reqField.ID,
 				)
 				return nil
 			}
 
 			if len(field.Data) < reqField.minLen {
-				cc.Server.Logger.Infow(
+				cc.logger.Infow(
 					"Field does not meet minLen",
-					"Account", cc.Account.Login, "UserName", string(cc.UserName), "RequestType", handler.Name, "FieldID", reqField.ID,
+					"RequestType", handler.Name, "FieldID", reqField.ID,
 				)
 				return nil
 			}
 		}
 
-		cc.logger.Infow(
-			"Received Transaction",
-			"RequestType", handler.Name,
-		)
+		cc.logger.Infow("Received Transaction", "RequestType", handler.Name)
 
 		transactions, err := handler.Handler(cc, transaction)
 		if err != nil {
@@ -112,10 +109,8 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 			cc.Server.outbox <- t
 		}
 	} else {
-		cc.Server.Logger.Errorw(
-			"Unimplemented transaction type received",
-			"UserName", string(cc.UserName), "RequestID", requestNum,
-		)
+		cc.logger.Errorw(
+			"Unimplemented transaction type received", "RequestID", requestNum)
 	}
 
 	cc.Server.mux.Lock()

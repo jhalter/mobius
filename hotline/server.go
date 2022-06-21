@@ -638,7 +638,7 @@ func (s *Server) handleNewConnection(ctx context.Context, conn net.Conn, remoteA
 		// into a slice of transactions
 		var transactions []Transaction
 		if transactions, tReadlen, err = readTransactions(tranBuff); err != nil {
-			c.Server.Logger.Errorw("Error handling transaction", "err", err)
+			c.logger.Errorw("Error handling transaction", "err", err)
 		}
 
 		// iterate over all the transactions that were parsed from the byte slice and handle them
