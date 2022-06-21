@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 )
 
@@ -168,22 +167,22 @@ func (f *fileWrapper) dataFile() (os.FileInfo, error) {
 
 // move a fileWrapper and its associated metadata files to newPath
 func (f *fileWrapper) move(newPath string) error {
-	err := f.fs.Rename(f.dataPath, path.Join(newPath, f.name))
+	err := f.fs.Rename(f.dataPath, filepath.Join(newPath, f.name))
 	if err != nil {
 		// TODO
 	}
 
-	err = f.fs.Rename(f.incompletePath, path.Join(newPath, f.incompleteDataName()))
+	err = f.fs.Rename(f.incompletePath, filepath.Join(newPath, f.incompleteDataName()))
 	if err != nil {
 		// TODO
 	}
 
-	err = f.fs.Rename(f.rsrcPath, path.Join(newPath, f.rsrcForkName()))
+	err = f.fs.Rename(f.rsrcPath, filepath.Join(newPath, f.rsrcForkName()))
 	if err != nil {
 		// TODO
 	}
 
-	err = f.fs.Rename(f.infoPath, path.Join(newPath, f.infoForkName()))
+	err = f.fs.Rename(f.infoPath, filepath.Join(newPath, f.infoForkName()))
 	if err != nil {
 		// TODO
 	}
