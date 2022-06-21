@@ -29,83 +29,36 @@ func (tf *transfer) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-const fileCopyBufSize = 524288 // 512k
-func receiveFile(conn io.Reader, targetFile io.Writer, resForkFile io.Writer) error {
-	ffhBuf := make([]byte, 24)
-	if _, err := io.ReadFull(conn, ffhBuf); err != nil {
+const fileCopyBufSize = 4096
+
+func receiveFile(r io.Reader, targetFile, resForkFile, infoFork io.Writer) error {
+	var ffo flattenedFileObject
+	if _, err := ffo.ReadFrom(r); err != nil {
 		return err
 	}
 
-	var ffh FlatFileHeader
-	err := binary.Read(bytes.NewReader(ffhBuf), binary.BigEndian, &ffh)
+	// Write the information fork
+	_, err := infoFork.Write(ffo.FlatFileInformationFork.MarshalBinary())
 	if err != nil {
 		return err
 	}
 
-	ffifhBuf := make([]byte, 16)
-	if _, err := io.ReadFull(conn, ffifhBuf); err != nil {
-		return err
-	}
-
-	var ffifh FlatFileInformationForkHeader
-	err = binary.Read(bytes.NewReader(ffifhBuf), binary.BigEndian, &ffifh)
-	if err != nil {
-		return err
-	}
-
-	var ffif FlatFileInformationFork
-
-	dataLen := binary.BigEndian.Uint32(ffifh.DataSize[:])
-	ffifBuf := make([]byte, dataLen)
-	if _, err := io.ReadFull(conn, ffifBuf); err != nil {
-		return err
-	}
-	if err := ffif.UnmarshalBinary(ffifBuf); err != nil {
-		return err
-	}
-
-	var ffdfh FlatFileDataForkHeader
-	ffdfhBuf := make([]byte, 16)
-	if _, err := io.ReadFull(conn, ffdfhBuf); err != nil {
-		return err
-	}
-	err = binary.Read(bytes.NewReader(ffdfhBuf), binary.BigEndian, &ffdfh)
-	if err != nil {
-		return err
-	}
-
-	// this will be zero if the file only has a resource fork
-	fileSize := int(binary.BigEndian.Uint32(ffdfh.DataSize[:]))
-
+	// read and write the data fork
 	bw := bufio.NewWriterSize(targetFile, fileCopyBufSize)
-	_, err = io.CopyN(bw, conn, int64(fileSize))
-	if err != nil {
+	if _, err = io.CopyN(bw, r, ffo.dataSize()); err != nil {
 		return err
 	}
 	if err := bw.Flush(); err != nil {
 		return err
 	}
 
-	if ffh.ForkCount == [2]byte{0, 3} {
-		var resForkHeader FlatFileDataForkHeader
-		if _, err := io.ReadFull(conn, resForkHeader.ForkType[:]); err != nil {
-			return err
-		}
-
-		if _, err := io.ReadFull(conn, resForkHeader.CompressionType[:]); err != nil {
-			return err
-		}
-
-		if _, err := io.ReadFull(conn, resForkHeader.RSVD[:]); err != nil {
-			return err
-		}
-
-		if _, err := io.ReadFull(conn, resForkHeader.DataSize[:]); err != nil {
+	if ffo.FlatFileHeader.ForkCount == [2]byte{0, 3} {
+		if err := binary.Read(r, binary.BigEndian, &ffo.FlatFileResForkHeader); err != nil {
 			return err
 		}
 
 		bw = bufio.NewWriterSize(resForkFile, fileCopyBufSize)
-		_, err = io.CopyN(resForkFile, conn, int64(binary.BigEndian.Uint32(resForkHeader.DataSize[:])))
+		_, err = io.CopyN(resForkFile, r, ffo.rsrcSize())
 		if err != nil {
 			return err
 		}
@@ -114,4 +67,34 @@ func receiveFile(conn io.Reader, targetFile io.Writer, resForkFile io.Writer) er
 		}
 	}
 	return nil
+}
+
+func sendFile(w io.Writer, r io.Reader, offset int) (err error) {
+	br := bufio.NewReader(r)
+	if _, err := br.Discard(offset); err != nil {
+		return err
+	}
+
+	rSendBuffer := make([]byte, 1024)
+	for {
+		var bytesRead int
+
+		if bytesRead, err = br.Read(rSendBuffer); err == io.EOF {
+			if _, err := w.Write(rSendBuffer[:bytesRead]); err != nil {
+				return err
+			}
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		// totalSent += int64(bytesRead)
+
+		// fileTransfer.BytesSent += bytesRead
+
+		if _, err := w.Write(rSendBuffer[:bytesRead]); err != nil {
+			return err
+		}
+	}
+
 }

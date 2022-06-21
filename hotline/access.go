@@ -6,8 +6,6 @@ import (
 )
 
 const (
-	accessAlwaysAllow = -1 // Some transactions are always allowed
-
 	// File System Maintenance
 	accessDeleteFile   = 0
 	accessUploadFile   = 1
@@ -37,13 +35,13 @@ const (
 	accessUploadAnywhere = 25
 	// accessAnyName          = 26
 	// accessNoAgreement      = 27
-	// accessSetFileComment   = 28
-	// accessSetFolderComment = 29
-	accessViewDropBoxes = 30
-	accessMakeAlias     = 31
-	accessBroadcast     = 32
-	accessNewsDeleteArt = 33
-	accessNewsCreateCat = 34
+	accessSetFileComment   = 28
+	accessSetFolderComment = 29
+	accessViewDropBoxes    = 30
+	accessMakeAlias        = 31
+	accessBroadcast        = 32
+	accessNewsDeleteArt    = 33
+	accessNewsCreateCat    = 34
 	// accessNewsDeleteCat    = 35
 	accessNewsCreateFldr = 36
 	// accessNewsDeleteFldr   = 37
@@ -58,9 +56,6 @@ func (bits *accessBitmap) Set(i int) {
 // authorize checks if 64 bit access slice contain has accessBit set
 // TODO: refactor to use accessBitmap type
 func authorize(access *[]byte, accessBit int) bool {
-	if accessBit == accessAlwaysAllow {
-		return true
-	}
 	bits := big.NewInt(int64(binary.BigEndian.Uint64(*access)))
 
 	return bits.Bit(63-accessBit) == 1

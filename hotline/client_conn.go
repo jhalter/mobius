@@ -5,6 +5,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"io"
 	"math/big"
+	"sort"
 )
 
 type byClientID []*ClientConn
@@ -164,9 +165,9 @@ func (cc *ClientConn) Authorize(access int) bool {
 		return true
 	}
 
-	accessBitmap := big.NewInt(int64(binary.BigEndian.Uint64(*cc.Account.Access)))
+	i := big.NewInt(int64(binary.BigEndian.Uint64(*cc.Account.Access)))
 
-	return accessBitmap.Bit(63-access) == 1
+	return i.Bit(63-access) == 1
 }
 
 // Disconnect notifies other clients that a client has disconnected
@@ -221,4 +222,14 @@ func (cc *ClientConn) NewErrReply(t *Transaction, errMsg string) Transaction {
 			NewField(fieldError, []byte(errMsg)),
 		},
 	}
+}
+
+// sortedClients is a utility function that takes a map of *ClientConn and returns a sorted slice of the values.
+// The purpose of this is to ensure that the ordering of client connections is deterministic so that test assertions work.
+func sortedClients(unsortedClients map[uint16]*ClientConn) (clients []*ClientConn) {
+	for _, c := range unsortedClients {
+		clients = append(clients, c)
+	}
+	sort.Sort(byClientID(clients))
+	return clients
 }

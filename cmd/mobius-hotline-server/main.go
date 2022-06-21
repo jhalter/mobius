@@ -29,7 +29,22 @@ const (
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
-	ctx, cancelRoot := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// TODO: implement graceful shutdown by closing context
+	// c := make(chan os.Signal, 1)
+	// signal.Notify(c, os.Interrupt)
+	// defer func() {
+	// 	signal.Stop(c)
+	// 	cancel()
+	// }()
+	// go func() {
+	// 	select {
+	// 	case <-c:
+	// 		cancel()
+	// 	case <-ctx.Done():
+	// 	}
+	// }()
 
 	basePort := flag.Int("bind", defaultPort, "Bind address and port")
 	statsPort := flag.String("stats-port", "", "Enable stats HTTP endpoint on address and port")
@@ -80,7 +95,7 @@ func main() {
 		logger.Fatalw("Configuration directory not found", "path", configDir)
 	}
 
-	srv, err := hotline.NewServer(*configDir, "", *basePort, logger, &hotline.OSFileStore{})
+	srv, err := hotline.NewServer(*configDir, *basePort, logger, &hotline.OSFileStore{})
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -99,7 +114,7 @@ func main() {
 	}
 
 	// Serve Hotline requests until program exit
-	logger.Fatal(srv.ListenAndServe(ctx, cancelRoot))
+	logger.Fatal(srv.ListenAndServe(ctx, cancel))
 }
 
 type statHandler struct {

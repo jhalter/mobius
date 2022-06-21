@@ -63,9 +63,12 @@ var fileTypes = map[string]fileType{
 
 // A small number of type codes are displayed in the GetInfo window with a friendly name instead of the 4 letter code
 var friendlyCreatorNames = map[string]string{
+	"APPL": "Application Program",
+	"HTbm": "Hotline Bookmark",
 	"fldr": "Folder",
 	"flda": "Folder Alias",
 	"HTft": "Incomplete File",
 	"SIT!": "StuffIt Archive",
 	"TEXT": "Text File",
+	"HTLC": "Hotline",
 }

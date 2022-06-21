@@ -2,15 +2,15 @@ package hotline
 
 import (
 	"encoding/binary"
-	"os"
+	"io"
 )
 
 type flattenedFileObject struct {
 	FlatFileHeader                FlatFileHeader
-	FlatFileInformationForkHeader FlatFileInformationForkHeader
+	FlatFileInformationForkHeader FlatFileForkHeader
 	FlatFileInformationFork       FlatFileInformationFork
-	FlatFileDataForkHeader        FlatFileDataForkHeader
-	FileData                      []byte
+	FlatFileDataForkHeader        FlatFileForkHeader
+	FlatFileResForkHeader         FlatFileForkHeader
 }
 
 // FlatFileHeader is the first section of a "Flattened File Object".  All fields have static values.
@@ -18,25 +18,7 @@ type FlatFileHeader struct {
 	Format    [4]byte  // Always "FILP"
 	Version   [2]byte  // Always 1
 	RSVD      [16]byte // Always empty zeros
-	ForkCount [2]byte  // Number of forks
-}
-
-// NewFlatFileHeader returns a FlatFileHeader struct
-func NewFlatFileHeader() FlatFileHeader {
-	return FlatFileHeader{
-		Format:    [4]byte{0x46, 0x49, 0x4c, 0x50}, // FILP
-		Version:   [2]byte{0, 1},
-		RSVD:      [16]byte{},
-		ForkCount: [2]byte{0, 2},
-	}
-}
-
-// FlatFileInformationForkHeader is the second section of a "Flattened File Object"
-type FlatFileInformationForkHeader struct {
-	ForkType        [4]byte // Always "INFO"
-	CompressionType [4]byte // Always 0; Compression was never implemented in the Hotline protocol
-	RSVD            [4]byte // Always zeros
-	DataSize        [4]byte // Size of the flat file information fork
+	ForkCount [2]byte  // Number of forks, either 2 or 3 if there is a resource fork
 }
 
 type FlatFileInformationFork struct {
@@ -48,10 +30,10 @@ type FlatFileInformationFork struct {
 	RSVD             []byte
 	CreateDate       []byte
 	ModifyDate       []byte
-	NameScript       []byte // TODO: what is this?
+	NameScript       []byte
 	NameSize         []byte // Length of file name (Maximum 128 characters)
 	Name             []byte // File name
-	CommentSize      []byte // Length of file comment
+	CommentSize      []byte // Length of the comment
 	Comment          []byte // File comment
 }
 
@@ -73,11 +55,25 @@ func NewFlatFileInformationFork(fileName string, modifyTime []byte, typeSignatur
 }
 
 func (ffif *FlatFileInformationFork) friendlyType() []byte {
-
 	if name, ok := friendlyCreatorNames[string(ffif.TypeSignature)]; ok {
 		return []byte(name)
 	}
+	return ffif.TypeSignature
+}
+
+func (ffif *FlatFileInformationFork) friendlyCreator() []byte {
+	if name, ok := friendlyCreatorNames[string(ffif.CreatorSignature)]; ok {
+		return []byte(name)
+	}
 	return ffif.CreatorSignature
+}
+
+func (ffif *FlatFileInformationFork) setComment(comment []byte) error {
+	ffif.Comment = comment
+	binary.BigEndian.PutUint16(ffif.CommentSize, uint16(len(comment)))
+
+	// TODO: return err if comment is too long
+	return nil
 }
 
 // DataSize calculates the size of the flat file information fork, which is
@@ -85,22 +81,37 @@ func (ffif *FlatFileInformationFork) friendlyType() []byte {
 func (ffif *FlatFileInformationFork) DataSize() []byte {
 	size := make([]byte, 4)
 
-	// TODO: Can I do math directly on two byte slices?
-	dataSize := len(ffif.Name) + len(ffif.Comment) + 74
+	dataSize := len(ffif.Name) + len(ffif.Comment) + 74 // 74 = len of fixed size headers
 
 	binary.BigEndian.PutUint32(size, uint32(dataSize))
 
 	return size
 }
 
-func (ffo *flattenedFileObject) TransferSize() []byte {
+func (ffif *FlatFileInformationFork) Size() [4]byte {
+	size := [4]byte{}
+
+	dataSize := len(ffif.Name) + len(ffif.Comment) + 74 // 74 = len of fixed size headers
+
+	binary.BigEndian.PutUint32(size[:], uint32(dataSize))
+
+	return size
+}
+
+func (ffo *flattenedFileObject) TransferSize(offset int64) []byte {
+	// get length of the flattenedFileObject, including the info fork
 	payloadSize := len(ffo.BinaryMarshal())
+
+	// length of data fork
 	dataSize := binary.BigEndian.Uint32(ffo.FlatFileDataForkHeader.DataSize[:])
 
-	transferSize := make([]byte, 4)
-	binary.BigEndian.PutUint32(transferSize, dataSize+uint32(payloadSize))
+	// length of resource fork
+	resForkSize := binary.BigEndian.Uint32(ffo.FlatFileResForkHeader.DataSize[:])
 
-	return transferSize
+	size := make([]byte, 4)
+	binary.BigEndian.PutUint32(size[:], dataSize+resForkSize+uint32(payloadSize)-uint32(offset))
+
+	return size
 }
 
 func (ffif *FlatFileInformationFork) ReadNameSize() []byte {
@@ -110,11 +121,30 @@ func (ffif *FlatFileInformationFork) ReadNameSize() []byte {
 	return size
 }
 
-type FlatFileDataForkHeader struct {
-	ForkType        [4]byte
+type FlatFileForkHeader struct {
+	ForkType        [4]byte // Either INFO, DATA or MACR
 	CompressionType [4]byte
 	RSVD            [4]byte
 	DataSize        [4]byte
+}
+
+func (ffif *FlatFileInformationFork) MarshalBinary() []byte {
+	var b []byte
+	b = append(b, ffif.Platform...)
+	b = append(b, ffif.TypeSignature...)
+	b = append(b, ffif.CreatorSignature...)
+	b = append(b, ffif.Flags...)
+	b = append(b, ffif.PlatformFlags...)
+	b = append(b, ffif.RSVD...)
+	b = append(b, ffif.CreateDate...)
+	b = append(b, ffif.ModifyDate...)
+	b = append(b, ffif.NameScript...)
+	b = append(b, ffif.ReadNameSize()...)
+	b = append(b, ffif.Name...)
+	b = append(b, ffif.CommentSize...)
+	b = append(b, ffif.Comment...)
+
+	return b
 }
 
 func (ffif *FlatFileInformationFork) UnmarshalBinary(b []byte) error {
@@ -147,72 +177,72 @@ func (ffif *FlatFileInformationFork) UnmarshalBinary(b []byte) error {
 	return nil
 }
 
-func (f *flattenedFileObject) BinaryMarshal() []byte {
+func (ffo *flattenedFileObject) BinaryMarshal() []byte {
 	var out []byte
-	out = append(out, f.FlatFileHeader.Format[:]...)
-	out = append(out, f.FlatFileHeader.Version[:]...)
-	out = append(out, f.FlatFileHeader.RSVD[:]...)
-	out = append(out, f.FlatFileHeader.ForkCount[:]...)
+	out = append(out, ffo.FlatFileHeader.Format[:]...)
+	out = append(out, ffo.FlatFileHeader.Version[:]...)
+	out = append(out, ffo.FlatFileHeader.RSVD[:]...)
+	out = append(out, ffo.FlatFileHeader.ForkCount[:]...)
 
 	out = append(out, []byte("INFO")...)
 	out = append(out, []byte{0, 0, 0, 0}...)
 	out = append(out, make([]byte, 4)...)
-	out = append(out, f.FlatFileInformationFork.DataSize()...)
+	out = append(out, ffo.FlatFileInformationFork.DataSize()...)
 
-	out = append(out, f.FlatFileInformationFork.Platform...)
-	out = append(out, f.FlatFileInformationFork.TypeSignature...)
-	out = append(out, f.FlatFileInformationFork.CreatorSignature...)
-	out = append(out, f.FlatFileInformationFork.Flags...)
-	out = append(out, f.FlatFileInformationFork.PlatformFlags...)
-	out = append(out, f.FlatFileInformationFork.RSVD...)
-	out = append(out, f.FlatFileInformationFork.CreateDate...)
-	out = append(out, f.FlatFileInformationFork.ModifyDate...)
-	out = append(out, f.FlatFileInformationFork.NameScript...)
-	out = append(out, f.FlatFileInformationFork.ReadNameSize()...)
-	out = append(out, f.FlatFileInformationFork.Name...)
-	out = append(out, f.FlatFileInformationFork.CommentSize...)
-	out = append(out, f.FlatFileInformationFork.Comment...)
+	out = append(out, ffo.FlatFileInformationFork.Platform...)
+	out = append(out, ffo.FlatFileInformationFork.TypeSignature...)
+	out = append(out, ffo.FlatFileInformationFork.CreatorSignature...)
+	out = append(out, ffo.FlatFileInformationFork.Flags...)
+	out = append(out, ffo.FlatFileInformationFork.PlatformFlags...)
+	out = append(out, ffo.FlatFileInformationFork.RSVD...)
+	out = append(out, ffo.FlatFileInformationFork.CreateDate...)
+	out = append(out, ffo.FlatFileInformationFork.ModifyDate...)
+	out = append(out, ffo.FlatFileInformationFork.NameScript...)
+	out = append(out, ffo.FlatFileInformationFork.ReadNameSize()...)
+	out = append(out, ffo.FlatFileInformationFork.Name...)
+	out = append(out, ffo.FlatFileInformationFork.CommentSize...)
+	out = append(out, ffo.FlatFileInformationFork.Comment...)
 
-	out = append(out, f.FlatFileDataForkHeader.ForkType[:]...)
-	out = append(out, f.FlatFileDataForkHeader.CompressionType[:]...)
-	out = append(out, f.FlatFileDataForkHeader.RSVD[:]...)
-	out = append(out, f.FlatFileDataForkHeader.DataSize[:]...)
+	out = append(out, ffo.FlatFileDataForkHeader.ForkType[:]...)
+	out = append(out, ffo.FlatFileDataForkHeader.CompressionType[:]...)
+	out = append(out, ffo.FlatFileDataForkHeader.RSVD[:]...)
+	out = append(out, ffo.FlatFileDataForkHeader.DataSize[:]...)
 
 	return out
 }
 
-func NewFlattenedFileObject(fileRoot string, filePath, fileName []byte, dataOffset int64) (*flattenedFileObject, error) {
-	fullFilePath, err := readPath(fileRoot, filePath, fileName)
-	if err != nil {
-		return nil, err
-	}
-	file, err := effectiveFile(fullFilePath)
-	if err != nil {
-		return nil, err
+func (ffo *flattenedFileObject) ReadFrom(r io.Reader) (int, error) {
+	var n int
+
+	if err := binary.Read(r, binary.BigEndian, &ffo.FlatFileHeader); err != nil {
+		return n, err
 	}
 
-	defer func(file *os.File) { _ = file.Close() }(file)
-
-	fileInfo, err := file.Stat()
-	if err != nil {
-		return nil, err
+	if err := binary.Read(r, binary.BigEndian, &ffo.FlatFileInformationForkHeader); err != nil {
+		return n, err
 	}
 
-	dataSize := make([]byte, 4)
-	binary.BigEndian.PutUint32(dataSize, uint32(fileInfo.Size()-dataOffset))
+	dataLen := binary.BigEndian.Uint32(ffo.FlatFileInformationForkHeader.DataSize[:])
+	ffifBuf := make([]byte, dataLen)
+	if _, err := io.ReadFull(r, ffifBuf); err != nil {
+		return n, err
+	}
 
-	mTime := toHotlineTime(fileInfo.ModTime())
+	if err := ffo.FlatFileInformationFork.UnmarshalBinary(ffifBuf); err != nil {
+		return n, err
+	}
 
-	ft, _ := fileTypeFromInfo(fileInfo)
+	if err := binary.Read(r, binary.BigEndian, &ffo.FlatFileDataForkHeader); err != nil {
+		return n, err
+	}
 
-	return &flattenedFileObject{
-		FlatFileHeader:          NewFlatFileHeader(),
-		FlatFileInformationFork: NewFlatFileInformationFork(string(fileName), mTime, ft.TypeCode, ft.CreatorCode),
-		FlatFileDataForkHeader: FlatFileDataForkHeader{
-			ForkType:        [4]byte{0x44, 0x41, 0x54, 0x41}, // "DATA"
-			CompressionType: [4]byte{},
-			RSVD:            [4]byte{},
-			DataSize:        [4]byte{dataSize[0], dataSize[1], dataSize[2], dataSize[3]},
-		},
-	}, nil
+	return n, nil
+}
+
+func (ffo *flattenedFileObject) dataSize() int64 {
+	return int64(binary.BigEndian.Uint32(ffo.FlatFileDataForkHeader.DataSize[:]))
+}
+
+func (ffo *flattenedFileObject) rsrcSize() int64 {
+	return int64(binary.BigEndian.Uint32(ffo.FlatFileResForkHeader.DataSize[:]))
 }

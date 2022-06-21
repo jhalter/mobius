@@ -249,10 +249,6 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 		formattedMsg = fmt.Sprintf("\r*** %s %s", cc.UserName, t.GetField(fieldData).Data)
 	}
 
-	if bytes.Equal(t.GetField(fieldData).Data, []byte("/stats")) {
-		formattedMsg = strings.Replace(cc.Server.Stats.String(), "\n", "\r", -1)
-	}
-
 	chatID := t.GetField(fieldChatID).Data
 	// a non-nil chatID indicates the message belongs to a private chat
 	if chatID != nil {
@@ -347,26 +343,30 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	fileName := t.GetField(fieldFileName).Data
 	filePath := t.GetField(fieldFilePath).Data
 
-	ffo, err := NewFlattenedFileObject(cc.Server.Config.FileRoot, filePath, fileName, 0)
+	fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
+	if err != nil {
+		return res, err
+	}
+
+	fw, err := newFileWrapper(cc.Server.FS, fullFilePath, 0)
 	if err != nil {
 		return res, err
 	}
 
 	res = append(res, cc.NewReply(t,
-		NewField(fieldFileName, fileName),
-		NewField(fieldFileTypeString, ffo.FlatFileInformationFork.friendlyType()),
-		NewField(fieldFileCreatorString, ffo.FlatFileInformationFork.CreatorSignature),
-		NewField(fieldFileComment, ffo.FlatFileInformationFork.Comment),
-		NewField(fieldFileType, ffo.FlatFileInformationFork.TypeSignature),
-		NewField(fieldFileCreateDate, ffo.FlatFileInformationFork.CreateDate),
-		NewField(fieldFileModifyDate, ffo.FlatFileInformationFork.ModifyDate),
-		NewField(fieldFileSize, ffo.FlatFileDataForkHeader.DataSize[:]),
+		NewField(fieldFileName, []byte(fw.name)),
+		NewField(fieldFileTypeString, fw.ffo.FlatFileInformationFork.friendlyType()),
+		NewField(fieldFileCreatorString, fw.ffo.FlatFileInformationFork.friendlyCreator()),
+		NewField(fieldFileComment, fw.ffo.FlatFileInformationFork.Comment),
+		NewField(fieldFileType, fw.ffo.FlatFileInformationFork.TypeSignature),
+		NewField(fieldFileCreateDate, fw.ffo.FlatFileInformationFork.CreateDate),
+		NewField(fieldFileModifyDate, fw.ffo.FlatFileInformationFork.ModifyDate),
+		NewField(fieldFileSize, fw.totalSize()),
 	))
 	return res, err
 }
 
 // HandleSetFileInfo updates a file or folder name and/or comment from the Get Info window
-// TODO: Implement support for comments
 // Fields used in the request:
 // * 201	File name
 // * 202	File path	Optional
@@ -382,23 +382,57 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		return res, err
 	}
 
+	fi, err := cc.Server.FS.Stat(fullFilePath)
+	if err != nil {
+		return res, err
+	}
+
+	hlFile, err := newFileWrapper(cc.Server.FS, fullFilePath, 0)
+	if err != nil {
+		return res, err
+	}
+	if t.GetField(fieldFileComment).Data != nil {
+		switch mode := fi.Mode(); {
+		case mode.IsDir():
+			if !authorize(cc.Account.Access, accessSetFolderComment) {
+				res = append(res, cc.NewErrReply(t, "You are not allowed to set comments for folders."))
+				return res, err
+			}
+		case mode.IsRegular():
+			if !authorize(cc.Account.Access, accessSetFileComment) {
+				res = append(res, cc.NewErrReply(t, "You are not allowed to set comments for files."))
+				return res, err
+			}
+		}
+
+		hlFile.ffo.FlatFileInformationFork.setComment(t.GetField(fieldFileComment).Data)
+		w, err := hlFile.infoForkWriter()
+		if err != nil {
+			return res, err
+		}
+		_, err = w.Write(hlFile.ffo.FlatFileInformationFork.MarshalBinary())
+		if err != nil {
+			return res, err
+		}
+	}
+
 	fullNewFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, t.GetField(fieldFileNewName).Data)
 	if err != nil {
 		return nil, err
 	}
 
-	// fileComment := t.GetField(fieldFileComment).Data
 	fileNewName := t.GetField(fieldFileNewName).Data
 
 	if fileNewName != nil {
-		fi, err := cc.Server.FS.Stat(fullFilePath)
-		if err != nil {
-			return res, err
-		}
 		switch mode := fi.Mode(); {
 		case mode.IsDir():
 			if !authorize(cc.Account.Access, accessRenameFolder) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to rename folders."))
+				return res, err
+			}
+			err = os.Rename(fullFilePath, fullNewFilePath)
+			if os.IsNotExist(err) {
+				res = append(res, cc.NewErrReply(t, "Cannot rename folder "+string(fileName)+" because it does not exist or cannot be found."))
 				return res, err
 			}
 		case mode.IsRegular():
@@ -406,12 +440,19 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 				res = append(res, cc.NewErrReply(t, "You are not allowed to rename files."))
 				return res, err
 			}
-		}
-
-		err = os.Rename(fullFilePath, fullNewFilePath)
-		if os.IsNotExist(err) {
-			res = append(res, cc.NewErrReply(t, "Cannot rename file "+string(fileName)+" because it does not exist or cannot be found."))
-			return res, err
+			fileDir, err := readPath(cc.Server.Config.FileRoot, filePath, []byte{})
+			if err != nil {
+				return nil, err
+			}
+			hlFile.name = string(fileNewName)
+			err = hlFile.move(fileDir)
+			if os.IsNotExist(err) {
+				res = append(res, cc.NewErrReply(t, "Cannot rename file "+string(fileName)+" because it does not exist or cannot be found."))
+				return res, err
+			}
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 
@@ -433,13 +474,17 @@ func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		return res, err
 	}
 
-	cc.Server.Logger.Debugw("Delete file", "src", fullFilePath)
+	hlFile, err := newFileWrapper(cc.Server.FS, fullFilePath, 0)
+	if err != nil {
+		return res, err
+	}
 
-	fi, err := os.Stat(fullFilePath)
+	fi, err := hlFile.dataFile()
 	if err != nil {
 		res = append(res, cc.NewErrReply(t, "Cannot delete file "+string(fileName)+" because it does not exist or cannot be found."))
 		return res, nil
 	}
+
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
 		if !authorize(cc.Account.Access, accessDeleteFolder) {
@@ -453,7 +498,7 @@ func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		}
 	}
 
-	if err := os.RemoveAll(fullFilePath); err != nil {
+	if err := hlFile.delete(); err != nil {
 		return res, err
 	}
 
@@ -464,13 +509,26 @@ func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 // HandleMoveFile moves files or folders. Note: seemingly not documented
 func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	fileName := string(t.GetField(fieldFileName).Data)
-	filePath := cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFilePath).Data)
-	fileNewPath := cc.Server.Config.FileRoot + ReadFilePath(t.GetField(fieldFileNewPath).Data)
+
+	filePath, err := readPath(cc.Server.Config.FileRoot, t.GetField(fieldFilePath).Data, t.GetField(fieldFileName).Data)
+	if err != nil {
+		return res, err
+	}
+
+	fileNewPath, err := readPath(cc.Server.Config.FileRoot, t.GetField(fieldFileNewPath).Data, nil)
+	if err != nil {
+		return res, err
+	}
 
 	cc.Server.Logger.Debugw("Move file", "src", filePath+"/"+fileName, "dst", fileNewPath+"/"+fileName)
 
-	fp := filePath + "/" + fileName
-	fi, err := os.Stat(fp)
+	hlFile, err := newFileWrapper(cc.Server.FS, filePath, 0)
+
+	fi, err := hlFile.dataFile()
+	if err != nil {
+		res = append(res, cc.NewErrReply(t, "Cannot delete file "+fileName+" because it does not exist or cannot be found."))
+		return res, err
+	}
 	if err != nil {
 		return res, err
 	}
@@ -486,16 +544,10 @@ func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 			return res, err
 		}
 	}
-
-	err = os.Rename(filePath+"/"+fileName, fileNewPath+"/"+fileName)
-	if os.IsNotExist(err) {
-		res = append(res, cc.NewErrReply(t, "Cannot delete file "+fileName+" because it does not exist or cannot be found."))
+	if err := hlFile.move(fileNewPath); err != nil {
 		return res, err
 	}
-	if err != nil {
-		return []Transaction{}, err
-	}
-	// TODO: handle other possible errors; e.g. file delete fails due to file permission issue
+	// TODO: handle other possible errors; e.g. fileWrapper delete fails due to fileWrapper permission issue
 
 	res = append(res, cc.NewReply(t))
 	return res, err
@@ -673,11 +725,11 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 		login := DecodeUserString(getField(fieldUserLogin, &subFields).Data)
 
-		// check if the login exists; if so, we know we are updating an existing user
+		// check if the login dataFile; if so, we know we are updating an existing user
 		if acc, ok := cc.Server.Accounts[login]; ok {
 			cc.Server.Logger.Infow("UpdateUser", "login", login)
 
-			// account exists, so this is an update action
+			// account dataFile, so this is an update action
 			if !authorize(cc.Account.Access, accessModifyUser) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to modify accounts."))
 				return res, err
@@ -737,7 +789,7 @@ func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 
 	login := DecodeUserString(t.GetField(fieldUserLogin).Data)
 
-	// If the account already exists, reply with an error
+	// If the account already dataFile, reply with an error
 	if _, ok := cc.Server.Accounts[login]; ok {
 		res = append(res, cc.NewErrReply(t, "Cannot create account "+login+" because there is already an account with that login."))
 		return res, err
@@ -1310,7 +1362,6 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 
 	fileName := t.GetField(fieldFileName).Data
 	filePath := t.GetField(fieldFilePath).Data
-
 	resumeData := t.GetField(fieldFileResumeData).Data
 
 	var dataOffset int64
@@ -1319,16 +1370,16 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 		if err := frd.UnmarshalBinary(t.GetField(fieldFileResumeData).Data); err != nil {
 			return res, err
 		}
+		// TODO: handle rsrc fork offset
 		dataOffset = int64(binary.BigEndian.Uint32(frd.ForkInfoList[0].DataSize[:]))
 	}
 
-	var fp FilePath
-	err = fp.UnmarshalBinary(filePath)
+	fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
 	if err != nil {
 		return res, err
 	}
 
-	ffo, err := NewFlattenedFileObject(cc.Server.Config.FileRoot, filePath, fileName, dataOffset)
+	hlFile, err := newFileWrapper(cc.Server.FS, fullFilePath, dataOffset)
 	if err != nil {
 		return res, err
 	}
@@ -1343,6 +1394,7 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 		Type:            FileDownload,
 	}
 
+	// TODO: refactor to remove this
 	if resumeData != nil {
 		var frd FileResumeData
 		if err := frd.UnmarshalBinary(t.GetField(fieldFileResumeData).Data); err != nil {
@@ -1351,14 +1403,14 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 		ft.fileResumeData = &frd
 	}
 
-	xferSize := ffo.TransferSize()
+	xferSize := hlFile.ffo.TransferSize(0)
 
 	// Optional field for when a HL v1.5+ client requests file preview
 	// Used only for TEXT, JPEG, GIFF, BMP or PICT files
 	// The value will always be 2
 	if t.GetField(fieldFileTransferOptions).Data != nil {
 		ft.options = t.GetField(fieldFileTransferOptions).Data
-		xferSize = ffo.FlatFileDataForkHeader.DataSize[:]
+		xferSize = hlFile.ffo.FlatFileDataForkHeader.DataSize[:]
 	}
 
 	cc.Server.mux.Lock()
@@ -1371,7 +1423,7 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 		NewField(fieldRefNum, transactionRef),
 		NewField(fieldWaitingCount, []byte{0x00, 0x00}), // TODO: Implement waiting count
 		NewField(fieldTransferSize, xferSize),
-		NewField(fieldFileSize, ffo.FlatFileDataForkHeader.DataSize[:]),
+		NewField(fieldFileSize, hlFile.ffo.FlatFileDataForkHeader.DataSize[:]),
 	))
 
 	return res, err
@@ -1516,7 +1568,7 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	replyT := cc.NewReply(t, NewField(fieldRefNum, transactionRef))
 
-	// client has requested to resume a partially transfered file
+	// client has requested to resume a partially transferred file
 	if transferOptions != nil {
 		fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
 		if err != nil {
@@ -1827,7 +1879,7 @@ func HandleSetChatSubject(cc *ClientConn, t *Transaction) (res []Transaction, er
 	return res, err
 }
 
-// HandleMakeAlias makes a file alias using the specified path.
+// HandleMakeAlias makes a filer alias using the specified path.
 // Fields used in the request:
 // 201	File name
 // 202	File path

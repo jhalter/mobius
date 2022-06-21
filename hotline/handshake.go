@@ -14,6 +14,8 @@ type handshake struct {
 	SubVersion  [2]byte
 }
 
+var trtp = [4]byte{0x54, 0x52, 0x54, 0x50}
+
 // Handshake
 // After establishing TCP connection, both client and server start the handshake process
 // in order to confirm that each of them comply with requirements of the other.
@@ -33,9 +35,9 @@ type handshake struct {
 // Description		Size 	Data	Note
 // Protocol ID		4		TRTP
 // Error code		4				Error code returned by the server (0 = no error)
-func Handshake(conn io.ReadWriter) error {
+func Handshake(rw io.ReadWriter) error {
 	handshakeBuf := make([]byte, 12)
-	if _, err := io.ReadFull(conn, handshakeBuf); err != nil {
+	if _, err := io.ReadFull(rw, handshakeBuf); err != nil {
 		return err
 	}
 
@@ -45,10 +47,10 @@ func Handshake(conn io.ReadWriter) error {
 		return err
 	}
 
-	if h.Protocol != [4]byte{0x54, 0x52, 0x54, 0x50} {
+	if h.Protocol != trtp {
 		return errors.New("invalid handshake")
 	}
 
-	_, err := conn.Write([]byte{84, 82, 84, 80, 0, 0, 0, 0})
+	_, err := rw.Write([]byte{84, 82, 84, 80, 0, 0, 0, 0})
 	return err
 }

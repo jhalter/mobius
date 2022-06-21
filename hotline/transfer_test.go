@@ -115,20 +115,24 @@ func Test_receiveFile(t *testing.T) {
 		wantErr         assert.ErrorAssertionFunc
 	}{
 		{
-			name: "transfers file",
+			name: "transfers file when there is no resource fork",
 			args: args{
 				conn: func() io.Reader {
 					testFile := flattenedFileObject{
-						FlatFileHeader:                NewFlatFileHeader(),
-						FlatFileInformationForkHeader: FlatFileInformationForkHeader{},
+						FlatFileHeader: FlatFileHeader{
+							Format:    [4]byte{0x46, 0x49, 0x4c, 0x50}, // "FILP"
+							Version:   [2]byte{0, 1},
+							RSVD:      [16]byte{},
+							ForkCount: [2]byte{0, 2},
+						},
+						FlatFileInformationForkHeader: FlatFileForkHeader{},
 						FlatFileInformationFork:       NewFlatFileInformationFork("testfile.txt", make([]byte, 8), "TEXT", "TEXT"),
-						FlatFileDataForkHeader: FlatFileDataForkHeader{
+						FlatFileDataForkHeader: FlatFileForkHeader{
 							ForkType:        [4]byte{0x4d, 0x41, 0x43, 0x52}, // DATA
 							CompressionType: [4]byte{0, 0, 0, 0},
 							RSVD:            [4]byte{0, 0, 0, 0},
 							DataSize:        [4]byte{0x00, 0x00, 0x00, 0x03},
 						},
-						FileData: nil,
 					}
 					fakeFileData := []byte{1, 2, 3}
 					b := testFile.BinaryMarshal()
@@ -141,12 +145,50 @@ func Test_receiveFile(t *testing.T) {
 
 			wantErr: assert.NoError,
 		},
+		// {
+		// 	name: "transfers fileWrapper when there is a resource fork",
+		// 	args: args{
+		// 		conn: func() io.Reader {
+		// 			testFile := flattenedFileObject{
+		// 				FlatFileHeader: FlatFileHeader{
+		// 					Format:    [4]byte{0x46, 0x49, 0x4c, 0x50}, // "FILP"
+		// 					Version:   [2]byte{0, 1},
+		// 					RSVD:      [16]byte{},
+		// 					ForkCount: [2]byte{0, 3},
+		// 				},
+		// 				FlatFileInformationForkHeader: FlatFileForkHeader{},
+		// 				FlatFileInformationFork:       NewFlatFileInformationFork("testfile.txt", make([]byte, 8), "TEXT", "TEXT"),
+		// 				FlatFileDataForkHeader: FlatFileForkHeader{
+		// 					ForkType:        [4]byte{0x44, 0x41, 0x54, 0x41}, // DATA
+		// 					CompressionType: [4]byte{0, 0, 0, 0},
+		// 					RSVD:            [4]byte{0, 0, 0, 0},
+		// 					DataSize:        [4]byte{0x00, 0x00, 0x00, 0x03},
+		// 				},
+		// 				FlatFileResForkHeader: FlatFileForkHeader{
+		// 					ForkType:        [4]byte{0x4d, 0x41, 0x43, 0x52}, // MACR
+		// 					CompressionType: [4]byte{0, 0, 0, 0},
+		// 					RSVD:            [4]byte{0, 0, 0, 0},
+		// 					DataSize:        [4]byte{0x00, 0x00, 0x00, 0x03},
+		// 				},
+		// 			}
+		// 			fakeFileData := []byte{1, 2, 3}
+		// 			b := testFile.BinaryMarshal()
+		// 			b = append(b, fakeFileData...)
+		// 			return bytes.NewReader(b)
+		// 		}(),
+		// 	},
+		// 	wantTargetFile:  []byte{1, 2, 3},
+		// 	wantResForkFile: []byte(nil),
+		//
+		// 	wantErr: assert.NoError,
+		// },
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			targetFile := &bytes.Buffer{}
 			resForkFile := &bytes.Buffer{}
-			err := receiveFile(tt.args.conn, targetFile, resForkFile)
+			infoForkFile := &bytes.Buffer{}
+			err := receiveFile(tt.args.conn, targetFile, resForkFile, infoForkFile)
 			if !tt.wantErr(t, err, fmt.Sprintf("receiveFile(%v, %v, %v)", tt.args.conn, targetFile, resForkFile)) {
 				return
 			}

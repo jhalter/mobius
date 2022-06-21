@@ -119,7 +119,7 @@ func (db *DebugBuffer) Write(p []byte) (int, error) {
 	return db.TextView.Write(p)
 }
 
-// Sync is a noop function that exists to satisfy the zapcore.WriteSyncer interface
+// Sync is a noop function that dataFile to satisfy the zapcore.WriteSyncer interface
 func (db *DebugBuffer) Sync() error {
 	return nil
 }

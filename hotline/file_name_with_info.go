@@ -12,7 +12,7 @@ type FileNameWithInfo struct {
 
 // fileNameWithInfoHeader contains the fixed length fields of FileNameWithInfo
 type fileNameWithInfoHeader struct {
-	Type       [4]byte // file type code
+	Type       [4]byte // File type code
 	Creator    [4]byte // File creator code
 	FileSize   [4]byte // File Size in bytes
 	RSVD       [4]byte
@@ -49,4 +49,3 @@ func (f *FileNameWithInfo) UnmarshalBinary(data []byte) error {
 
 	return err
 }
-

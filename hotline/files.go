@@ -10,8 +10,6 @@ import (
 	"strings"
 )
 
-const incompleteFileSuffix = ".incomplete"
-
 func downcaseFileExtension(filename string) string {
 	splitStr := strings.Split(filename, ".")
 	ext := strings.ToLower(
@@ -29,7 +27,7 @@ func fileTypeFromFilename(fn string) fileType {
 	return defaultFileType
 }
 
-func fileTypeFromInfo(info os.FileInfo) (ft fileType, err error) {
+func fileTypeFromInfo(info fs.FileInfo) (ft fileType, err error) {
 	if info.IsDir() {
 		ft.CreatorCode = "n/a "
 		ft.TypeCode = "fldr"
@@ -41,7 +39,7 @@ func fileTypeFromInfo(info os.FileInfo) (ft fileType, err error) {
 }
 
 func getFileNameList(filePath string) (fields []Field, err error) {
-	files, err := ioutil.ReadDir(filePath)
+	files, err := os.ReadDir(filePath)
 	if err != nil {
 		return fields, nil
 	}
@@ -49,9 +47,18 @@ func getFileNameList(filePath string) (fields []Field, err error) {
 	for _, file := range files {
 		var fnwi FileNameWithInfo
 
+		if strings.HasPrefix(file.Name(), ".") {
+			continue
+		}
+
 		fileCreator := make([]byte, 4)
 
-		if file.Mode()&os.ModeSymlink != 0 {
+		fileInfo, err := file.Info()
+		if err != nil {
+			return fields, err
+		}
+
+		if fileInfo.Mode()&os.ModeSymlink != 0 {
 			resolvedPath, err := os.Readlink(filePath + "/" + file.Name())
 			if err != nil {
 				return fields, err
@@ -70,7 +77,15 @@ func getFileNameList(filePath string) (fields []Field, err error) {
 				if err != nil {
 					return fields, err
 				}
-				binary.BigEndian.PutUint32(fnwi.FileSize[:], uint32(len(dir)))
+
+				var c uint32
+				for _, f := range dir {
+					if !strings.HasPrefix(f.Name(), ".") {
+						c += 1
+					}
+				}
+
+				binary.BigEndian.PutUint32(fnwi.FileSize[:], c)
 				copy(fnwi.Type[:], []byte("fldr")[:])
 				copy(fnwi.Creator[:], fileCreator[:])
 			} else {
@@ -84,17 +99,31 @@ func getFileNameList(filePath string) (fields []Field, err error) {
 			if err != nil {
 				return fields, err
 			}
-			binary.BigEndian.PutUint32(fnwi.FileSize[:], uint32(len(dir)))
+
+			var c uint32
+			for _, f := range dir {
+				if !strings.HasPrefix(f.Name(), ".") {
+					c += 1
+				}
+			}
+
+			binary.BigEndian.PutUint32(fnwi.FileSize[:], c)
 			copy(fnwi.Type[:], []byte("fldr")[:])
 			copy(fnwi.Creator[:], fileCreator[:])
 		} else {
-			// the Hotline protocol does not support file sizes > 4GiB due to the 4 byte field size, so skip them
-			if file.Size() > 4294967296 {
+			// the Hotline protocol does not support fileWrapper sizes > 4GiB due to the 4 byte field size, so skip them
+			if fileInfo.Size() > 4294967296 {
 				continue
 			}
-			binary.BigEndian.PutUint32(fnwi.FileSize[:], uint32(file.Size()))
-			copy(fnwi.Type[:], []byte(fileTypeFromFilename(file.Name()).TypeCode)[:])
-			copy(fnwi.Creator[:], []byte(fileTypeFromFilename(file.Name()).CreatorCode)[:])
+
+			hlFile, err := newFileWrapper(&OSFileStore{}, filePath+"/"+file.Name(), 0)
+			if err != nil {
+				return nil, err
+			}
+
+			copy(fnwi.FileSize[:], hlFile.totalSize()[:])
+			copy(fnwi.Type[:], hlFile.ffo.FlatFileInformationFork.TypeSignature[:])
+			copy(fnwi.Creator[:], hlFile.ffo.FlatFileInformationFork.CreatorSignature[:])
 		}
 
 		strippedName := strings.Replace(file.Name(), ".incomplete", "", -1)
@@ -143,10 +172,12 @@ func CalcTotalSize(filePath string) ([]byte, error) {
 func CalcItemCount(filePath string) ([]byte, error) {
 	var itemcount uint16
 	err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
-		itemcount += 1
-
 		if err != nil {
 			return err
+		}
+
+		if !strings.HasPrefix(info.Name(), ".") {
+			itemcount += 1
 		}
 
 		return nil
@@ -177,20 +208,4 @@ func EncodeFilePath(filePath string) []byte {
 	}
 
 	return bytes
-}
-
-// effectiveFile wraps os.Open to check for the presence of a partial file transfer as a fallback
-func effectiveFile(filePath string) (*os.File, error) {
-	file, err := os.Open(filePath)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, err
-	}
-
-	if errors.Is(err, fs.ErrNotExist) {
-		file, err = os.OpenFile(filePath+incompleteFileSuffix, os.O_APPEND|os.O_WRONLY, 0644)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return file, nil
 }

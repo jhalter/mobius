@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHandleSetChatSubject(t *testing.T) {
@@ -625,6 +626,7 @@ func TestHandleGetFileInfo(t *testing.T) {
 				cc: &ClientConn{
 					ID: &[]byte{0x00, 0x01},
 					Server: &Server{
+						FS: &OSFileStore{},
 						Config: &Config{
 							FileRoot: func() string {
 								path, _ := os.Getwd()
@@ -672,7 +674,7 @@ func TestHandleGetFileInfo(t *testing.T) {
 				return
 			}
 
-			// Clear the file timestamp fields to work around problems running the tests in multiple timezones
+			// Clear the fileWrapper timestamp fields to work around problems running the tests in multiple timezones
 			// TODO: revisit how to test this by mocking the stat calls
 			gotRes[0].Fields[5].Data = make([]byte, 8)
 			gotRes[0].Fields[6].Data = make([]byte, 8)
@@ -1398,7 +1400,7 @@ func TestHandleDeleteUser(t *testing.T) {
 		wantErr assert.ErrorAssertionFunc
 	}{
 		{
-			name: "when user exists",
+			name: "when user dataFile",
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
@@ -1748,6 +1750,7 @@ func TestHandleDownloadFile(t *testing.T) {
 						}(),
 					},
 					Server: &Server{
+						FS:            &OSFileStore{},
 						FileTransfers: make(map[uint32]*FileTransfer),
 						Config: &Config{
 							FileRoot: func() string { path, _ := os.Getwd(); return path + "/test/config/Files" }(),
@@ -1779,12 +1782,99 @@ func TestHandleDownloadFile(t *testing.T) {
 			},
 			wantErr: assert.NoError,
 		},
+		{
+			name: "when client requests to resume 1k test file at offset 256",
+			args: args{
+				cc: &ClientConn{
+					Transfers: make(map[int][]*FileTransfer),
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessDownloadFile)
+							access := bits[:]
+							return &access
+						}(),
+					},
+					Server: &Server{
+						FS: &OSFileStore{},
+						// FS: func() *MockFileStore {
+						// 	path, _ := os.Getwd()
+						// 	testFile, err := os.Open(path + "/test/config/Files/testfile-1k")
+						// 	if err != nil {
+						// 		panic(err)
+						// 	}
+						//
+						// 	mfi := &MockFileInfo{}
+						// 	mfi.On("Mode").Return(fs.FileMode(0))
+						// 	mfs := &MockFileStore{}
+						// 	mfs.On("Stat", "/fakeRoot/Files/testfile.txt").Return(mfi, nil)
+						// 	mfs.On("Open", "/fakeRoot/Files/testfile.txt").Return(testFile, nil)
+						// 	mfs.On("Stat", "/fakeRoot/Files/.info_testfile.txt").Return(nil, errors.New("no"))
+						// 	mfs.On("Stat", "/fakeRoot/Files/.rsrc_testfile.txt").Return(nil, errors.New("no"))
+						//
+						// 	return mfs
+						// }(),
+						FileTransfers: make(map[uint32]*FileTransfer),
+						Config: &Config{
+							FileRoot: func() string { path, _ := os.Getwd(); return path + "/test/config/Files" }(),
+						},
+						Accounts: map[string]*Account{},
+					},
+				},
+				t: NewTransaction(
+					accessDownloadFile,
+					&[]byte{0, 1},
+					NewField(fieldFileName, []byte("testfile-1k")),
+					NewField(fieldFilePath, []byte{0x00, 0x00}),
+					NewField(
+						fieldFileResumeData,
+						func() []byte {
+							frd := FileResumeData{
+								Format:    [4]byte{},
+								Version:   [2]byte{},
+								RSVD:      [34]byte{},
+								ForkCount: [2]byte{0, 2},
+								ForkInfoList: []ForkInfoList{
+									{
+										Fork:     [4]byte{0x44, 0x41, 0x54, 0x41}, // "DATA"
+										DataSize: [4]byte{0, 0, 0x01, 0x00},       // request offset 256
+										RSVDA:    [4]byte{},
+										RSVDB:    [4]byte{},
+									},
+									{
+										Fork:     [4]byte{0x4d, 0x41, 0x43, 0x52}, // "MACR"
+										DataSize: [4]byte{0, 0, 0, 0},
+										RSVDA:    [4]byte{},
+										RSVDB:    [4]byte{},
+									},
+								},
+							}
+							b, _ := frd.BinaryMarshal()
+							return b
+						}(),
+					),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x2},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(fieldRefNum, []byte{0x52, 0xfd, 0xfc, 0x07}),
+						NewField(fieldWaitingCount, []byte{0x00, 0x00}),
+						NewField(fieldTransferSize, []byte{0x00, 0x00, 0x03, 0x8d}),
+						NewField(fieldFileSize, []byte{0x00, 0x00, 0x03, 0x00}),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// reset the rand seed so that the random fieldRefNum will be deterministic
-			rand.Seed(1)
-
 			gotRes, err := HandleDownloadFile(tt.args.cc, tt.args.t)
 			if !tt.wantErr(t, err, fmt.Sprintf("HandleDownloadFile(%v, %v)", tt.args.cc, tt.args.t)) {
 				return
@@ -2241,6 +2331,156 @@ func TestHandleSendInstantMsg(t *testing.T) {
 			}
 
 			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}
+
+func TestHandleDeleteFile(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "when user does not have required permission to delete a folder",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							access := bits[:]
+							return &access
+						}(),
+					},
+					Server: &Server{
+						Config: &Config{
+							FileRoot: func() string {
+								return "/fakeRoot/Files"
+							}(),
+						},
+						FS: func() *MockFileStore {
+							mfi := &MockFileInfo{}
+							mfi.On("Mode").Return(fs.FileMode(0))
+							mfi.On("Size").Return(int64(100))
+							mfi.On("ModTime").Return(time.Parse(time.Layout, time.Layout))
+							mfi.On("IsDir").Return(false)
+							mfi.On("Name").Return("testfile")
+
+							mfs := &MockFileStore{}
+							mfs.On("Stat", "/fakeRoot/Files/aaa/testfile").Return(mfi, nil)
+							mfs.On("Stat", "/fakeRoot/Files/aaa/.info_testfile").Return(nil, errors.New("err"))
+							mfs.On("Stat", "/fakeRoot/Files/aaa/.rsrc_testfile").Return(nil, errors.New("err"))
+
+							return mfs
+						}(),
+						Accounts: map[string]*Account{},
+					},
+				},
+				t: NewTransaction(
+					tranDeleteFile, &[]byte{0, 1},
+					NewField(fieldFileName, []byte("testfile")),
+					NewField(fieldFilePath, []byte{
+						0x00, 0x01,
+						0x00, 0x00,
+						0x03,
+						0x61, 0x61, 0x61,
+					}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to delete files.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "deletes all associated metadata files",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessDeleteFile)
+							access := bits[:]
+							return &access
+						}(),
+					},
+					Server: &Server{
+						Config: &Config{
+							FileRoot: func() string {
+								return "/fakeRoot/Files"
+							}(),
+						},
+						FS: func() *MockFileStore {
+							mfi := &MockFileInfo{}
+							mfi.On("Mode").Return(fs.FileMode(0))
+							mfi.On("Size").Return(int64(100))
+							mfi.On("ModTime").Return(time.Parse(time.Layout, time.Layout))
+							mfi.On("IsDir").Return(false)
+							mfi.On("Name").Return("testfile")
+
+							mfs := &MockFileStore{}
+							mfs.On("Stat", "/fakeRoot/Files/aaa/testfile").Return(mfi, nil)
+							mfs.On("Stat", "/fakeRoot/Files/aaa/.info_testfile").Return(nil, errors.New("err"))
+							mfs.On("Stat", "/fakeRoot/Files/aaa/.rsrc_testfile").Return(nil, errors.New("err"))
+
+							mfs.On("RemoveAll", "/fakeRoot/Files/aaa/testfile").Return(nil)
+							mfs.On("Remove", "/fakeRoot/Files/aaa/testfile.incomplete").Return(nil)
+							mfs.On("Remove", "/fakeRoot/Files/aaa/.rsrc_testfile").Return(nil)
+							mfs.On("Remove", "/fakeRoot/Files/aaa/.info_testfile").Return(nil)
+
+							return mfs
+						}(),
+						Accounts: map[string]*Account{},
+					},
+				},
+				t: NewTransaction(
+					tranDeleteFile, &[]byte{0, 1},
+					NewField(fieldFileName, []byte("testfile")),
+					NewField(fieldFilePath, []byte{
+						0x00, 0x01,
+						0x00, 0x00,
+						0x03,
+						0x61, 0x61, 0x61,
+					}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0x0, 0xcc},
+					ID:        []byte{0x0, 0x0, 0x0, 0x0},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields:    []Field(nil),
+				},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes, err := HandleDeleteFile(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleDeleteFile(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
+
+			tranAssertEqual(t, tt.wantRes, gotRes)
+
+			tt.args.cc.Server.FS.(*MockFileStore).AssertExpectations(t)
 		})
 	}
 }

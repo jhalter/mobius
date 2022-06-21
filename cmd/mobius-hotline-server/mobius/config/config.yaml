@@ -11,3 +11,4 @@ NewsDateFormat: ""
 MaxDownloads: 0
 MaxDownloadsPerClient: 0
 MaxConnectionsPerIP: 0
+PreserveResourceForks: true

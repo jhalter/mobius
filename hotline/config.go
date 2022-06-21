@@ -12,4 +12,5 @@ type Config struct {
 	MaxDownloads              int      `yaml:"MaxDownloads"`                            // Global simultaneous download limit
 	MaxDownloadsPerClient     int      `yaml:"MaxDownloadsPerClient"`                   // Per client simultaneous download limit
 	MaxConnectionsPerIP       int      `yaml:"MaxConnectionsPerIP"`                     // Max connections per IP
+	PreserveResourceForks     bool     `yaml:"PreserveResourceForks"`                   // Enable preservation of file info and resource forks in sidecar files
 }

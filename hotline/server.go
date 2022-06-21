@@ -1,6 +1,7 @@
 package hotline
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -8,6 +9,7 @@ import (
 	"fmt"
 	"github.com/go-playground/validator/v10"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 	"io"
 	"io/fs"
 	"io/ioutil"
@@ -18,13 +20,20 @@ import (
 	"path"
 	"path/filepath"
 	"runtime/debug"
-	"sort"
 	"strings"
 	"sync"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
+
+type contextKey string
+
+var contextKeyReq = contextKey("req")
+
+type requestCtx struct {
+	remoteAddr string
+	login      string
+	name       string
+}
 
 const (
 	userIdleSeconds        = 300 // time in seconds before an inactive user is marked idle
@@ -39,7 +48,6 @@ type Server struct {
 	Accounts      map[string]*Account
 	Agreement     []byte
 	Clients       map[uint16]*ClientConn
-	FlatNews      []byte
 	ThreadedNews  *ThreadedNews
 	FileTransfers map[uint32]*FileTransfer
 	Config        *Config
@@ -50,15 +58,13 @@ type Server struct {
 	TrackerPassID [4]byte
 	Stats         *Stats
 
-	FS FileStore
-
-	// newsReader io.Reader
-	// newsWriter io.WriteCloser
+	FS FileStore // Storage backend to use for File storage
 
 	outbox chan Transaction
+	mux    sync.Mutex
 
-	mux         sync.Mutex
 	flatNewsMux sync.Mutex
+	FlatNews    []byte
 }
 
 type PrivateChat struct {
@@ -82,7 +88,7 @@ func (s *Server) ListenAndServe(ctx context.Context, cancelRoot context.CancelFu
 			s.Logger.Fatal(err)
 		}
 
-		s.Logger.Fatal(s.Serve(ctx, cancelRoot, ln))
+		s.Logger.Fatal(s.Serve(ctx, ln))
 	}()
 
 	wg.Add(1)
@@ -93,7 +99,7 @@ func (s *Server) ListenAndServe(ctx context.Context, cancelRoot context.CancelFu
 
 		}
 
-		s.Logger.Fatal(s.ServeFileTransfers(ln))
+		s.Logger.Fatal(s.ServeFileTransfers(ctx, ln))
 	}()
 
 	wg.Wait()
@@ -101,7 +107,7 @@ func (s *Server) ListenAndServe(ctx context.Context, cancelRoot context.CancelFu
 	return nil
 }
 
-func (s *Server) ServeFileTransfers(ln net.Listener) error {
+func (s *Server) ServeFileTransfers(ctx context.Context, ln net.Listener) error {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -109,7 +115,16 @@ func (s *Server) ServeFileTransfers(ln net.Listener) error {
 		}
 
 		go func() {
-			if err := s.handleFileTransfer(conn); err != nil {
+			defer func() { _ = conn.Close() }()
+
+			err = s.handleFileTransfer(
+				context.WithValue(ctx, contextKeyReq, requestCtx{
+					remoteAddr: conn.RemoteAddr().String(),
+				}),
+				conn,
+			)
+
+			if err != nil {
 				s.Logger.Errorw("file transfer error", "reason", err)
 			}
 		}()
@@ -153,8 +168,7 @@ func (s *Server) sendTransaction(t Transaction) error {
 	return nil
 }
 
-func (s *Server) Serve(ctx context.Context, cancelRoot context.CancelFunc, ln net.Listener) error {
-
+func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -172,7 +186,8 @@ func (s *Server) Serve(ctx context.Context, cancelRoot context.CancelFunc, ln ne
 			}
 		}()
 		go func() {
-			if err := s.handleNewConnection(conn, conn.RemoteAddr().String()); err != nil {
+			if err := s.handleNewConnection(ctx, conn, conn.RemoteAddr().String()); err != nil {
+				s.Logger.Infow("New client connection established", "RemoteAddr", conn.RemoteAddr())
 				if err == io.EOF {
 					s.Logger.Infow("Client disconnected", "RemoteAddr", conn.RemoteAddr())
 				} else {
@@ -188,7 +203,7 @@ const (
 )
 
 // NewServer constructs a new Server from a config dir
-func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredLogger, FS FileStore) (*Server, error) {
+func NewServer(configDir string, netPort int, logger *zap.SugaredLogger, FS FileStore) (*Server, error) {
 	server := Server{
 		Port:          netPort,
 		Accounts:      make(map[string]*Account),
@@ -500,7 +515,7 @@ func dontPanic(logger *zap.SugaredLogger) {
 }
 
 // handleNewConnection takes a new net.Conn and performs the initial login sequence
-func (s *Server) handleNewConnection(conn net.Conn, remoteAddr string) error {
+func (s *Server) handleNewConnection(ctx context.Context, conn net.Conn, remoteAddr string) error {
 	defer dontPanic(s.Logger)
 
 	if err := Handshake(conn); err != nil {
@@ -616,7 +631,7 @@ func (s *Server) handleNewConnection(conn net.Conn, remoteAddr string) error {
 			c.Server.Logger.Errorw("Error handling transaction", "err", err)
 		}
 
-		// iterate over all of the transactions that were parsed from the byte slice and handle them
+		// iterate over all the transactions that were parsed from the byte slice and handle them
 		for _, t := range transactions {
 			if err := c.handleTransaction(&t); err != nil {
 				c.Server.Logger.Errorw("Error handling transaction", "err", err)
@@ -626,7 +641,7 @@ func (s *Server) handleNewConnection(conn net.Conn, remoteAddr string) error {
 }
 
 // NewTransactionRef generates a random ID for the file transfer.  The Hotline client includes this ID
-// in the file transfer request payload, and the file transfer server will use it to map the request
+// in the transfer request payload, and the file transfer server will use it to map the request
 // to a transfer
 func (s *Server) NewTransactionRef() []byte {
 	transactionRef := make([]byte, 4)
@@ -657,18 +672,11 @@ const dlFldrActionResumeFile = 2
 const dlFldrActionNextFile = 3
 
 // handleFileTransfer receives a client net.Conn from the file transfer server, performs the requested transfer type, then closes the connection
-func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
-	defer func() {
-
-		if err := conn.Close(); err != nil {
-			s.Logger.Errorw("error closing connection", "error", err)
-		}
-	}()
-
+func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) error {
 	defer dontPanic(s.Logger)
 
 	txBuf := make([]byte, 16)
-	if _, err := io.ReadFull(conn, txBuf); err != nil {
+	if _, err := io.ReadFull(rwc, txBuf); err != nil {
 		return err
 	}
 
@@ -691,6 +699,11 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 		return errors.New("invalid transaction ID")
 	}
 
+	rLogger := s.Logger.With(
+		"remoteAddr", ctx.Value(contextKeyReq).(requestCtx).remoteAddr,
+		"xferID", transferRefNum,
+	)
+
 	switch fileTransfer.Type {
 	case FileDownload:
 		s.Stats.DownloadCounter += 1
@@ -705,50 +718,65 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 			dataOffset = int64(binary.BigEndian.Uint32(fileTransfer.fileResumeData.ForkInfoList[0].DataSize[:]))
 		}
 
-		ffo, err := NewFlattenedFileObject(s.Config.FileRoot, fileTransfer.FilePath, fileTransfer.FileName, dataOffset)
+		fw, err := newFileWrapper(s.FS, fullFilePath, 0)
 		if err != nil {
 			return err
 		}
 
-		s.Logger.Infow("File download started", "filePath", fullFilePath, "transactionRef", fileTransfer.ReferenceNumber)
+		rLogger.Infow("File download started", "filePath", fullFilePath, "transactionRef", fileTransfer.ReferenceNumber)
 
+		wr := bufio.NewWriterSize(rwc, 1460)
+
+		// if file transfer options are included, that means this is a "quick preview" request from a 1.5+ client
 		if fileTransfer.options == nil {
 			// Start by sending flat file object to client
-			if _, err := conn.Write(ffo.BinaryMarshal()); err != nil {
+			if _, err := wr.Write(fw.ffo.BinaryMarshal()); err != nil {
 				return err
 			}
 		}
 
-		file, err := s.FS.Open(fullFilePath)
+		file, err := fw.dataForkReader()
 		if err != nil {
 			return err
 		}
 
-		sendBuffer := make([]byte, 1048576)
-		var totalSent int64
-		for {
-			var bytesRead int
-			if bytesRead, err = file.ReadAt(sendBuffer, dataOffset+totalSent); err == io.EOF {
-				if _, err := conn.Write(sendBuffer[:bytesRead]); err != nil {
-					return err
-				}
-				break
-			}
+		if err := sendFile(wr, file, int(dataOffset)); err != nil {
+			return err
+		}
+
+		if err := wr.Flush(); err != nil {
+			return err
+		}
+
+		// if the client requested to resume transfer, do not send the resource fork, or it will be appended into the fileWrapper data
+		if fileTransfer.fileResumeData == nil {
+			err = binary.Write(wr, binary.BigEndian, fw.rsrcForkHeader())
 			if err != nil {
 				return err
 			}
-			totalSent += int64(bytesRead)
-
-			fileTransfer.BytesSent += bytesRead
-
-			if _, err := conn.Write(sendBuffer[:bytesRead]); err != nil {
+			if err := wr.Flush(); err != nil {
 				return err
 			}
 		}
+
+		rFile, err := fw.rsrcForkFile()
+		if err != nil {
+			return nil
+		}
+
+		err = sendFile(wr, rFile, int(dataOffset))
+
+		if err := wr.Flush(); err != nil {
+			return err
+		}
+
 	case FileUpload:
 		s.Stats.UploadCounter += 1
 
-		destinationFile := s.Config.FileRoot + ReadFilePath(fileTransfer.FilePath) + "/" + string(fileTransfer.FileName)
+		destinationFile, err := readPath(s.Config.FileRoot, fileTransfer.FilePath, fileTransfer.FileName)
+		if err != nil {
+			return err
+		}
 
 		var file *os.File
 
@@ -756,10 +784,10 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 		// 1) Upload a new file
 		// 2) Resume a partially transferred file
 		// 3) Replace a fully uploaded file
-		// Unfortunately we have to infer which case applies by inspecting what is already on the file system
+		//  We have to infer which case applies by inspecting what is already on the filesystem
 
 		// 1) Check for existing file:
-		_, err := os.Stat(destinationFile)
+		_, err = os.Stat(destinationFile)
 		if err == nil {
 			// If found, that means this upload is intended to replace the file
 			if err = os.Remove(destinationFile); err != nil {
@@ -768,23 +796,41 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 			file, err = os.Create(destinationFile + incompleteFileSuffix)
 		}
 		if errors.Is(err, fs.ErrNotExist) {
-			// If not found, open or create a new incomplete file
+			// If not found, open or create a new .incomplete file
 			file, err = os.OpenFile(destinationFile+incompleteFileSuffix, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 			if err != nil {
 				return err
 			}
 		}
 
+		f, err := newFileWrapper(s.FS, destinationFile, 0)
+		if err != nil {
+			return err
+		}
+
 		defer func() { _ = file.Close() }()
 
 		s.Logger.Infow("File upload started", "transactionRef", fileTransfer.ReferenceNumber, "dstFile", destinationFile)
 
-		// TODO: replace io.Discard with a real file when ready to implement storing of resource fork data
-		if err := receiveFile(conn, file, io.Discard); err != nil {
+		rForkWriter := io.Discard
+		iForkWriter := io.Discard
+		if s.Config.PreserveResourceForks {
+			rForkWriter, err = f.rsrcForkWriter()
+			if err != nil {
+				return err
+			}
+
+			iForkWriter, err = f.infoForkWriter()
+			if err != nil {
+				return err
+			}
+		}
+
+		if err := receiveFile(rwc, file, rForkWriter, iForkWriter); err != nil {
 			return err
 		}
 
-		if err := os.Rename(destinationFile+".incomplete", destinationFile); err != nil {
+		if err := s.FS.Rename(destinationFile+".incomplete", destinationFile); err != nil {
 			return err
 		}
 
@@ -793,26 +839,26 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 		// Folder Download flow:
 		// 1. Get filePath from the transfer
 		// 2. Iterate over files
-		// 3. For each file:
-		// 	 Send file header to client
+		// 3. For each fileWrapper:
+		// 	 Send fileWrapper header to client
 		// The client can reply in 3 ways:
 		//
-		// 1. If type is an odd number (unknown type?), or file download for the current file is completed:
-		//		client sends []byte{0x00, 0x03} to tell the server to continue to the next file
+		// 1. If type is an odd number (unknown type?), or fileWrapper download for the current fileWrapper is completed:
+		//		client sends []byte{0x00, 0x03} to tell the server to continue to the next fileWrapper
 		//
-		// 2. If download of a file is to be resumed:
+		// 2. If download of a fileWrapper is to be resumed:
 		//		client sends:
 		//			[]byte{0x00, 0x02} // download folder action
 		//			[2]byte // Resume data size
-		//			[]byte file resume data (see myField_FileResumeData)
+		//			[]byte fileWrapper resume data (see myField_FileResumeData)
 		//
-		// 3. Otherwise, download of the file is requested and client sends []byte{0x00, 0x01}
+		// 3. Otherwise, download of the fileWrapper is requested and client sends []byte{0x00, 0x01}
 		//
 		// When download is requested (case 2 or 3), server replies with:
-		// 			[4]byte - file size
+		// 			[4]byte - fileWrapper size
 		//			[]byte  - Flattened File Object
 		//
-		// After every file download, client could request next file with:
+		// After every fileWrapper download, client could request next fileWrapper with:
 		// 			[]byte{0x00, 0x03}
 		//
 		// This notifies the server to send the next item header
@@ -827,18 +873,29 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 		s.Logger.Infow("Start folder download", "path", fullFilePath, "ReferenceNumber", fileTransfer.ReferenceNumber)
 
 		nextAction := make([]byte, 2)
-		if _, err := io.ReadFull(conn, nextAction); err != nil {
+		if _, err := io.ReadFull(rwc, nextAction); err != nil {
 			return err
 		}
 
 		i := 0
 		err = filepath.Walk(fullFilePath+"/", func(path string, info os.FileInfo, err error) error {
 			s.Stats.DownloadCounter += 1
+			i += 1
 
 			if err != nil {
 				return err
 			}
-			i += 1
+
+			// skip dot files
+			if strings.HasPrefix(info.Name(), ".") {
+				return nil
+			}
+
+			hlFile, err := newFileWrapper(s.FS, path, 0)
+			if err != nil {
+				return err
+			}
+
 			subPath := path[basePathLen+1:]
 			s.Logger.Infow("Sending fileheader", "i", i, "path", path, "fullFilePath", fullFilePath, "subPath", subPath, "IsDir", info.IsDir())
 
@@ -848,14 +905,14 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 
 			fileHeader := NewFileHeader(subPath, info.IsDir())
 
-			// Send the file header to client
-			if _, err := conn.Write(fileHeader.Payload()); err != nil {
+			// Send the fileWrapper header to client
+			if _, err := rwc.Write(fileHeader.Payload()); err != nil {
 				s.Logger.Errorf("error sending file header: %v", err)
 				return err
 			}
 
 			// Read the client's Next Action request
-			if _, err := io.ReadFull(conn, nextAction); err != nil {
+			if _, err := io.ReadFull(rwc, nextAction); err != nil {
 				return err
 			}
 
@@ -865,19 +922,19 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 
 			switch nextAction[1] {
 			case dlFldrActionResumeFile:
-				// client asked to resume this file
-				var frd FileResumeData
 				// get size of resumeData
-				if _, err := io.ReadFull(conn, nextAction); err != nil {
+				resumeDataByteLen := make([]byte, 2)
+				if _, err := io.ReadFull(rwc, resumeDataByteLen); err != nil {
 					return err
 				}
 
-				resumeDataLen := binary.BigEndian.Uint16(nextAction)
+				resumeDataLen := binary.BigEndian.Uint16(resumeDataByteLen)
 				resumeDataBytes := make([]byte, resumeDataLen)
-				if _, err := io.ReadFull(conn, resumeDataBytes); err != nil {
+				if _, err := io.ReadFull(rwc, resumeDataBytes); err != nil {
 					return err
 				}
 
+				var frd FileResumeData
 				if err := frd.UnmarshalBinary(resumeDataBytes); err != nil {
 					return err
 				}
@@ -891,26 +948,20 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 				return nil
 			}
 
-			splitPath := strings.Split(path, "/")
-
-			ffo, err := NewFlattenedFileObject(strings.Join(splitPath[:len(splitPath)-1], "/"), nil, []byte(info.Name()), dataOffset)
-			if err != nil {
-				return err
-			}
 			s.Logger.Infow("File download started",
 				"fileName", info.Name(),
 				"transactionRef", fileTransfer.ReferenceNumber,
-				"TransferSize", fmt.Sprintf("%x", ffo.TransferSize()),
+				"TransferSize", fmt.Sprintf("%x", hlFile.ffo.TransferSize(dataOffset)),
 			)
 
 			// Send file size to client
-			if _, err := conn.Write(ffo.TransferSize()); err != nil {
+			if _, err := rwc.Write(hlFile.ffo.TransferSize(dataOffset)); err != nil {
 				s.Logger.Error(err)
 				return err
 			}
 
 			// Send ffo bytes to client
-			if _, err := conn.Write(ffo.BinaryMarshal()); err != nil {
+			if _, err := rwc.Write(hlFile.ffo.BinaryMarshal()); err != nil {
 				s.Logger.Error(err)
 				return err
 			}
@@ -920,38 +971,31 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 				return err
 			}
 
-			// // Copy N bytes from file to connection
-			// _, err = io.CopyN(conn, file, int64(binary.BigEndian.Uint32(ffo.FlatFileDataForkHeader.DataSize[:])))
-			// if err != nil {
-			// 	return err
-			// }
-			// file.Close()
-			sendBuffer := make([]byte, 1048576)
-			var totalSent int64
-			for {
-				var bytesRead int
-				if bytesRead, err = file.ReadAt(sendBuffer, dataOffset+totalSent); err == io.EOF {
-					if _, err := conn.Write(sendBuffer[:bytesRead]); err != nil {
-						return err
-					}
-					break
-				}
+			// wr := bufio.NewWriterSize(rwc, 1460)
+			err = sendFile(rwc, file, int(dataOffset))
+			if err != nil {
+				return err
+			}
+
+			if nextAction[1] != 2 && hlFile.ffo.FlatFileHeader.ForkCount[1] == 3 {
+				err = binary.Write(rwc, binary.BigEndian, hlFile.rsrcForkHeader())
 				if err != nil {
-					panic(err)
+					return err
 				}
-				totalSent += int64(bytesRead)
 
-				fileTransfer.BytesSent += bytesRead
+				rFile, err := hlFile.rsrcForkFile()
+				if err != nil {
+					return err
+				}
 
-				if _, err := conn.Write(sendBuffer[:bytesRead]); err != nil {
+				err = sendFile(rwc, rFile, int(dataOffset))
+				if err != nil {
 					return err
 				}
 			}
 
-			// TODO: optionally send resource fork header and resource fork data
-
 			// Read the client's Next Action request.  This is always 3, I think?
-			if _, err := io.ReadFull(conn, nextAction); err != nil {
+			if _, err := io.ReadFull(rwc, nextAction); err != nil {
 				return err
 			}
 
@@ -963,6 +1007,7 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 		if err != nil {
 			return err
 		}
+
 		s.Logger.Infow(
 			"Folder upload started",
 			"transactionRef", fileTransfer.ReferenceNumber,
@@ -979,7 +1024,7 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 		}
 
 		// Begin the folder upload flow by sending the "next file action" to client
-		if _, err := conn.Write([]byte{0, dlFldrActionNextFile}); err != nil {
+		if _, err := rwc.Write([]byte{0, dlFldrActionNextFile}); err != nil {
 			return err
 		}
 
@@ -989,19 +1034,19 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 			s.Stats.UploadCounter += 1
 
 			var fu folderUpload
-			if _, err := io.ReadFull(conn, fu.DataSize[:]); err != nil {
+			if _, err := io.ReadFull(rwc, fu.DataSize[:]); err != nil {
+				return err
+			}
+			if _, err := io.ReadFull(rwc, fu.IsFolder[:]); err != nil {
+				return err
+			}
+			if _, err := io.ReadFull(rwc, fu.PathItemCount[:]); err != nil {
 				return err
 			}
 
-			if _, err := io.ReadFull(conn, fu.IsFolder[:]); err != nil {
-				return err
-			}
-			if _, err := io.ReadFull(conn, fu.PathItemCount[:]); err != nil {
-				return err
-			}
-			fu.FileNamePath = make([]byte, binary.BigEndian.Uint16(fu.DataSize[:])-4)
+			fu.FileNamePath = make([]byte, binary.BigEndian.Uint16(fu.DataSize[:])-4) // -4 to subtract the path separator bytes
 
-			if _, err := io.ReadFull(conn, fu.FileNamePath); err != nil {
+			if _, err := io.ReadFull(rwc, fu.FileNamePath); err != nil {
 				return err
 			}
 
@@ -1021,14 +1066,14 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 				}
 
 				// Tell client to send next file
-				if _, err := conn.Write([]byte{0, dlFldrActionNextFile}); err != nil {
+				if _, err := rwc.Write([]byte{0, dlFldrActionNextFile}); err != nil {
 					return err
 				}
 			} else {
 				nextAction := dlFldrActionSendFile
 
 				// Check if we have the full file already.  If so, send dlFldrAction_NextFile to client to skip.
-				_, err := os.Stat(dstPath + "/" + fu.FormattedPath())
+				_, err = os.Stat(dstPath + "/" + fu.FormattedPath())
 				if err != nil && !errors.Is(err, fs.ErrNotExist) {
 					return err
 				}
@@ -1037,7 +1082,7 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 				}
 
 				//  Check if we have a partial file already.  If so, send dlFldrAction_ResumeFile to client to resume upload.
-				inccompleteFile, err := os.Stat(dstPath + "/" + fu.FormattedPath() + incompleteFileSuffix)
+				incompleteFile, err := os.Stat(dstPath + "/" + fu.FormattedPath() + incompleteFileSuffix)
 				if err != nil && !errors.Is(err, fs.ErrNotExist) {
 					return err
 				}
@@ -1045,7 +1090,7 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 					nextAction = dlFldrActionResumeFile
 				}
 
-				if _, err := conn.Write([]byte{0, uint8(nextAction)}); err != nil {
+				if _, err := rwc.Write([]byte{0, uint8(nextAction)}); err != nil {
 					return err
 				}
 
@@ -1054,31 +1099,29 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 					continue
 				case dlFldrActionResumeFile:
 					offset := make([]byte, 4)
-					binary.BigEndian.PutUint32(offset, uint32(inccompleteFile.Size()))
+					binary.BigEndian.PutUint32(offset, uint32(incompleteFile.Size()))
 
 					file, err := os.OpenFile(dstPath+"/"+fu.FormattedPath()+incompleteFileSuffix, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 					if err != nil {
 						return err
 					}
 
-					fileResumeData := NewFileResumeData([]ForkInfoList{
-						*NewForkInfoList(offset),
-					})
+					fileResumeData := NewFileResumeData([]ForkInfoList{*NewForkInfoList(offset)})
 
 					b, _ := fileResumeData.BinaryMarshal()
 
 					bs := make([]byte, 2)
 					binary.BigEndian.PutUint16(bs, uint16(len(b)))
 
-					if _, err := conn.Write(append(bs, b...)); err != nil {
+					if _, err := rwc.Write(append(bs, b...)); err != nil {
 						return err
 					}
 
-					if _, err := io.ReadFull(conn, fileSize); err != nil {
+					if _, err := io.ReadFull(rwc, fileSize); err != nil {
 						return err
 					}
 
-					if err := receiveFile(conn, file, ioutil.Discard); err != nil {
+					if err := receiveFile(rwc, file, ioutil.Discard, ioutil.Discard); err != nil {
 						s.Logger.Error(err)
 					}
 
@@ -1088,29 +1131,48 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 					}
 
 				case dlFldrActionSendFile:
-					if _, err := io.ReadFull(conn, fileSize); err != nil {
+					if _, err := io.ReadFull(rwc, fileSize); err != nil {
 						return err
 					}
 
 					filePath := dstPath + "/" + fu.FormattedPath()
-					s.Logger.Infow("Starting file transfer", "path", filePath, "fileNum", i+1, "totalFiles", "zz", "fileSize", binary.BigEndian.Uint32(fileSize))
 
-					newFile, err := s.FS.Create(filePath + ".incomplete")
+					hlFile, err := newFileWrapper(s.FS, filePath, 0)
 					if err != nil {
 						return err
 					}
 
-					if err := receiveFile(conn, newFile, ioutil.Discard); err != nil {
-						s.Logger.Error(err)
+					s.Logger.Infow("Starting file transfer", "path", filePath, "fileNum", i+1, "fileSize", binary.BigEndian.Uint32(fileSize))
+
+					incWriter, err := hlFile.incFileWriter()
+					if err != nil {
+						return err
 					}
-					_ = newFile.Close()
+
+					rForkWriter := io.Discard
+					iForkWriter := io.Discard
+					if s.Config.PreserveResourceForks {
+						iForkWriter, err = hlFile.infoForkWriter()
+						if err != nil {
+							return err
+						}
+
+						rForkWriter, err = hlFile.rsrcForkWriter()
+						if err != nil {
+							return err
+						}
+					}
+					if err := receiveFile(rwc, incWriter, rForkWriter, iForkWriter); err != nil {
+						return err
+					}
+					// _ = newFile.Close()
 					if err := os.Rename(filePath+".incomplete", filePath); err != nil {
 						return err
 					}
 				}
 
-				// Tell client to send next file
-				if _, err := conn.Write([]byte{0, dlFldrActionNextFile}); err != nil {
+				// Tell client to send next fileWrapper
+				if _, err := rwc.Write([]byte{0, dlFldrActionNextFile}); err != nil {
 					return err
 				}
 			}
@@ -1119,14 +1181,4 @@ func (s *Server) handleFileTransfer(conn io.ReadWriteCloser) error {
 	}
 
 	return nil
-}
-
-// sortedClients is a utility function that takes a map of *ClientConn and returns a sorted slice of the values.
-// The purpose of this is to ensure that the ordering of client connections is deterministic so that test assertions work.
-func sortedClients(unsortedClients map[uint16]*ClientConn) (clients []*ClientConn) {
-	for _, c := range unsortedClients {
-		clients = append(clients, c)
-	}
-	sort.Sort(byClientID(clients))
-	return clients
 }

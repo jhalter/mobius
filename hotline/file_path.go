@@ -87,15 +87,6 @@ func (fp *FilePath) String() string {
 	return path.Join(out...)
 }
 
-func ReadFilePath(filePathFieldData []byte) string {
-	var fp FilePath
-	err := fp.UnmarshalBinary(filePathFieldData)
-	if err != nil {
-		// TODO
-	}
-	return fp.String()
-}
-
 func readPath(fileRoot string, filePath, fileName []byte) (fullPath string, err error) {
 	var fp FilePath
 	if filePath != nil {
