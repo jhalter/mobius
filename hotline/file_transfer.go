@@ -3,7 +3,7 @@ package hotline
 import (
 	"encoding/binary"
 	"fmt"
-	"strings"
+	"path/filepath"
 )
 
 // File transfer types
@@ -51,11 +51,12 @@ func (fu *folderUpload) FormattedPath() string {
 	var pathSegments []string
 	pathData := fu.FileNamePath
 
+	// TODO: implement scanner interface instead?
 	for i := uint16(0); i < pathItemLen; i++ {
 		segLen := pathData[2]
 		pathSegments = append(pathSegments, string(pathData[3:3+segLen]))
 		pathData = pathData[3+segLen:]
 	}
 
-	return strings.Join(pathSegments, pathSeparator)
+	return filepath.Join(pathSegments...)
 }

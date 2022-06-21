@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -630,7 +631,7 @@ func TestHandleGetFileInfo(t *testing.T) {
 						Config: &Config{
 							FileRoot: func() string {
 								path, _ := os.Getwd()
-								return path + "/test/config/Files"
+								return filepath.Join(path, "/test/config/Files")
 							}(),
 						},
 					},

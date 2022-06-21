@@ -10,17 +10,9 @@ import (
 	"strings"
 )
 
-func downcaseFileExtension(filename string) string {
-	splitStr := strings.Split(filename, ".")
-	ext := strings.ToLower(
-		splitStr[len(splitStr)-1],
-	)
-
-	return ext
-}
-
-func fileTypeFromFilename(fn string) fileType {
-	ft, ok := fileTypes[downcaseFileExtension(fn)]
+func fileTypeFromFilename(filename string) fileType {
+	fileExt := strings.ToLower(filepath.Ext(filename))
+	ft, ok := fileTypes[fileExt]
 	if ok {
 		return ft
 	}
@@ -38,8 +30,8 @@ func fileTypeFromInfo(info fs.FileInfo) (ft fileType, err error) {
 	return ft, nil
 }
 
-func getFileNameList(filePath string) (fields []Field, err error) {
-	files, err := os.ReadDir(filePath)
+func getFileNameList(path string) (fields []Field, err error) {
+	files, err := os.ReadDir(path)
 	if err != nil {
 		return fields, nil
 	}
@@ -59,12 +51,12 @@ func getFileNameList(filePath string) (fields []Field, err error) {
 		}
 
 		if fileInfo.Mode()&os.ModeSymlink != 0 {
-			resolvedPath, err := os.Readlink(filePath + "/" + file.Name())
+			resolvedPath, err := os.Readlink(filepath.Join(path, file.Name()))
 			if err != nil {
 				return fields, err
 			}
 
-			rFile, err := os.Stat(filePath + "/" + resolvedPath)
+			rFile, err := os.Stat(filepath.Join(path, resolvedPath))
 			if errors.Is(err, os.ErrNotExist) {
 				continue
 			}
@@ -73,7 +65,7 @@ func getFileNameList(filePath string) (fields []Field, err error) {
 			}
 
 			if rFile.IsDir() {
-				dir, err := ioutil.ReadDir(filePath + "/" + file.Name())
+				dir, err := ioutil.ReadDir(filepath.Join(path, file.Name()))
 				if err != nil {
 					return fields, err
 				}
@@ -95,7 +87,7 @@ func getFileNameList(filePath string) (fields []Field, err error) {
 			}
 
 		} else if file.IsDir() {
-			dir, err := ioutil.ReadDir(filePath + "/" + file.Name())
+			dir, err := ioutil.ReadDir(filepath.Join(path, file.Name()))
 			if err != nil {
 				return fields, err
 			}
@@ -116,7 +108,7 @@ func getFileNameList(filePath string) (fields []Field, err error) {
 				continue
 			}
 
-			hlFile, err := newFileWrapper(&OSFileStore{}, filePath+"/"+file.Name(), 0)
+			hlFile, err := newFileWrapper(&OSFileStore{}, path+"/"+file.Name(), 0)
 			if err != nil {
 				return nil, err
 			}

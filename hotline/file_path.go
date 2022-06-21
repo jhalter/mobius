@@ -5,11 +5,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"path"
+	"path/filepath"
 	"strings"
 )
-
-const pathSeparator = "/" // File path separator TODO: make configurable to support Windows
 
 // FilePathItem represents the file or directory portion of a delimited file path (e.g. foo and bar in "/foo/bar")
 // 00 00
@@ -84,7 +82,7 @@ func (fp *FilePath) String() string {
 		out = append(out, string(i.Name))
 	}
 
-	return path.Join(out...)
+	return filepath.Join(out...)
 }
 
 func readPath(fileRoot string, filePath, fileName []byte) (fullPath string, err error) {
@@ -95,11 +93,11 @@ func readPath(fileRoot string, filePath, fileName []byte) (fullPath string, err 
 		}
 	}
 
-	fullPath = path.Join(
+	fullPath = filepath.Join(
 		"/",
 		fileRoot,
 		fp.String(),
-		path.Join("/", string(fileName)),
+		filepath.Join("/", string(fileName)),
 	)
 
 	return fullPath, nil

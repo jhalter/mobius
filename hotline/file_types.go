@@ -11,51 +11,55 @@ var defaultFileType = fileType{
 }
 
 var fileTypes = map[string]fileType{
-	"sit": {
+	".sit": {
 		TypeCode:    "SIT!",
 		CreatorCode: "SIT!",
 	},
-	"pdf": {
+	".pdf": {
 		TypeCode:    "PDF ",
 		CreatorCode: "CARO",
 	},
-	"gif": {
+	".gif": {
 		TypeCode:    "GIFf",
 		CreatorCode: "ogle",
 	},
-	"txt": {
+	".txt": {
 		TypeCode:    "TEXT",
 		CreatorCode: "ttxt",
 	},
-	"zip": {
+	".zip": {
 		TypeCode:    "ZIP ",
 		CreatorCode: "SITx",
 	},
-	"tgz": {
+	".tgz": {
 		TypeCode:    "Gzip",
 		CreatorCode: "SITx",
 	},
-	"hqx": {
+	".hqx": {
 		TypeCode:    "TEXT",
 		CreatorCode: "SITx",
 	},
-	"jpg": {
+	".jpg": {
 		TypeCode:    "JPEG",
 		CreatorCode: "ogle",
 	},
-	"img": {
+	".jpeg": {
+		TypeCode:    "JPEG",
+		CreatorCode: "ogle",
+	},
+	".img": {
 		TypeCode:    "rohd",
 		CreatorCode: "ddsk",
 	},
-	"sea": {
+	".sea": {
 		TypeCode:    "APPL",
 		CreatorCode: "aust",
 	},
-	"mov": {
+	".mov": {
 		TypeCode:    "MooV",
 		CreatorCode: "TVOD",
 	},
-	"incomplete": { // Partial file upload
+	".incomplete": { // Partial file upload
 		TypeCode:    "HTft",
 		CreatorCode: "HTLC",
 	},

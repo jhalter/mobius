@@ -17,7 +17,6 @@ import (
 	"math/rand"
 	"net"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
@@ -227,28 +226,28 @@ func NewServer(configDir string, netPort int, logger *zap.SugaredLogger, FS File
 		return nil, err
 	}
 
-	server.Agreement, err = os.ReadFile(configDir + agreementFile)
+	server.Agreement, err = os.ReadFile(filepath.Join(configDir, agreementFile))
 	if err != nil {
 		return nil, err
 	}
 
-	if server.FlatNews, err = os.ReadFile(configDir + "MessageBoard.txt"); err != nil {
+	if server.FlatNews, err = os.ReadFile(filepath.Join(configDir, "MessageBoard.txt")); err != nil {
 		return nil, err
 	}
 
-	if err := server.loadThreadedNews(configDir + "ThreadedNews.yaml"); err != nil {
+	if err := server.loadThreadedNews(filepath.Join(configDir, "ThreadedNews.yaml")); err != nil {
 		return nil, err
 	}
 
-	if err := server.loadConfig(configDir + "config.yaml"); err != nil {
+	if err := server.loadConfig(filepath.Join(configDir, "config.yaml")); err != nil {
 		return nil, err
 	}
 
-	if err := server.loadAccounts(configDir + "Users/"); err != nil {
+	if err := server.loadAccounts(filepath.Join(configDir, "Users/")); err != nil {
 		return nil, err
 	}
 
-	server.Config.FileRoot = configDir + "Files/"
+	server.Config.FileRoot = filepath.Join(configDir, "Files")
 
 	*server.NextGuestID = 1
 
@@ -329,7 +328,7 @@ func (s *Server) writeThreadedNews() error {
 		return err
 	}
 	err = ioutil.WriteFile(
-		s.ConfigDir+"ThreadedNews.yaml",
+		filepath.Join(s.ConfigDir, "ThreadedNews.yaml"),
 		out,
 		0666,
 	)
@@ -379,7 +378,7 @@ func (s *Server) NewUser(login, name, password string, access []byte) error {
 	}
 	s.Accounts[login] = &account
 
-	return s.FS.WriteFile(s.ConfigDir+"Users/"+login+".yaml", out, 0666)
+	return s.FS.WriteFile(filepath.Join(s.ConfigDir, "Users", login+".yaml"), out, 0666)
 }
 
 func (s *Server) UpdateUser(login, newLogin, name, password string, access []byte) error {
@@ -388,7 +387,7 @@ func (s *Server) UpdateUser(login, newLogin, name, password string, access []byt
 
 	// update renames the user login
 	if login != newLogin {
-		err := os.Rename(s.ConfigDir+"Users/"+login+".yaml", s.ConfigDir+"Users/"+newLogin+".yaml")
+		err := os.Rename(filepath.Join(s.ConfigDir, "Users", login+".yaml"), filepath.Join(s.ConfigDir, "Users", newLogin+".yaml"))
 		if err != nil {
 			return err
 		}
@@ -405,7 +404,8 @@ func (s *Server) UpdateUser(login, newLogin, name, password string, access []byt
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(s.ConfigDir+"Users/"+newLogin+".yaml", out, 0666); err != nil {
+
+	if err := os.WriteFile(filepath.Join(s.ConfigDir, "Users", newLogin+".yaml"), out, 0666); err != nil {
 		return err
 	}
 
@@ -419,7 +419,7 @@ func (s *Server) DeleteUser(login string) error {
 
 	delete(s.Accounts, login)
 
-	return s.FS.Remove(s.ConfigDir + "Users/" + login + ".yaml")
+	return s.FS.Remove(filepath.Join(s.ConfigDir, "Users", login+".yaml"))
 }
 
 func (s *Server) connectedUsers() []Field {
@@ -455,7 +455,7 @@ func (s *Server) loadThreadedNews(threadedNewsPath string) error {
 
 // loadAccounts loads account data from disk
 func (s *Server) loadAccounts(userDir string) error {
-	matches, err := filepath.Glob(path.Join(userDir, "*.yaml"))
+	matches, err := filepath.Glob(filepath.Join(userDir, "*.yaml"))
 	if err != nil {
 		return err
 	}
@@ -1059,8 +1059,8 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 			)
 
 			if fu.IsFolder == [2]byte{0, 1} {
-				if _, err := os.Stat(dstPath + "/" + fu.FormattedPath()); os.IsNotExist(err) {
-					if err := os.Mkdir(dstPath+"/"+fu.FormattedPath(), 0777); err != nil {
+				if _, err := os.Stat(filepath.Join(dstPath, fu.FormattedPath())); os.IsNotExist(err) {
+					if err := os.Mkdir(filepath.Join(dstPath, fu.FormattedPath()), 0777); err != nil {
 						return err
 					}
 				}
@@ -1073,7 +1073,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 				nextAction := dlFldrActionSendFile
 
 				// Check if we have the full file already.  If so, send dlFldrAction_NextFile to client to skip.
-				_, err = os.Stat(dstPath + "/" + fu.FormattedPath())
+				_, err = os.Stat(filepath.Join(dstPath, fu.FormattedPath()))
 				if err != nil && !errors.Is(err, fs.ErrNotExist) {
 					return err
 				}
@@ -1082,7 +1082,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 				}
 
 				//  Check if we have a partial file already.  If so, send dlFldrAction_ResumeFile to client to resume upload.
-				incompleteFile, err := os.Stat(dstPath + "/" + fu.FormattedPath() + incompleteFileSuffix)
+				incompleteFile, err := os.Stat(filepath.Join(dstPath, fu.FormattedPath()+incompleteFileSuffix))
 				if err != nil && !errors.Is(err, fs.ErrNotExist) {
 					return err
 				}
@@ -1135,7 +1135,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 						return err
 					}
 
-					filePath := dstPath + "/" + fu.FormattedPath()
+					filePath := filepath.Join(dstPath, fu.FormattedPath())
 
 					hlFile, err := newFileWrapper(s.FS, filePath, 0)
 					if err != nil {

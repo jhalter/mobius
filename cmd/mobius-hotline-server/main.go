@@ -14,8 +14,8 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 )
 
@@ -71,12 +71,8 @@ func main() {
 	defer func() { _ = l.Sync() }()
 	logger := l.Sugar()
 
-	if !(strings.HasSuffix(*configDir, "/") || strings.HasSuffix(*configDir, "\\")) {
-		*configDir = *configDir + "/"
-	}
-
 	if *init {
-		if _, err := os.Stat(*configDir + "/config.yaml"); os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(*configDir, "/config.yaml")); os.IsNotExist(err) {
 			if err := os.MkdirAll(*configDir, 0750); err != nil {
 				logger.Fatal(err)
 			}
@@ -92,7 +88,7 @@ func main() {
 	}
 
 	if _, err := os.Stat(*configDir); os.IsNotExist(err) {
-		logger.Fatalw("Configuration directory not found", "path", configDir)
+		logger.Fatalw("Configuration directory not found.  Correct the path or re-run with -init to generate initial config.", "path", configDir)
 	}
 
 	srv, err := hotline.NewServer(*configDir, *basePort, logger, &hotline.OSFileStore{})
@@ -176,17 +172,17 @@ func copyDir(src, dst string) error {
 	}
 	for _, dirEntry := range entries {
 		if dirEntry.IsDir() {
-			if err := os.MkdirAll(dst+"/"+dirEntry.Name(), 0777); err != nil {
+			if err := os.MkdirAll(filepath.Join(dst, dirEntry.Name()), 0777); err != nil {
 				panic(err)
 			}
-			subdirEntries, _ := cfgTemplate.ReadDir(src + "/" + dirEntry.Name())
+			subdirEntries, _ := cfgTemplate.ReadDir(filepath.Join(src, dirEntry.Name()))
 			for _, subDirEntry := range subdirEntries {
-				f, err := os.Create(dst + "/" + dirEntry.Name() + "/" + subDirEntry.Name())
+				f, err := os.Create(filepath.Join(dst, dirEntry.Name(), subDirEntry.Name()))
 				if err != nil {
 					return err
 				}
 
-				srcFile, err := cfgTemplate.Open(src + "/" + dirEntry.Name() + "/" + subDirEntry.Name())
+				srcFile, err := cfgTemplate.Open(filepath.Join(src, dirEntry.Name(), subDirEntry.Name()))
 				if err != nil {
 					return err
 				}
@@ -197,12 +193,12 @@ func copyDir(src, dst string) error {
 				f.Close()
 			}
 		} else {
-			f, err := os.Create(dst + "/" + dirEntry.Name())
+			f, err := os.Create(filepath.Join(dst, dirEntry.Name()))
 			if err != nil {
 				return err
 			}
 
-			srcFile, err := cfgTemplate.Open(src + "/" + dirEntry.Name())
+			srcFile, err := cfgTemplate.Open(filepath.Join(src, dirEntry.Name()))
 			if err != nil {
 				return err
 			}

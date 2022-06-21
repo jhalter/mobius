@@ -8,13 +8,13 @@ import (
 	"io/fs"
 	"os"
 	"path"
-	"strings"
+	"path/filepath"
 )
 
 const (
 	incompleteFileSuffix = ".incomplete"
-	infoForkNameTemplate = "%s.info_%s" // template string for info fork filenames
-	rsrcForkNameTemplate = "%s.rsrc_%s" // template string for resource fork filenames
+	infoForkNameTemplate = ".info_%s" // template string for info fork filenames
+	rsrcForkNameTemplate = ".rsrc_%s" // template string for resource fork filenames
 )
 
 // fileWrapper encapsulates the data, info, and resource forks of a Hotline file and provides methods to manage the files.
@@ -33,18 +33,17 @@ type fileWrapper struct {
 }
 
 func newFileWrapper(fs FileStore, path string, dataOffset int64) (*fileWrapper, error) {
-	pathSegs := strings.Split(path, pathSeparator)
-	dir := strings.Join(pathSegs[:len(pathSegs)-1], pathSeparator)
-	fName := pathSegs[len(pathSegs)-1]
+	dir := filepath.Dir(path)
+	fName := filepath.Base(path)
 	f := fileWrapper{
 		fs:             fs,
 		name:           fName,
 		path:           dir,
 		dataPath:       path,
 		dataOffset:     dataOffset,
-		rsrcPath:       fmt.Sprintf(rsrcForkNameTemplate, dir+"/", fName),
-		infoPath:       fmt.Sprintf(infoForkNameTemplate, dir+"/", fName),
-		incompletePath: dir + "/" + fName + incompleteFileSuffix,
+		rsrcPath:       filepath.Join(dir, fmt.Sprintf(rsrcForkNameTemplate, fName)),
+		infoPath:       filepath.Join(dir, fmt.Sprintf(infoForkNameTemplate, fName)),
+		incompletePath: filepath.Join(dir, fName+incompleteFileSuffix),
 		ffo:            &flattenedFileObject{},
 	}
 
@@ -100,11 +99,11 @@ func (f *fileWrapper) incompleteDataName() string {
 }
 
 func (f *fileWrapper) rsrcForkName() string {
-	return fmt.Sprintf(rsrcForkNameTemplate, "", f.name)
+	return fmt.Sprintf(rsrcForkNameTemplate, f.name)
 }
 
 func (f *fileWrapper) infoForkName() string {
-	return fmt.Sprintf(infoForkNameTemplate, "", f.name)
+	return fmt.Sprintf(infoForkNameTemplate, f.name)
 }
 
 func (f *fileWrapper) creatorCode() []byte {
