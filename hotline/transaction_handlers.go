@@ -1962,6 +1962,5 @@ func HandleDownloadBanner(cc *ClientConn, t *Transaction) (res []Transaction, er
 		NewField(fieldTransferSize, size),
 	))
 
-	res = append(res, cc.NewReply(t))
 	return res, err
 }
