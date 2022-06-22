@@ -156,10 +156,6 @@ func (cc *ClientConn) uint16ID() uint16 {
 
 // Authorize checks if the user account has the specified permission
 func (cc *ClientConn) Authorize(access int) bool {
-	if access == 0 {
-		return true
-	}
-
 	i := big.NewInt(int64(binary.BigEndian.Uint64(*cc.Account.Access)))
 
 	return i.Bit(63-access) == 1
