@@ -69,6 +69,7 @@ func (ffif *FlatFileInformationFork) friendlyCreator() []byte {
 }
 
 func (ffif *FlatFileInformationFork) setComment(comment []byte) error {
+	ffif.CommentSize = make([]byte, 2)
 	ffif.Comment = comment
 	binary.BigEndian.PutUint16(ffif.CommentSize, uint16(len(comment)))
 
