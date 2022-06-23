@@ -1,7 +1,6 @@
 package hotline
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -31,9 +30,7 @@ func (tf *transfer) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-const fileCopyBufSize = 4096
-
-func receiveFile(r io.Reader, targetFile, resForkFile, infoFork io.Writer) error {
+func receiveFile(r io.Reader, targetFile, resForkFile, infoFork, counterWriter io.Writer) error {
 	var ffo flattenedFileObject
 	if _, err := ffo.ReadFrom(r); err != nil {
 		return err
@@ -45,12 +42,7 @@ func receiveFile(r io.Reader, targetFile, resForkFile, infoFork io.Writer) error
 		return err
 	}
 
-	// read and write the data fork
-	bw := bufio.NewWriterSize(targetFile, fileCopyBufSize)
-	if _, err = io.CopyN(bw, r, ffo.dataSize()); err != nil {
-		return err
-	}
-	if err := bw.Flush(); err != nil {
+	if _, err = io.Copy(targetFile, io.TeeReader(r, counterWriter)); err != nil {
 		return err
 	}
 
@@ -59,45 +51,11 @@ func receiveFile(r io.Reader, targetFile, resForkFile, infoFork io.Writer) error
 			return err
 		}
 
-		bw = bufio.NewWriterSize(resForkFile, fileCopyBufSize)
-		_, err = io.CopyN(resForkFile, r, ffo.rsrcSize())
-		if err != nil {
-			return err
-		}
-		if err := bw.Flush(); err != nil {
+		if _, err = io.Copy(resForkFile, io.TeeReader(r, counterWriter)); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func sendFile(w io.Writer, r io.Reader, offset int) (err error) {
-	br := bufio.NewReader(r)
-	if _, err := br.Discard(offset); err != nil {
-		return err
-	}
-
-	rSendBuffer := make([]byte, 1024)
-	for {
-		var bytesRead int
-
-		if bytesRead, err = br.Read(rSendBuffer); err == io.EOF {
-			if _, err := w.Write(rSendBuffer[:bytesRead]); err != nil {
-				return err
-			}
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		// totalSent += int64(bytesRead)
-
-		// fileTransfer.BytesSent += bytesRead
-
-		if _, err := w.Write(rSendBuffer[:bytesRead]); err != nil {
-			return err
-		}
-	}
 }
 
 func (s *Server) bannerDownload(w io.Writer) error {

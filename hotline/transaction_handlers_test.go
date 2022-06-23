@@ -978,7 +978,13 @@ func TestHandleUploadFile(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Server: &Server{
-						FileTransfers: map[uint32]*FileTransfer{},
+						FS:            &OSFileStore{},
+						fileTransfers: map[[4]byte]*FileTransfer{},
+						Config: &Config{
+							FileRoot: func() string { path, _ := os.Getwd(); return path + "/test/config/Files" }(),
+						}},
+					transfers: map[int]map[[4]byte]*FileTransfer{
+						FileUpload: {},
 					},
 					Account: &Account{
 						Access: func() *[]byte {
@@ -1025,9 +1031,6 @@ func TestHandleUploadFile(t *testing.T) {
 							access := bits[:]
 							return &access
 						}(),
-					},
-					Server: &Server{
-						FileTransfers: map[uint32]*FileTransfer{},
 					},
 				},
 				t: NewTransaction(
@@ -1744,7 +1747,9 @@ func TestHandleDownloadFile(t *testing.T) {
 			name: "with a valid file",
 			args: args{
 				cc: &ClientConn{
-					Transfers: make(map[int][]*FileTransfer),
+					transfers: map[int]map[[4]byte]*FileTransfer{
+						FileDownload: {},
+					},
 					Account: &Account{
 						Access: func() *[]byte {
 							var bits accessBitmap
@@ -1755,7 +1760,7 @@ func TestHandleDownloadFile(t *testing.T) {
 					},
 					Server: &Server{
 						FS:            &OSFileStore{},
-						FileTransfers: make(map[uint32]*FileTransfer),
+						fileTransfers: map[[4]byte]*FileTransfer{},
 						Config: &Config{
 							FileRoot: func() string { path, _ := os.Getwd(); return path + "/test/config/Files" }(),
 						},
@@ -1790,8 +1795,9 @@ func TestHandleDownloadFile(t *testing.T) {
 			name: "when client requests to resume 1k test file at offset 256",
 			args: args{
 				cc: &ClientConn{
-					Transfers: make(map[int][]*FileTransfer),
-					Account: &Account{
+					transfers: map[int]map[[4]byte]*FileTransfer{
+						FileDownload: {},
+					}, Account: &Account{
 						Access: func() *[]byte {
 							var bits accessBitmap
 							bits.Set(accessDownloadFile)
@@ -1801,6 +1807,7 @@ func TestHandleDownloadFile(t *testing.T) {
 					},
 					Server: &Server{
 						FS: &OSFileStore{},
+
 						// FS: func() *MockFileStore {
 						// 	path, _ := os.Getwd()
 						// 	testFile, err := os.Open(path + "/test/config/Files/testfile-1k")
@@ -1818,7 +1825,7 @@ func TestHandleDownloadFile(t *testing.T) {
 						//
 						// 	return mfs
 						// }(),
-						FileTransfers: make(map[uint32]*FileTransfer),
+						fileTransfers: map[[4]byte]*FileTransfer{},
 						Config: &Config{
 							FileRoot: func() string { path, _ := os.Getwd(); return path + "/test/config/Files" }(),
 						},
@@ -2607,6 +2614,152 @@ func TestHandleGetFileNameList(t *testing.T) {
 				return
 			}
 
+			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}
+
+func TestHandleGetClientInfoText(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "when user does not have required permission",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							access := bits[:]
+							return &access
+						}(),
+					},
+					Server: &Server{
+						Accounts: map[string]*Account{},
+					},
+				},
+				t: NewTransaction(
+					tranGetClientInfoText, &[]byte{0, 1},
+					NewField(fieldUserID, []byte{0, 1}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to get client info.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "with a valid user",
+			args: args{
+				cc: &ClientConn{
+					UserName:   []byte("Testy McTest"),
+					RemoteAddr: "1.2.3.4:12345",
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessGetClientInfo)
+							access := bits[:]
+							return &access
+						}(),
+						Name:  "test",
+						Login: "test",
+					},
+					Server: &Server{
+						Accounts: map[string]*Account{},
+						Clients: map[uint16]*ClientConn{
+							uint16(1): {
+								UserName:   []byte("Testy McTest"),
+								RemoteAddr: "1.2.3.4:12345",
+								Account: &Account{
+									Access: func() *[]byte {
+										var bits accessBitmap
+										bits.Set(accessGetClientInfo)
+										access := bits[:]
+										return &access
+									}(),
+									Name:  "test",
+									Login: "test",
+								},
+							},
+						},
+					},
+					transfers: map[int]map[[4]byte]*FileTransfer{
+						FileDownload:   {},
+						FileUpload:     {},
+						FolderDownload: {},
+						FolderUpload:   {},
+					},
+				},
+				t: NewTransaction(
+					tranGetClientInfoText, &[]byte{0, 1},
+					NewField(fieldUserID, []byte{0, 1}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0x1, 0x2f},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(fieldData, []byte(
+							strings.Replace(`Nickname:   Testy McTest
+Name:       test
+Account:    test
+Address:    1.2.3.4:12345
+
+-------- File Downloads ---------
+
+None.
+
+------- Folder Downloads --------
+
+None.
+
+--------- File Uploads ----------
+
+None.
+
+-------- Folder Uploads ---------
+
+None.
+
+------- Waiting Downloads -------
+
+None.
+
+`, "\n", "\r", -1)),
+						),
+						NewField(fieldUserName, []byte("Testy McTest")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes, err := HandleGetClientInfoText(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleGetClientInfoText(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
