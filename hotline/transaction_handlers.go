@@ -1782,7 +1782,10 @@ func HandleLeaveChat(cc *ClientConn, t *Transaction) (res []Transaction, err err
 	chatID := t.GetField(fieldChatID).Data
 	chatInt := binary.BigEndian.Uint32(chatID)
 
-	privChat := cc.Server.PrivateChats[chatInt]
+	privChat, ok := cc.Server.PrivateChats[chatInt]
+	if !ok {
+		return res, nil
+	}
 
 	delete(privChat.ClientConn, cc.uint16ID())
 
