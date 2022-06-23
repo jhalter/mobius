@@ -2,11 +2,14 @@ package hotline
 
 import (
 	"encoding/binary"
+	"fmt"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 	"io"
 	"math/big"
 	"sort"
+	"strings"
+	"sync"
 )
 
 type byClientID []*ClientConn
@@ -23,33 +26,6 @@ func (s byClientID) Less(i, j int) bool {
 	return s[i].uint16ID() < s[j].uint16ID()
 }
 
-const template = `Nickname:   %s
-Name:       %s
-Account:    %s
-Address:    %s
-
--------- File Downloads ---------
-
-%s
-
-------- Folder Downloads --------
-
-None.
-
---------- File Uploads ----------
-
-None.
-
--------- Folder Uploads ---------
-
-None.
-
-------- Waiting Downloads -------
-
-None.
-
-	`
-
 // ClientConn represents a client connected to a Server
 type ClientConn struct {
 	Connection io.ReadWriteCloser
@@ -64,9 +40,12 @@ type ClientConn struct {
 	Version    *[]byte
 	Idle       bool
 	AutoReply  []byte
-	Transfers  map[int][]*FileTransfer
-	Agreed     bool
-	logger     *zap.SugaredLogger
+
+	transfersMU sync.Mutex
+	transfers   map[int]map[[4]byte]*FileTransfer
+
+	Agreed bool
+	logger *zap.SugaredLogger
 }
 
 func (cc *ClientConn) sendAll(t int, fields ...Field) {
@@ -226,4 +205,57 @@ func sortedClients(unsortedClients map[uint16]*ClientConn) (clients []*ClientCon
 	}
 	sort.Sort(byClientID(clients))
 	return clients
+}
+
+const userInfoTemplate = `Nickname:   %s
+Name:       %s
+Account:    %s
+Address:    %s
+
+-------- File Downloads ---------
+
+%s
+------- Folder Downloads --------
+
+%s
+--------- File Uploads ----------
+
+%s
+-------- Folder Uploads ---------
+
+%s
+------- Waiting Downloads -------
+
+%s
+`
+
+func formatDownloadList(fts map[[4]byte]*FileTransfer) (s string) {
+	if len(fts) == 0 {
+		return "None.\n"
+	}
+
+	for _, dl := range fts {
+		s += dl.String()
+	}
+
+	return s
+}
+
+func (cc *ClientConn) String() string {
+	cc.transfersMU.Lock()
+	defer cc.transfersMU.Unlock()
+	template := fmt.Sprintf(
+		userInfoTemplate,
+		cc.UserName,
+		cc.Account.Name,
+		cc.Account.Login,
+		cc.RemoteAddr,
+		formatDownloadList(cc.transfers[FileDownload]),
+		formatDownloadList(cc.transfers[FolderDownload]),
+		formatDownloadList(cc.transfers[FileUpload]),
+		formatDownloadList(cc.transfers[FolderUpload]),
+		"None.\n",
+	)
+
+	return strings.Replace(template, "\n", "\r", -1)
 }

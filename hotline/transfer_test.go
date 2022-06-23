@@ -188,7 +188,7 @@ func Test_receiveFile(t *testing.T) {
 			targetFile := &bytes.Buffer{}
 			resForkFile := &bytes.Buffer{}
 			infoForkFile := &bytes.Buffer{}
-			err := receiveFile(tt.args.conn, targetFile, resForkFile, infoForkFile)
+			err := receiveFile(tt.args.conn, targetFile, resForkFile, infoForkFile, io.Discard)
 			if !tt.wantErr(t, err, fmt.Sprintf("receiveFile(%v, %v, %v)", tt.args.conn, targetFile, resForkFile)) {
 				return
 			}

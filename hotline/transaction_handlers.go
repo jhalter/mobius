@@ -87,7 +87,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 	},
 	tranGetClientInfoText: {
 		Name:    "tranGetClientInfoText",
-		Handler: HandleGetClientConnInfoText,
+		Handler: HandleGetClientInfoText,
 	},
 	tranGetFileInfo: {
 		Name:    "tranGetFileInfo",
@@ -867,9 +867,17 @@ func byteToInt(bytes []byte) (int, error) {
 	return 0, errors.New("unknown byte length")
 }
 
-func HandleGetClientConnInfoText(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+// HandleGetClientInfoText returns user information for the specific user.
+//
+// Fields used in the request:
+// 103	User ID
+//
+// Fields used in the reply:
+// 102	User name
+// 101	Data		User info text string
+func HandleGetClientInfoText(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	if !authorize(cc.Account.Access, accessGetClientInfo) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to get client info"))
+		res = append(res, cc.NewErrReply(t, "You are not allowed to get client info."))
 		return res, err
 	}
 
@@ -877,55 +885,11 @@ func HandleGetClientConnInfoText(cc *ClientConn, t *Transaction) (res []Transact
 
 	clientConn := cc.Server.Clients[uint16(clientID)]
 	if clientConn == nil {
-		return res, errors.New("invalid client")
+		return append(res, cc.NewErrReply(t, "User not found.")), err
 	}
-
-	// TODO: Implement non-hardcoded values
-	template := `Nickname:   %s
-Name:       %s
-Account:    %s
-Address:    %s
-
--------- File Downloads ---------
-
-%s
-
-------- Folder Downloads --------
-
-None.
-
---------- File Uploads ----------
-
-None.
-
--------- Folder Uploads ---------
-
-None.
-
-------- Waiting Downloads -------
-
-None.
-
-	`
-
-	activeDownloads := clientConn.Transfers[FileDownload]
-	activeDownloadList := "None."
-	for _, dl := range activeDownloads {
-		activeDownloadList += dl.String() + "\n"
-	}
-
-	template = fmt.Sprintf(
-		template,
-		clientConn.UserName,
-		clientConn.Account.Name,
-		clientConn.Account.Login,
-		clientConn.RemoteAddr,
-		activeDownloadList,
-	)
-	template = strings.Replace(template, "\n", "\r", -1)
 
 	res = append(res, cc.NewReply(t,
-		NewField(fieldData, []byte(template)),
+		NewField(fieldData, []byte(clientConn.String())),
 		NewField(fieldUserName, clientConn.UserName),
 	))
 	return res, err
@@ -1403,15 +1367,9 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 		return res, err
 	}
 
-	transactionRef := cc.Server.NewTransactionRef()
-	data := binary.BigEndian.Uint32(transactionRef)
+	xferSize := hlFile.ffo.TransferSize(0)
 
-	ft := &FileTransfer{
-		FileName:        fileName,
-		FilePath:        filePath,
-		ReferenceNumber: transactionRef,
-		Type:            FileDownload,
-	}
+	ft := cc.newFileTransfer(FileDownload, fileName, filePath, xferSize)
 
 	// TODO: refactor to remove this
 	if resumeData != nil {
@@ -1422,8 +1380,6 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 		ft.fileResumeData = &frd
 	}
 
-	xferSize := hlFile.ffo.TransferSize(0)
-
 	// Optional field for when a HL v1.5+ client requests file preview
 	// Used only for TEXT, JPEG, GIFF, BMP or PICT files
 	// The value will always be 2
@@ -1432,14 +1388,8 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 		xferSize = hlFile.ffo.FlatFileDataForkHeader.DataSize[:]
 	}
 
-	cc.Server.mux.Lock()
-	defer cc.Server.mux.Unlock()
-	cc.Server.FileTransfers[data] = ft
-
-	cc.Transfers[FileDownload] = append(cc.Transfers[FileDownload], ft)
-
 	res = append(res, cc.NewReply(t,
-		NewField(fieldRefNum, transactionRef),
+		NewField(fieldRefNum, ft.refNum[:]),
 		NewField(fieldWaitingCount, []byte{0x00, 0x00}), // TODO: Implement waiting count
 		NewField(fieldTransferSize, xferSize),
 		NewField(fieldFileSize, hlFile.ffo.FlatFileDataForkHeader.DataSize[:]),
@@ -1452,26 +1402,6 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	if !authorize(cc.Account.Access, accessDownloadFile) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to download folders."))
-		return res, err
-	}
-
-	transactionRef := cc.Server.NewTransactionRef()
-	data := binary.BigEndian.Uint32(transactionRef)
-
-	fileTransfer := &FileTransfer{
-		FileName:        t.GetField(fieldFileName).Data,
-		FilePath:        t.GetField(fieldFilePath).Data,
-		ReferenceNumber: transactionRef,
-		Type:            FolderDownload,
-	}
-	cc.Server.mux.Lock()
-	cc.Server.FileTransfers[data] = fileTransfer
-	cc.Server.mux.Unlock()
-	cc.Transfers[FolderDownload] = append(cc.Transfers[FolderDownload], fileTransfer)
-
-	var fp FilePath
-	err = fp.UnmarshalBinary(t.GetField(fieldFilePath).Data)
-	if err != nil {
 		return res, err
 	}
 
@@ -1488,8 +1418,17 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 	if err != nil {
 		return res, err
 	}
+
+	fileTransfer := cc.newFileTransfer(FolderDownload, t.GetField(fieldFileName).Data, t.GetField(fieldFilePath).Data, transferSize)
+
+	var fp FilePath
+	err = fp.UnmarshalBinary(t.GetField(fieldFilePath).Data)
+	if err != nil {
+		return res, err
+	}
+
 	res = append(res, cc.NewReply(t,
-		NewField(fieldRefNum, transactionRef),
+		NewField(fieldRefNum, fileTransfer.ReferenceNumber),
 		NewField(fieldTransferSize, transferSize),
 		NewField(fieldFolderItemCount, itemCount),
 		NewField(fieldWaitingCount, []byte{0x00, 0x00}), // TODO: Implement waiting count
@@ -1505,9 +1444,6 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 // 220	Folder item count
 // 204	File transfer options	"Optional Currently set to 1" (TODO: ??)
 func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	transactionRef := cc.Server.NewTransactionRef()
-	data := binary.BigEndian.Uint32(transactionRef)
-
 	var fp FilePath
 	if t.GetField(fieldFilePath).Data != nil {
 		if err = fp.UnmarshalBinary(t.GetField(fieldFilePath).Data); err != nil {
@@ -1523,17 +1459,15 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err 
 		}
 	}
 
-	fileTransfer := &FileTransfer{
-		FileName:        t.GetField(fieldFileName).Data,
-		FilePath:        t.GetField(fieldFilePath).Data,
-		ReferenceNumber: transactionRef,
-		Type:            FolderUpload,
-		FolderItemCount: t.GetField(fieldFolderItemCount).Data,
-		TransferSize:    t.GetField(fieldTransferSize).Data,
-	}
-	cc.Server.FileTransfers[data] = fileTransfer
+	fileTransfer := cc.newFileTransfer(FolderUpload,
+		t.GetField(fieldFileName).Data,
+		t.GetField(fieldFilePath).Data,
+		t.GetField(fieldTransferSize).Data,
+	)
 
-	res = append(res, cc.NewReply(t, NewField(fieldRefNum, transactionRef)))
+	fileTransfer.FolderItemCount = t.GetField(fieldFolderItemCount).Data
+
+	res = append(res, cc.NewReply(t, NewField(fieldRefNum, fileTransfer.ReferenceNumber)))
 	return res, err
 }
 
@@ -1552,11 +1486,8 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	fileName := t.GetField(fieldFileName).Data
 	filePath := t.GetField(fieldFilePath).Data
-
 	transferOptions := t.GetField(fieldFileTransferOptions).Data
-
-	// TODO: is this field useful for anything?
-	// transferSize := t.GetField(fieldTransferSize).Data
+	transferSize := t.GetField(fieldTransferSize).Data // not sent for resume
 
 	var fp FilePath
 	if filePath != nil {
@@ -1572,27 +1503,22 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			return res, err
 		}
 	}
-
-	transactionRef := cc.Server.NewTransactionRef()
-	data := binary.BigEndian.Uint32(transactionRef)
-
-	cc.Server.mux.Lock()
-	cc.Server.FileTransfers[data] = &FileTransfer{
-		FileName:        fileName,
-		FilePath:        filePath,
-		ReferenceNumber: transactionRef,
-		Type:            FileUpload,
+	fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
+	if err != nil {
+		return res, err
 	}
-	cc.Server.mux.Unlock()
 
-	replyT := cc.NewReply(t, NewField(fieldRefNum, transactionRef))
+	if _, err := cc.Server.FS.Stat(fullFilePath); err == nil {
+		res = append(res, cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload because there is already a file named \"%v\".  Try choosing a different name.", string(fileName))))
+		return res, err
+	}
+
+	ft := cc.newFileTransfer(FileUpload, fileName, filePath, transferSize)
+
+	replyT := cc.NewReply(t, NewField(fieldRefNum, ft.ReferenceNumber))
 
 	// client has requested to resume a partially transferred file
 	if transferOptions != nil {
-		fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
-		if err != nil {
-			return res, err
-		}
 
 		fileInfo, err := cc.Server.FS.Stat(fullFilePath + incompleteFileSuffix)
 		if err != nil {
@@ -1607,6 +1533,8 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		})
 
 		b, _ := fileResumeData.BinaryMarshal()
+
+		ft.TransferSize = offset
 
 		replyT.Fields = append(replyT.Fields, NewField(fieldFileResumeData, b))
 	}
@@ -1937,29 +1865,18 @@ func HandleMakeAlias(cc *ClientConn, t *Transaction) (res []Transaction, err err
 }
 
 func HandleDownloadBanner(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	transactionRef := cc.Server.NewTransactionRef()
-	data := binary.BigEndian.Uint32(transactionRef)
-
-	ft := &FileTransfer{
-		ReferenceNumber: transactionRef,
-		Type:            bannerDownload,
-	}
-
 	fi, err := cc.Server.FS.Stat(filepath.Join(cc.Server.ConfigDir, cc.Server.Config.BannerFile))
 	if err != nil {
 		return res, err
 	}
 
-	size := make([]byte, 4)
-	binary.BigEndian.PutUint32(size, uint32(fi.Size()))
+	ft := cc.newFileTransfer(bannerDownload, []byte{}, []byte{}, make([]byte, 4))
 
-	cc.Server.mux.Lock()
-	defer cc.Server.mux.Unlock()
-	cc.Server.FileTransfers[data] = ft
+	binary.BigEndian.PutUint32(ft.TransferSize, uint32(fi.Size()))
 
 	res = append(res, cc.NewReply(t,
-		NewField(fieldRefNum, transactionRef),
-		NewField(fieldTransferSize, size),
+		NewField(fieldRefNum, ft.refNum[:]),
+		NewField(fieldTransferSize, ft.TransferSize),
 	))
 
 	return res, err

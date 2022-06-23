@@ -32,7 +32,7 @@ func TestServer_handleFileTransfer(t *testing.T) {
 		Agreement     []byte
 		Clients       map[uint16]*ClientConn
 		ThreadedNews  *ThreadedNews
-		FileTransfers map[uint32]*FileTransfer
+		fileTransfers map[[4]byte]*FileTransfer
 		Config        *Config
 		ConfigDir     string
 		Logger        *zap.SugaredLogger
@@ -116,12 +116,24 @@ func TestServer_handleFileTransfer(t *testing.T) {
 					}()},
 				Logger: NewTestLogger(),
 				Stats:  &Stats{},
-				FileTransfers: map[uint32]*FileTransfer{
-					uint32(5): {
+				fileTransfers: map[[4]byte]*FileTransfer{
+					[4]byte{0, 0, 0, 5}: {
 						ReferenceNumber: []byte{0, 0, 0, 5},
 						Type:            FileDownload,
 						FileName:        []byte("testfile-8b"),
 						FilePath:        []byte{},
+						ClientConn: &ClientConn{
+							Account: &Account{
+								Login: "foo",
+							},
+							transfersMU: sync.Mutex{},
+							transfers: map[int]map[[4]byte]*FileTransfer{
+								FileDownload: {
+									[4]byte{0, 0, 0, 5}: &FileTransfer{},
+								},
+							},
+						},
+						bytesSentCounter: &WriteCounter{},
 					},
 				},
 			},
@@ -168,7 +180,7 @@ func TestServer_handleFileTransfer(t *testing.T) {
 				Agreement:     tt.fields.Agreement,
 				Clients:       tt.fields.Clients,
 				ThreadedNews:  tt.fields.ThreadedNews,
-				FileTransfers: tt.fields.FileTransfers,
+				fileTransfers: tt.fields.fileTransfers,
 				Config:        tt.fields.Config,
 				ConfigDir:     tt.fields.ConfigDir,
 				Logger:        tt.fields.Logger,

@@ -105,7 +105,7 @@ func (f *fileWrapper) infoForkName() string {
 	return fmt.Sprintf(infoForkNameTemplate, f.name)
 }
 
-func (f *fileWrapper) rsrcForkWriter() (io.Writer, error) {
+func (f *fileWrapper) rsrcForkWriter() (io.WriteCloser, error) {
 	file, err := os.OpenFile(f.rsrcPath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, err
@@ -114,7 +114,7 @@ func (f *fileWrapper) rsrcForkWriter() (io.Writer, error) {
 	return file, nil
 }
 
-func (f *fileWrapper) infoForkWriter() (io.Writer, error) {
+func (f *fileWrapper) infoForkWriter() (io.WriteCloser, error) {
 	file, err := os.OpenFile(f.infoPath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, err
@@ -123,7 +123,7 @@ func (f *fileWrapper) infoForkWriter() (io.Writer, error) {
 	return file, nil
 }
 
-func (f *fileWrapper) incFileWriter() (io.Writer, error) {
+func (f *fileWrapper) incFileWriter() (io.WriteCloser, error) {
 	file, err := os.OpenFile(f.incompletePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, err
