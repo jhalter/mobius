@@ -193,8 +193,9 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 		})
 
 		go func() {
+			s.Logger.Infow("Connection established", "RemoteAddr", conn.RemoteAddr())
+
 			if err := s.handleNewConnection(connCtx, conn, conn.RemoteAddr().String()); err != nil {
-				s.Logger.Infow("New client connection established", "RemoteAddr", conn.RemoteAddr())
 				if err == io.EOF {
 					s.Logger.Infow("Client disconnected", "RemoteAddr", conn.RemoteAddr())
 				} else {
@@ -568,6 +569,8 @@ func (s *Server) handleNewConnection(ctx context.Context, conn io.ReadWriteClose
 		login = GuestAccount
 	}
 
+	c.logger = s.Logger.With("remoteAddr", remoteAddr, "login", login)
+
 	// If authentication fails, send error reply and close connection
 	if !c.Authenticate(login, encodedPassword) {
 		t := c.NewErrReply(clientLogin, "Incorrect login.")
@@ -578,7 +581,10 @@ func (s *Server) handleNewConnection(ctx context.Context, conn io.ReadWriteClose
 		if _, err := conn.Write(b); err != nil {
 			return err
 		}
-		return fmt.Errorf("incorrect login")
+
+		c.logger.Infow("Login failed", "clientVersion", fmt.Sprintf("%x", *c.Version))
+
+		return nil
 	}
 
 	if clientLogin.GetField(fieldUserName).Data != nil {
@@ -594,10 +600,6 @@ func (s *Server) handleNewConnection(ctx context.Context, conn io.ReadWriteClose
 	if c.Authorize(accessDisconUser) {
 		*c.Flags = []byte{0, 2}
 	}
-
-	c.logger = s.Logger.With("remoteAddr", remoteAddr, "login", login)
-
-	c.logger.Infow("Client connection received", "version", fmt.Sprintf("%x", *c.Version))
 
 	s.outbox <- c.NewReply(clientLogin,
 		NewField(fieldVersion, []byte{0x00, 0xbe}),
@@ -615,6 +617,7 @@ func (s *Server) handleNewConnection(ctx context.Context, conn io.ReadWriteClose
 	if *c.Version == nil || bytes.Equal(*c.Version, nostalgiaVersion) {
 		c.Agreed = true
 		c.logger = c.logger.With("name", string(c.UserName))
+		c.logger.Infow("Login successful", "clientVersion", fmt.Sprintf("%x", *c.Version))
 
 		for _, t := range c.notifyOthers(
 			*NewTransaction(

@@ -907,6 +907,7 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	*cc.Icon = t.GetField(fieldUserIconID).Data
 
 	cc.logger = cc.logger.With("name", string(cc.UserName))
+	cc.logger.Infow("Login successful", "clientVersion", fmt.Sprintf("%x", *cc.Version))
 
 	options := t.GetField(fieldOptions).Data
 	optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))

@@ -674,10 +674,7 @@ func (c *Client) HandleTransaction(t *Transaction) error {
 	}
 
 	requestNum := binary.BigEndian.Uint16(t.Type)
-	c.Logger.Infow(
-		"Received Transaction",
-		"RequestType", requestNum,
-	)
+	c.Logger.Debugw("Received Transaction", "RequestType", requestNum)
 
 	if handler, ok := c.Handlers[requestNum]; ok {
 		outT, _ := handler.Handle(c, t)

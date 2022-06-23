@@ -78,7 +78,7 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 			}
 		}
 
-		cc.logger.Infow("Received Transaction", "RequestType", handler.Name)
+		cc.logger.Debugw("Received Transaction", "RequestType", handler.Name)
 
 		transactions, err := handler.Handler(cc, transaction)
 		if err != nil {
