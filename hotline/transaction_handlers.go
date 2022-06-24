@@ -1024,12 +1024,48 @@ func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, er
 		return res, err
 	}
 
-	if err := clientConn.Connection.Close(); err != nil {
-		return res, err
+	// If fieldOptions is set, then the client IP is banned in addition to disconnected.
+	// 00 01 = temporary ban
+	// 00 02 = permanent ban
+	if t.GetField(fieldOptions).Data != nil {
+		switch t.GetField(fieldOptions).Data[1] {
+		case 1:
+			// send message: "You are temporarily banned on this server"
+			cc.logger.Infow("Disconnect & temporarily ban " + string(clientConn.UserName))
+
+			res = append(res, *NewTransaction(
+				tranServerMsg,
+				clientConn.ID,
+				NewField(fieldData, []byte("You are temporarily banned on this server")),
+				NewField(fieldChatOptions, []byte{0, 0}),
+			))
+
+			banUntil := time.Now().Add(tempBanDuration)
+			cc.Server.banList[strings.Split(clientConn.RemoteAddr, ":")[0]] = &banUntil
+			cc.Server.writeBanList()
+		case 2:
+			// send message: "You are permanently banned on this server"
+			cc.logger.Infow("Disconnect & ban " + string(clientConn.UserName))
+
+			res = append(res, *NewTransaction(
+				tranServerMsg,
+				clientConn.ID,
+				NewField(fieldData, []byte("You are permanently banned on this server")),
+				NewField(fieldChatOptions, []byte{0, 0}),
+			))
+
+			cc.Server.banList[strings.Split(clientConn.RemoteAddr, ":")[0]] = nil
+			cc.Server.writeBanList()
+		}
 	}
 
-	res = append(res, cc.NewReply(t))
-	return res, err
+	// TODO: remove this awful hack
+	go func() {
+		time.Sleep(1 * time.Second)
+		clientConn.Disconnect()
+	}()
+
+	return append(res, cc.NewReply(t)), err
 }
 
 // HandleGetNewsCatNameList returns a list of news categories for a path

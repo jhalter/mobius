@@ -19,7 +19,7 @@ const fieldUserAccess = 110
 
 // const fieldUserAlias = 111 TODO: implement
 const fieldUserFlags = 112
-const fieldOptions = 113
+const fieldOptions = 113 // Server message (1) or admin message (any other value)
 const fieldChatID = 114
 const fieldChatSubject = 115
 const fieldWaitingCount = 116

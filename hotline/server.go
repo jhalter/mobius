@@ -66,6 +66,9 @@ type Server struct {
 
 	flatNewsMux sync.Mutex
 	FlatNews    []byte
+
+	banListMU sync.Mutex
+	banList   map[string]*time.Time
 }
 
 type PrivateChat struct {
@@ -184,6 +187,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 		go func() {
 			s.Logger.Infow("Connection established", "RemoteAddr", conn.RemoteAddr())
 
+			defer conn.Close()
 			if err := s.handleNewConnection(connCtx, conn, conn.RemoteAddr().String()); err != nil {
 				if err == io.EOF {
 					s.Logger.Infow("Client disconnected", "RemoteAddr", conn.RemoteAddr())
@@ -215,6 +219,7 @@ func NewServer(configDir string, netPort int, logger *zap.SugaredLogger, FS File
 		Stats:         &Stats{StartTime: time.Now()},
 		ThreadedNews:  &ThreadedNews{},
 		FS:            FS,
+		banList:       make(map[string]*time.Time),
 	}
 
 	var err error
@@ -232,6 +237,9 @@ func NewServer(configDir string, netPort int, logger *zap.SugaredLogger, FS File
 	if server.FlatNews, err = os.ReadFile(filepath.Join(configDir, "MessageBoard.txt")); err != nil {
 		return nil, err
 	}
+
+	// try to load the ban list, but ignore errors as this file may not be present or may be empty
+	_ = server.loadBanList(filepath.Join(configDir, "Banlist.yaml"))
 
 	if err := server.loadThreadedNews(filepath.Join(configDir, "ThreadedNews.yaml")); err != nil {
 		return nil, err
@@ -315,6 +323,22 @@ func (s *Server) keepaliveHandler() {
 		}
 		s.mux.Unlock()
 	}
+}
+
+func (s *Server) writeBanList() error {
+	s.banListMU.Lock()
+	defer s.banListMU.Unlock()
+
+	out, err := yaml.Marshal(s.banList)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(
+		filepath.Join(s.ConfigDir, "Banlist.yaml"),
+		out,
+		0666,
+	)
+	return err
 }
 
 func (s *Server) writeThreadedNews() error {
@@ -448,6 +472,16 @@ func (s *Server) connectedUsers() []Field {
 	return connectedUsers
 }
 
+func (s *Server) loadBanList(path string) error {
+	fh, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	decoder := yaml.NewDecoder(fh)
+
+	return decoder.Decode(s.banList)
+}
+
 // loadThreadedNews loads the threaded news data from disk
 func (s *Server) loadThreadedNews(threadedNewsPath string) error {
 	fh, err := os.Open(threadedNewsPath)
@@ -535,6 +569,31 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	}
 
 	c := s.NewClientConn(rwc, remoteAddr)
+
+	// check if remoteAddr is present in the ban list
+	if banUntil, ok := s.banList[strings.Split(remoteAddr, ":")[0]]; ok {
+		// permaban
+		if banUntil == nil {
+			s.outbox <- *NewTransaction(
+				tranServerMsg,
+				c.ID,
+				NewField(fieldData, []byte("You are permanently banned on this server")),
+				NewField(fieldChatOptions, []byte{0, 0}),
+			)
+			time.Sleep(1 * time.Second)
+			return nil
+		} else if time.Now().Before(*banUntil) {
+			s.outbox <- *NewTransaction(
+				tranServerMsg,
+				c.ID,
+				NewField(fieldData, []byte("You are temporarily banned on this server")),
+				NewField(fieldChatOptions, []byte{0, 0}),
+			)
+			time.Sleep(1 * time.Second)
+			return nil
+		}
+
+	}
 	defer c.Disconnect()
 
 	encodedLogin := clientLogin.GetField(fieldUserLogin).Data
