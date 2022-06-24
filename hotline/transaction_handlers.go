@@ -634,7 +634,7 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 	if err != nil {
 		return res, err
 	}
-	if err := os.WriteFile(cc.Server.ConfigDir+"Users/"+login+".yaml", out, 0666); err != nil {
+	if err := os.WriteFile(filepath.Join(cc.Server.ConfigDir, "Users", login+".yaml"), out, 0666); err != nil {
 		return res, err
 	}
 
