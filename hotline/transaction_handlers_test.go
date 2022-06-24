@@ -1690,6 +1690,52 @@ func TestHandleListUsers(t *testing.T) {
 			},
 			wantErr: assert.NoError,
 		},
+		{
+			name: "when user has required permission",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessOpenUser)
+							access := bits[:]
+							return &access
+						}(),
+					},
+					Server: &Server{
+						Accounts: map[string]*Account{
+							"guest": {
+								Name:     "guest",
+								Login:    "guest",
+								Password: "zz",
+								Access:   &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+							},
+						},
+					},
+				},
+				t: NewTransaction(
+					tranGetClientInfoText, &[]byte{0, 1},
+					NewField(fieldUserID, []byte{0, 1}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0x01, 0x2f},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(fieldData, []byte{
+							0x00, 0x04, 0x00, 0x66, 0x00, 0x05, 0x67, 0x75, 0x65, 0x73, 0x74, 0x00, 0x69, 0x00, 0x05, 0x98,
+							0x8a, 0x9a, 0x8c, 0x8b, 0x00, 0x6e, 0x00, 0x08, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+							0x00, 0x6a, 0x00, 0x01, 0x78,
+						}),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
