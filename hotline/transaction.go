@@ -131,23 +131,24 @@ func ReadTransaction(buf []byte) (*Transaction, int, error) {
 	}, tranLen, nil
 }
 
-func readTransactions(buf []byte) ([]Transaction, int, error) {
-	var transactions []Transaction
+const tranHeaderLen = 20 // fixed length of transaction fields before the variable length fields
 
-	bufLen := len(buf)
-
-	var bytesRead = 0
-	for bytesRead < bufLen {
-		t, tReadLen, err := ReadTransaction(buf[bytesRead:])
-		if err != nil {
-			return transactions, bytesRead, err
-		}
-		bytesRead += tReadLen
-
-		transactions = append(transactions, *t)
+// transactionScanner implements bufio.SplitFunc for parsing incoming byte slices into complete tokens
+func transactionScanner(data []byte, _ bool) (advance int, token []byte, err error) {
+	// The bytes that contain the size of a transaction are from 12:16, so we need at least 16 bytes
+	if len(data) < 16 {
+		return 0, nil, nil
 	}
 
-	return transactions, bytesRead, nil
+	totalSize := binary.BigEndian.Uint32(data[12:16])
+
+	// tranLen represents the length of bytes that are part of the transaction
+	tranLen := int(tranHeaderLen + totalSize)
+	if tranLen > len(data) {
+		return 0, nil, nil
+	}
+
+	return tranLen, data[0:tranLen], nil
 }
 
 const minFieldLen = 4

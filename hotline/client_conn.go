@@ -54,7 +54,7 @@ func (cc *ClientConn) sendAll(t int, fields ...Field) {
 	}
 }
 
-func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
+func (cc *ClientConn) handleTransaction(transaction Transaction) error {
 	requestNum := binary.BigEndian.Uint16(transaction.Type)
 	if handler, ok := TransactionHandlers[requestNum]; ok {
 		for _, reqField := range handler.RequiredFields {
@@ -80,7 +80,7 @@ func (cc *ClientConn) handleTransaction(transaction *Transaction) error {
 
 		cc.logger.Debugw("Received Transaction", "RequestType", handler.Name)
 
-		transactions, err := handler.Handler(cc, transaction)
+		transactions, err := handler.Handler(cc, &transaction)
 		if err != nil {
 			return err
 		}

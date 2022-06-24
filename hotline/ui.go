@@ -1,11 +1,11 @@
 package hotline
 
 import (
+	"bufio"
 	"fmt"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"gopkg.in/yaml.v3"
-	"io"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -197,29 +197,41 @@ func (ui *UI) joinServer(addr, login, password string) error {
 	}
 
 	go func() {
-		for {
-			err := ui.HLClient.ReadLoop()
+		// Create a new scanner for parsing incoming bytes into transaction tokens
+		scanner := bufio.NewScanner(ui.HLClient.Connection)
+		scanner.Split(transactionScanner)
+
+		// Scan for new transactions and handle them as they come in.
+		for scanner.Scan() {
+			// Make a new []byte slice and copy the scanner bytes to it.  This is critical to avoid a data race as the
+			// scanner re-uses the buffer for subsequent scans.
+			buf := make([]byte, len(scanner.Bytes()))
+			copy(buf, scanner.Bytes())
+
+			t, _, err := ReadTransaction(buf)
 			if err != nil {
-				ui.HLClient.Logger.Errorw("read error", "err", err)
-
-				if err == io.EOF {
-					loginErrModal := tview.NewModal().
-						AddButtons([]string{"Ok"}).
-						SetText("The server connection has closed.").
-						SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-							ui.Pages.SwitchToPage("home")
-						})
-					loginErrModal.Box.SetTitle("Server Connection Error")
-
-					ui.Pages.AddPage("loginErr", loginErrModal, false, true)
-					ui.App.Draw()
-					return
-				}
-				ui.Pages.SwitchToPage("home")
-
-				return
+				break
+			}
+			if err := ui.HLClient.HandleTransaction(t); err != nil {
+				ui.HLClient.Logger.Errorw("Error handling transaction", "err", err)
 			}
 		}
+
+		if scanner.Err() == nil {
+			loginErrModal := tview.NewModal().
+				AddButtons([]string{"Ok"}).
+				SetText("The server connection has closed.").
+				SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+					ui.Pages.SwitchToPage("home")
+				})
+			loginErrModal.Box.SetTitle("Server Connection Error")
+
+			ui.Pages.AddPage("loginErr", loginErrModal, false, true)
+			ui.App.Draw()
+			return
+		}
+		ui.Pages.SwitchToPage("home")
+
 	}()
 
 	return nil
@@ -324,6 +336,7 @@ func (ui *UI) renderServerUI() *tview.Flex {
 		if buttonIndex == 1 {
 			_ = ui.HLClient.Disconnect()
 			ui.Pages.RemovePage(pageServerUI)
+			ui.Pages.SwitchToPage("home")
 		} else {
 			ui.Pages.HidePage("modal")
 		}

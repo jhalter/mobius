@@ -397,54 +397,6 @@ func handleNotifyDeleteUser(c *Client, t *Transaction) (res []Transaction, err e
 	return res, err
 }
 
-const readBuffSize = 1024000 // 1KB - TODO: what should this be?
-
-func (c *Client) ReadLoop() error {
-	tranBuff := make([]byte, 0)
-	tReadlen := 0
-	// Infinite loop where take action on incoming client requests until the connection is closed
-	for {
-		buf := make([]byte, readBuffSize)
-		tranBuff = tranBuff[tReadlen:]
-
-		readLen, err := c.Connection.Read(buf)
-		if err != nil {
-			return err
-		}
-		tranBuff = append(tranBuff, buf[:readLen]...)
-
-		// We may have read multiple requests worth of bytes from Connection.Read.  readTransactions splits them
-		// into a slice of transactions
-		var transactions []Transaction
-		if transactions, tReadlen, err = readTransactions(tranBuff); err != nil {
-			c.Logger.Errorw("Error handling transaction", "err", err)
-		}
-
-		// iterate over all of the transactions that were parsed from the byte slice and handle them
-		for _, t := range transactions {
-			if err := c.HandleTransaction(&t); err != nil {
-				c.Logger.Errorw("Error handling transaction", "err", err)
-			}
-		}
-	}
-}
-
-func (c *Client) GetTransactions() error {
-	tranBuff := make([]byte, 0)
-	tReadlen := 0
-
-	buf := make([]byte, readBuffSize)
-	tranBuff = tranBuff[tReadlen:]
-
-	readLen, err := c.Connection.Read(buf)
-	if err != nil {
-		return err
-	}
-	tranBuff = append(tranBuff, buf[:readLen]...)
-
-	return nil
-}
-
 func handleClientGetUserNameList(c *Client, t *Transaction) (res []Transaction, err error) {
 	var users []User
 	for _, field := range t.Fields {
