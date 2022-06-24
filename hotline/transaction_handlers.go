@@ -698,8 +698,13 @@ func HandleListUsers(cc *ClientConn, t *Transaction) (res []Transaction, err err
 
 	var userFields []Field
 	for _, acc := range cc.Server.Accounts {
-		userField := acc.MarshalBinary()
-		userFields = append(userFields, NewField(fieldData, userField))
+		b := make([]byte, 0, 100)
+		n, err := acc.Read(b)
+		if err != nil {
+			return res, err
+		}
+
+		userFields = append(userFields, NewField(fieldData, b[:n]))
 	}
 
 	res = append(res, cc.NewReply(t, userFields...))

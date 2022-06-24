@@ -2,7 +2,6 @@ package hotline
 
 import (
 	"encoding/binary"
-	"github.com/jhalter/mobius/concat"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -15,8 +14,8 @@ type Account struct {
 	Access   *[]byte `yaml:"Access"` // 8 byte bitmap
 }
 
-// MarshalBinary marshals an Account to byte slice
-func (a *Account) MarshalBinary() (out []byte) {
+// Read implements io.Reader interface for Account
+func (a *Account) Read(p []byte) (n int, err error) {
 	fields := []Field{
 		NewField(fieldUserName, []byte(a.Name)),
 		NewField(fieldUserLogin, negateString([]byte(a.Login))),
@@ -30,13 +29,11 @@ func (a *Account) MarshalBinary() (out []byte) {
 	fieldCount := make([]byte, 2)
 	binary.BigEndian.PutUint16(fieldCount, uint16(len(fields)))
 
-	var fieldPayload []byte
+	p = append(p, fieldCount...)
+
 	for _, field := range fields {
-		fieldPayload = append(fieldPayload, field.Payload()...)
+		p = append(p, field.Payload()...)
 	}
 
-	return concat.Slices(
-		fieldCount,
-		fieldPayload,
-	)
+	return len(p), nil
 }
