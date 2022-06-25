@@ -2887,3 +2887,72 @@ func TestHandleTranAgreed(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleSetClientUserInfo(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "when client does not have accessAnyName",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							access := bits[:]
+							return &access
+						}(),
+					},
+					ID:       &[]byte{0, 1},
+					UserName: []byte("Guest"),
+					Flags:    []byte{0, 1},
+					Server: &Server{
+						Clients: map[uint16]*ClientConn{
+							uint16(1): {
+								ID: &[]byte{0, 1},
+							},
+						},
+					},
+				},
+				t: NewTransaction(
+					tranSetClientUserInfo, nil,
+					NewField(fieldUserIconID, []byte{0, 1}),
+					NewField(fieldUserName, []byte("NOPE")),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x00,
+					Type:      []byte{0x01, 0x2d},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(fieldUserID, []byte{0, 1}),
+						NewField(fieldUserIconID, []byte{0, 1}),
+						NewField(fieldUserFlags, []byte{0, 1}),
+						NewField(fieldUserName, []byte("Guest"))},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes, err := HandleSetClientUserInfo(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleSetClientUserInfo(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
+
+			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}

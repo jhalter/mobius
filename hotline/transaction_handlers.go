@@ -1593,18 +1593,17 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 }
 
 func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	var icon []byte
 	if len(t.GetField(fieldUserIconID).Data) == 4 {
-		icon = t.GetField(fieldUserIconID).Data[2:]
+		cc.Icon = t.GetField(fieldUserIconID).Data[2:]
 	} else {
-		icon = t.GetField(fieldUserIconID).Data
+		cc.Icon = t.GetField(fieldUserIconID).Data
 	}
-	cc.Icon = icon
-	cc.UserName = t.GetField(fieldUserName).Data
+	if cc.Authorize(accessAnyName) {
+		cc.UserName = t.GetField(fieldUserName).Data
+	}
 
 	// the options field is only passed by the client versions > 1.2.3.
 	options := t.GetField(fieldOptions).Data
-
 	if options != nil {
 		optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
 		flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(cc.Flags)))
@@ -1623,14 +1622,16 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction,
 		}
 	}
 
-	// Notify all clients of updated user info
-	cc.sendAll(
-		tranNotifyChangeUser,
-		NewField(fieldUserID, *cc.ID),
-		NewField(fieldUserIconID, cc.Icon),
-		NewField(fieldUserFlags, cc.Flags),
-		NewField(fieldUserName, cc.UserName),
-	)
+	for _, c := range sortedClients(cc.Server.Clients) {
+		res = append(res, *NewTransaction(
+			tranNotifyChangeUser,
+			c.ID,
+			NewField(fieldUserID, *cc.ID),
+			NewField(fieldUserIconID, cc.Icon),
+			NewField(fieldUserFlags, cc.Flags),
+			NewField(fieldUserName, cc.UserName),
+		))
+	}
 
 	return res, err
 }
