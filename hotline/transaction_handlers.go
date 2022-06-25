@@ -908,7 +908,15 @@ func HandleGetUserNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 
 func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	cc.Agreed = true
-	cc.UserName = t.GetField(fieldUserName).Data
+
+	if t.GetField(fieldUserName).Data != nil {
+		if cc.Authorize(accessAnyName) {
+			cc.UserName = t.GetField(fieldUserName).Data
+		} else {
+			cc.UserName = []byte(cc.Account.Name)
+		}
+	}
+
 	*cc.Icon = t.GetField(fieldUserIconID).Data
 
 	cc.logger = cc.logger.With("name", string(cc.UserName))
@@ -938,7 +946,7 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		cc.AutoReply = []byte{}
 	}
 
-	for _, t := range cc.notifyOthers(
+	trans := cc.notifyOthers(
 		*NewTransaction(
 			tranNotifyChangeUser, nil,
 			NewField(fieldUserName, cc.UserName),
@@ -946,12 +954,11 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			NewField(fieldUserIconID, *cc.Icon),
 			NewField(fieldUserFlags, *cc.Flags),
 		),
-	) {
-		cc.Server.outbox <- t
-	}
+	)
+	res = append(res, trans...)
 
 	if cc.Server.Config.BannerFile != "" {
-		cc.Server.outbox <- *NewTransaction(tranServerBanner, cc.ID, NewField(fieldBannerType, []byte("JPEG")))
+		res = append(res, *NewTransaction(tranServerBanner, cc.ID, NewField(fieldBannerType, []byte("JPEG"))))
 	}
 
 	res = append(res, cc.NewReply(t))
