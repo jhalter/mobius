@@ -31,13 +31,13 @@ type ClientConn struct {
 	Connection io.ReadWriteCloser
 	RemoteAddr string
 	ID         *[]byte
-	Icon       *[]byte
-	Flags      *[]byte
+	Icon       []byte
+	Flags      []byte
 	UserName   []byte
 	Account    *Account
 	IdleTime   int
 	Server     *Server
-	Version    *[]byte
+	Version    []byte
 	Idle       bool
 	AutoReply  []byte
 
@@ -102,17 +102,17 @@ func (cc *ClientConn) handleTransaction(transaction Transaction) error {
 		// if user was previously idle, mark as not idle and notify other connected clients that
 		// the user is no longer away
 		if cc.Idle {
-			flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*cc.Flags)))
+			flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(cc.Flags)))
 			flagBitmap.SetBit(flagBitmap, userFlagAway, 0)
-			binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
+			binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
 			cc.Idle = false
 
 			cc.sendAll(
 				tranNotifyChangeUser,
 				NewField(fieldUserID, *cc.ID),
-				NewField(fieldUserFlags, *cc.Flags),
+				NewField(fieldUserFlags, cc.Flags),
 				NewField(fieldUserName, cc.UserName),
-				NewField(fieldUserIconID, *cc.Icon),
+				NewField(fieldUserIconID, cc.Icon),
 			)
 		}
 	}

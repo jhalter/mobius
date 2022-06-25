@@ -645,22 +645,22 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 			newT := NewTransaction(tranUserAccess, c.ID, NewField(fieldUserAccess, newAccessLvl))
 			res = append(res, *newT)
 
-			flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*c.Flags)))
+			flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(c.Flags)))
 			if authorize(c.Account.Access, accessDisconUser) {
 				flagBitmap.SetBit(flagBitmap, userFlagAdmin, 1)
 			} else {
 				flagBitmap.SetBit(flagBitmap, userFlagAdmin, 0)
 			}
-			binary.BigEndian.PutUint16(*c.Flags, uint16(flagBitmap.Int64()))
+			binary.BigEndian.PutUint16(c.Flags, uint16(flagBitmap.Int64()))
 
 			c.Account.Access = account.Access
 
 			cc.sendAll(
 				tranNotifyChangeUser,
 				NewField(fieldUserID, *c.ID),
-				NewField(fieldUserFlags, *c.Flags),
+				NewField(fieldUserFlags, c.Flags),
 				NewField(fieldUserName, c.UserName),
-				NewField(fieldUserIconID, *c.Icon),
+				NewField(fieldUserIconID, c.Icon),
 			)
 		}
 	}
@@ -917,26 +917,26 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		}
 	}
 
-	*cc.Icon = t.GetField(fieldUserIconID).Data
+	cc.Icon = t.GetField(fieldUserIconID).Data
 
 	cc.logger = cc.logger.With("name", string(cc.UserName))
-	cc.logger.Infow("Login successful", "clientVersion", fmt.Sprintf("%x", *cc.Version))
+	cc.logger.Infow("Login successful", "clientVersion", fmt.Sprintf("%x", cc.Version))
 
 	options := t.GetField(fieldOptions).Data
 	optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
 
-	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*cc.Flags)))
+	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(cc.Flags)))
 
 	// Check refuse private PM option
 	if optBitmap.Bit(refusePM) == 1 {
 		flagBitmap.SetBit(flagBitmap, userFlagRefusePM, 1)
-		binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
+		binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
 	}
 
 	// Check refuse private chat option
 	if optBitmap.Bit(refuseChat) == 1 {
 		flagBitmap.SetBit(flagBitmap, userFLagRefusePChat, 1)
-		binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
+		binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
 	}
 
 	// Check auto response
@@ -951,8 +951,8 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			tranNotifyChangeUser, nil,
 			NewField(fieldUserName, cc.UserName),
 			NewField(fieldUserID, *cc.ID),
-			NewField(fieldUserIconID, *cc.Icon),
-			NewField(fieldUserFlags, *cc.Flags),
+			NewField(fieldUserIconID, cc.Icon),
+			NewField(fieldUserFlags, cc.Flags),
 		),
 	)
 	res = append(res, trans...)
@@ -1599,7 +1599,7 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction,
 	} else {
 		icon = t.GetField(fieldUserIconID).Data
 	}
-	*cc.Icon = icon
+	cc.Icon = icon
 	cc.UserName = t.GetField(fieldUserName).Data
 
 	// the options field is only passed by the client versions > 1.2.3.
@@ -1607,13 +1607,13 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction,
 
 	if options != nil {
 		optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
-		flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*cc.Flags)))
+		flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(cc.Flags)))
 
 		flagBitmap.SetBit(flagBitmap, userFlagRefusePM, optBitmap.Bit(refusePM))
-		binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
+		binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
 
 		flagBitmap.SetBit(flagBitmap, userFLagRefusePChat, optBitmap.Bit(refuseChat))
-		binary.BigEndian.PutUint16(*cc.Flags, uint16(flagBitmap.Int64()))
+		binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
 
 		// Check auto response
 		if optBitmap.Bit(autoResponse) == 1 {
@@ -1627,8 +1627,8 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction,
 	cc.sendAll(
 		tranNotifyChangeUser,
 		NewField(fieldUserID, *cc.ID),
-		NewField(fieldUserIconID, *cc.Icon),
-		NewField(fieldUserFlags, *cc.Flags),
+		NewField(fieldUserIconID, cc.Icon),
+		NewField(fieldUserFlags, cc.Flags),
 		NewField(fieldUserName, cc.UserName),
 	)
 
@@ -1715,8 +1715,8 @@ func HandleInviteNewChat(cc *ClientConn, t *Transaction) (res []Transaction, err
 			NewField(fieldChatID, newChatID),
 			NewField(fieldUserName, cc.UserName),
 			NewField(fieldUserID, *cc.ID),
-			NewField(fieldUserIconID, *cc.Icon),
-			NewField(fieldUserFlags, *cc.Flags),
+			NewField(fieldUserIconID, cc.Icon),
+			NewField(fieldUserFlags, cc.Flags),
 		),
 	)
 
@@ -1748,8 +1748,8 @@ func HandleInviteToChat(cc *ClientConn, t *Transaction) (res []Transaction, err 
 			NewField(fieldChatID, chatID),
 			NewField(fieldUserName, cc.UserName),
 			NewField(fieldUserID, *cc.ID),
-			NewField(fieldUserIconID, *cc.Icon),
-			NewField(fieldUserFlags, *cc.Flags),
+			NewField(fieldUserIconID, cc.Icon),
+			NewField(fieldUserFlags, cc.Flags),
 		),
 	)
 
@@ -1798,8 +1798,8 @@ func HandleJoinChat(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 				NewField(fieldChatID, chatID),
 				NewField(fieldUserName, cc.UserName),
 				NewField(fieldUserID, *cc.ID),
-				NewField(fieldUserIconID, *cc.Icon),
-				NewField(fieldUserFlags, *cc.Flags),
+				NewField(fieldUserIconID, cc.Icon),
+				NewField(fieldUserFlags, cc.Flags),
 			),
 		)
 	}
@@ -1810,8 +1810,8 @@ func HandleJoinChat(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 	for _, c := range sortedClients(privChat.ClientConn) {
 		user := User{
 			ID:    *c.ID,
-			Icon:  *c.Icon,
-			Flags: *c.Flags,
+			Icon:  c.Icon,
+			Flags: c.Flags,
 			Name:  string(c.UserName),
 		}
 

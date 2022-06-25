@@ -228,22 +228,22 @@ func TestHandleGetUserNameList(t *testing.T) {
 						Clients: map[uint16]*ClientConn{
 							uint16(1): {
 								ID:       &[]byte{0, 1},
-								Icon:     &[]byte{0, 2},
-								Flags:    &[]byte{0, 3},
+								Icon:     []byte{0, 2},
+								Flags:    []byte{0, 3},
 								UserName: []byte{0, 4},
 								Agreed:   true,
 							},
 							uint16(2): {
 								ID:       &[]byte{0, 2},
-								Icon:     &[]byte{0, 2},
-								Flags:    &[]byte{0, 3},
+								Icon:     []byte{0, 2},
+								Flags:    []byte{0, 3},
 								UserName: []byte{0, 4},
 								Agreed:   true,
 							},
 							uint16(3): {
 								ID:       &[]byte{0, 3},
-								Icon:     &[]byte{0, 2},
-								Flags:    &[]byte{0, 3},
+								Icon:     []byte{0, 2},
+								Flags:    []byte{0, 3},
 								UserName: []byte{0, 4},
 								Agreed:   false,
 							},
@@ -2834,9 +2834,9 @@ func TestHandleTranAgreed(t *testing.T) {
 							access := bits[:]
 							return &access
 						}()},
-					Icon:    &[]byte{0, 1},
-					Flags:   &[]byte{0, 1},
-					Version: &[]byte{0, 1},
+					Icon:    []byte{0, 1},
+					Flags:   []byte{0, 1},
+					Version: []byte{0, 1},
 					ID:      &[]byte{0, 1},
 					logger:  NewTestLogger(),
 					Server: &Server{

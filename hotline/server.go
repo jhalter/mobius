@@ -308,16 +308,16 @@ func (s *Server) keepaliveHandler() {
 			if c.IdleTime > userIdleSeconds && !c.Idle {
 				c.Idle = true
 
-				flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(*c.Flags)))
+				flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(c.Flags)))
 				flagBitmap.SetBit(flagBitmap, userFlagAway, 1)
-				binary.BigEndian.PutUint16(*c.Flags, uint16(flagBitmap.Int64()))
+				binary.BigEndian.PutUint16(c.Flags, uint16(flagBitmap.Int64()))
 
 				c.sendAll(
 					tranNotifyChangeUser,
 					NewField(fieldUserID, *c.ID),
-					NewField(fieldUserFlags, *c.Flags),
+					NewField(fieldUserFlags, c.Flags),
 					NewField(fieldUserName, c.UserName),
-					NewField(fieldUserIconID, *c.Icon),
+					NewField(fieldUserIconID, c.Icon),
 				)
 			}
 		}
@@ -363,12 +363,12 @@ func (s *Server) NewClientConn(conn io.ReadWriteCloser, remoteAddr string) *Clie
 
 	clientConn := &ClientConn{
 		ID:         &[]byte{0, 0},
-		Icon:       &[]byte{0, 0},
-		Flags:      &[]byte{0, 0},
+		Icon:       []byte{0, 0},
+		Flags:      []byte{0, 0},
 		UserName:   []byte{},
 		Connection: conn,
 		Server:     s,
-		Version:    &[]byte{},
+		Version:    []byte{},
 		AutoReply:  []byte{},
 		transfers:  map[int]map[[4]byte]*FileTransfer{},
 		Agreed:     false,
@@ -463,8 +463,8 @@ func (s *Server) connectedUsers() []Field {
 		}
 		user := User{
 			ID:    *c.ID,
-			Icon:  *c.Icon,
-			Flags: *c.Flags,
+			Icon:  c.Icon,
+			Flags: c.Flags,
 			Name:  string(c.UserName),
 		}
 		connectedUsers = append(connectedUsers, NewField(fieldUsernameWithInfo, user.Payload()))
@@ -598,7 +598,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 
 	encodedLogin := clientLogin.GetField(fieldUserLogin).Data
 	encodedPassword := clientLogin.GetField(fieldUserPassword).Data
-	*c.Version = clientLogin.GetField(fieldVersion).Data
+	c.Version = clientLogin.GetField(fieldVersion).Data
 
 	var login string
 	for _, char := range encodedLogin {
@@ -621,13 +621,13 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 			return err
 		}
 
-		c.logger.Infow("Login failed", "clientVersion", fmt.Sprintf("%x", *c.Version))
+		c.logger.Infow("Login failed", "clientVersion", fmt.Sprintf("%x", c.Version))
 
 		return nil
 	}
 
 	if clientLogin.GetField(fieldUserIconID).Data != nil {
-		*c.Icon = clientLogin.GetField(fieldUserIconID).Data
+		c.Icon = clientLogin.GetField(fieldUserIconID).Data
 	}
 
 	c.Account = c.Server.Accounts[login]
@@ -641,7 +641,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	}
 
 	if c.Authorize(accessDisconUser) {
-		*c.Flags = []byte{0, 2}
+		c.Flags = []byte{0, 2}
 	}
 
 	s.outbox <- c.NewReply(clientLogin,
@@ -657,18 +657,18 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	c.Server.outbox <- *NewTransaction(tranShowAgreement, c.ID, NewField(fieldData, s.Agreement))
 
 	// Used simplified hotline v1.2.3 login flow for clients that do not send login info in tranAgreed
-	if *c.Version == nil || bytes.Equal(*c.Version, nostalgiaVersion) {
+	if c.Version == nil || bytes.Equal(c.Version, nostalgiaVersion) {
 		c.Agreed = true
 		c.logger = c.logger.With("name", string(c.UserName))
-		c.logger.Infow("Login successful", "clientVersion", fmt.Sprintf("%x", *c.Version))
+		c.logger.Infow("Login successful", "clientVersion", fmt.Sprintf("%x", c.Version))
 
 		for _, t := range c.notifyOthers(
 			*NewTransaction(
 				tranNotifyChangeUser, nil,
 				NewField(fieldUserName, c.UserName),
 				NewField(fieldUserID, *c.ID),
-				NewField(fieldUserIconID, *c.Icon),
-				NewField(fieldUserFlags, *c.Flags),
+				NewField(fieldUserIconID, c.Icon),
+				NewField(fieldUserFlags, c.Flags),
 			),
 		) {
 			c.Server.outbox <- t
