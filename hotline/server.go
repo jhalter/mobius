@@ -626,6 +626,12 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		return nil
 	}
 
+	if clientLogin.GetField(fieldUserIconID).Data != nil {
+		*c.Icon = clientLogin.GetField(fieldUserIconID).Data
+	}
+
+	c.Account = c.Server.Accounts[login]
+
 	if clientLogin.GetField(fieldUserName).Data != nil {
 		if c.Authorize(accessAnyName) {
 			c.UserName = clientLogin.GetField(fieldUserName).Data
@@ -633,12 +639,6 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 			c.UserName = []byte(c.Account.Name)
 		}
 	}
-
-	if clientLogin.GetField(fieldUserIconID).Data != nil {
-		*c.Icon = clientLogin.GetField(fieldUserIconID).Data
-	}
-
-	c.Account = c.Server.Accounts[login]
 
 	if c.Authorize(accessDisconUser) {
 		*c.Flags = []byte{0, 2}
