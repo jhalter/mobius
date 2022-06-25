@@ -627,7 +627,11 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	}
 
 	if clientLogin.GetField(fieldUserName).Data != nil {
-		c.UserName = clientLogin.GetField(fieldUserName).Data
+		if c.Authorize(accessAnyName) {
+			c.UserName = clientLogin.GetField(fieldUserName).Data
+		} else {
+			c.UserName = []byte(c.Account.Name)
+		}
 	}
 
 	if clientLogin.GetField(fieldUserIconID).Data != nil {

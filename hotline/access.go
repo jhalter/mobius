@@ -33,7 +33,7 @@ const (
 	accessCannotBeDiscon = 23
 	accessGetClientInfo  = 24
 	accessUploadAnywhere = 25
-	// accessAnyName          = 26
+	accessAnyName        = 26
 	// accessNoAgreement      = 27
 	accessSetFileComment   = 28
 	accessSetFolderComment = 29
