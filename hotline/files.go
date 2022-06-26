@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -30,7 +31,7 @@ func fileTypeFromInfo(info fs.FileInfo) (ft fileType, err error) {
 	return ft, nil
 }
 
-func getFileNameList(path string) (fields []Field, err error) {
+func getFileNameList(path string, ignoreList []string) (fields []Field, err error) {
 	files, err := os.ReadDir(path)
 	if err != nil {
 		return fields, nil
@@ -39,7 +40,7 @@ func getFileNameList(path string) (fields []Field, err error) {
 	for _, file := range files {
 		var fnwi FileNameWithInfo
 
-		if strings.HasPrefix(file.Name(), ".") {
+		if ignoreFile(file.Name(), ignoreList) {
 			continue
 		}
 
@@ -72,7 +73,7 @@ func getFileNameList(path string) (fields []Field, err error) {
 
 				var c uint32
 				for _, f := range dir {
-					if !strings.HasPrefix(f.Name(), ".") {
+					if !ignoreFile(f.Name(), ignoreList) {
 						c += 1
 					}
 				}
@@ -94,7 +95,7 @@ func getFileNameList(path string) (fields []Field, err error) {
 
 			var c uint32
 			for _, f := range dir {
-				if !strings.HasPrefix(f.Name(), ".") {
+				if !ignoreFile(f.Name(), ignoreList) {
 					c += 1
 				}
 			}
@@ -200,4 +201,15 @@ func EncodeFilePath(filePath string) []byte {
 	}
 
 	return bytes
+}
+
+func ignoreFile(fileName string, ignoreList []string) bool {
+	// skip files that match any regular expression present in the IgnoreFiles list
+	matchIgnoreFilter := 0
+	for _, pattern := range ignoreList {
+		if match, _ := regexp.MatchString(pattern, fileName); match {
+			matchIgnoreFilter += 1
+		}
+	}
+	return matchIgnoreFilter > 0
 }
