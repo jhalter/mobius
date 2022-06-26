@@ -299,6 +299,11 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 // Fields used in the reply:
 // None
 func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+	if !cc.Authorize(accessSendPrivMsg) {
+		res = append(res, cc.NewErrReply(t, "You are not allowed to send private messages."))
+		return res, err
+	}
+
 	msg := t.GetField(fieldData)
 	ID := t.GetField(fieldUserID)
 
