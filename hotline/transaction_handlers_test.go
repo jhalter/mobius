@@ -2288,9 +2288,48 @@ func TestHandleSendInstantMsg(t *testing.T) {
 		wantErr assert.ErrorAssertionFunc
 	}{
 		{
+			name: "without required permission",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							access := bits[:]
+							return &access
+						}(),
+					},
+				},
+				t: NewTransaction(
+					tranDelNewsArt,
+					&[]byte{0, 0},
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to send private messages.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
 			name: "when client 1 sends a message to client 2",
 			args: args{
 				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessSendPrivMsg)
+							access := bits[:]
+							return &access
+						}(),
+					},
 					ID:       &[]byte{0, 1},
 					UserName: []byte("User1"),
 					Server: &Server{
@@ -2333,6 +2372,14 @@ func TestHandleSendInstantMsg(t *testing.T) {
 			name: "when client 2 has autoreply enabled",
 			args: args{
 				cc: &ClientConn{
+					Account: &Account{
+						Access: func() *[]byte {
+							var bits accessBitmap
+							bits.Set(accessSendPrivMsg)
+							access := bits[:]
+							return &access
+						}(),
+					},
 					ID:       &[]byte{0, 1},
 					UserName: []byte("User1"),
 					Server: &Server{
