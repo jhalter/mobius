@@ -653,9 +653,14 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	// Send user access privs so client UI knows how to behave
 	c.Server.outbox <- *NewTransaction(tranUserAccess, c.ID, NewField(fieldUserAccess, *c.Account.Access))
 
-	// Users with accessNoAgreement do not receive the server agreement on login
+	// Accounts with accessNoAgreement do not receive the server agreement on login.  The behavior is different between
+	// client versions.  For 1.2.3 client, we do not send tranShowAgreement.  For other client versions, we send
+	// tranShowAgreement but with the NoServerAgreement field set to 1.
 	if c.Authorize(accessNoAgreement) {
-		c.Server.outbox <- *NewTransaction(tranShowAgreement, c.ID, NewField(fieldNoServerAgreement, []byte{1}))
+		// If client version is nil, then the client uses the 1.2.3 login behavior
+		if c.Version != nil {
+			c.Server.outbox <- *NewTransaction(tranShowAgreement, c.ID, NewField(fieldNoServerAgreement, []byte{1}))
+		}
 	} else {
 		c.Server.outbox <- *NewTransaction(tranShowAgreement, c.ID, NewField(fieldData, s.Agreement))
 	}
