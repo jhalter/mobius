@@ -8,10 +8,10 @@ import (
 const GuestAccount = "guest" // default account used when no login is provided for a connection
 
 type Account struct {
-	Login    string  `yaml:"Login"`
-	Name     string  `yaml:"Name"`
-	Password string  `yaml:"Password"`
-	Access   *[]byte `yaml:"Access"` // 8 byte bitmap
+	Login    string       `yaml:"Login"`
+	Name     string       `yaml:"Name"`
+	Password string       `yaml:"Password"`
+	Access   accessBitmap `yaml:"Access"`
 }
 
 // Read implements io.Reader interface for Account
@@ -19,7 +19,7 @@ func (a *Account) Read(p []byte) (n int, err error) {
 	fields := []Field{
 		NewField(fieldUserName, []byte(a.Name)),
 		NewField(fieldUserLogin, negateString([]byte(a.Login))),
-		NewField(fieldUserAccess, *a.Access),
+		NewField(fieldUserAccess, a.Access[:]),
 	}
 
 	if bcrypt.CompareHashAndPassword([]byte(a.Password), []byte("")) != nil {

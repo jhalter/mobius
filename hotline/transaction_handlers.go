@@ -238,7 +238,7 @@ var TransactionHandlers = map[uint16]TransactionType{
 }
 
 func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessSendChat) {
+	if !cc.Authorize(accessSendChat) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to participate in chat."))
 		return res, err
 	}
@@ -276,7 +276,7 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 
 	for _, c := range sortedClients(cc.Server.Clients) {
 		// Filter out clients that do not have the read chat permission
-		if authorize(c.Account.Access, accessReadChat) {
+		if c.Authorize(accessReadChat) {
 			res = append(res, *NewTransaction(tranChatMsg, c.ID, NewField(fieldData, []byte(formattedMsg))))
 		}
 	}
@@ -404,12 +404,12 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	if t.GetField(fieldFileComment).Data != nil {
 		switch mode := fi.Mode(); {
 		case mode.IsDir():
-			if !authorize(cc.Account.Access, accessSetFolderComment) {
+			if !cc.Authorize(accessSetFolderComment) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to set comments for folders."))
 				return res, err
 			}
 		case mode.IsRegular():
-			if !authorize(cc.Account.Access, accessSetFileComment) {
+			if !cc.Authorize(accessSetFileComment) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to set comments for files."))
 				return res, err
 			}
@@ -438,7 +438,7 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	if fileNewName != nil {
 		switch mode := fi.Mode(); {
 		case mode.IsDir():
-			if !authorize(cc.Account.Access, accessRenameFolder) {
+			if !cc.Authorize(accessRenameFolder) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to rename folders."))
 				return res, err
 			}
@@ -448,7 +448,7 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 				return res, err
 			}
 		case mode.IsRegular():
-			if !authorize(cc.Account.Access, accessRenameFile) {
+			if !cc.Authorize(accessRenameFile) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to rename files."))
 				return res, err
 			}
@@ -499,12 +499,12 @@ func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
-		if !authorize(cc.Account.Access, accessDeleteFolder) {
+		if !cc.Authorize(accessDeleteFolder) {
 			res = append(res, cc.NewErrReply(t, "You are not allowed to delete folders."))
 			return res, err
 		}
 	case mode.IsRegular():
-		if !authorize(cc.Account.Access, accessDeleteFile) {
+		if !cc.Authorize(accessDeleteFile) {
 			res = append(res, cc.NewErrReply(t, "You are not allowed to delete files."))
 			return res, err
 		}
@@ -549,12 +549,12 @@ func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 	}
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
-		if !authorize(cc.Account.Access, accessMoveFolder) {
+		if !cc.Authorize(accessMoveFolder) {
 			res = append(res, cc.NewErrReply(t, "You are not allowed to move folders."))
 			return res, err
 		}
 	case mode.IsRegular():
-		if !authorize(cc.Account.Access, accessMoveFile) {
+		if !cc.Authorize(accessMoveFile) {
 			res = append(res, cc.NewErrReply(t, "You are not allowed to move files."))
 			return res, err
 		}
@@ -569,7 +569,7 @@ func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 }
 
 func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessCreateFolder) {
+	if !cc.Authorize(accessCreateFolder) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to create folders."))
 		return res, err
 	}
@@ -612,7 +612,7 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err err
 }
 
 func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessModifyUser) {
+	if !cc.Authorize(accessModifyUser) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to modify accounts."))
 		return res, err
 	}
@@ -623,8 +623,8 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 	newAccessLvl := t.GetField(fieldUserAccess).Data
 
 	account := cc.Server.Accounts[login]
-	account.Access = &newAccessLvl
 	account.Name = userName
+	copy(account.Access[:], newAccessLvl)
 
 	// If the password field is cleared in the Hotline edit user UI, the SetUser transaction does
 	// not include fieldUserPassword
@@ -651,7 +651,7 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 			res = append(res, *newT)
 
 			flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(c.Flags)))
-			if authorize(c.Account.Access, accessDisconUser) {
+			if cc.Authorize(accessDisconUser) {
 				flagBitmap.SetBit(flagBitmap, userFlagAdmin, 1)
 			} else {
 				flagBitmap.SetBit(flagBitmap, userFlagAdmin, 0)
@@ -675,7 +675,7 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 }
 
 func HandleGetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessOpenUser) {
+	if !cc.Authorize(accessOpenUser) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to view accounts."))
 		return res, err
 	}
@@ -690,13 +690,13 @@ func HandleGetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 		NewField(fieldUserName, []byte(account.Name)),
 		NewField(fieldUserLogin, negateString(t.GetField(fieldUserLogin).Data)),
 		NewField(fieldUserPassword, []byte(account.Password)),
-		NewField(fieldUserAccess, *account.Access),
+		NewField(fieldUserAccess, account.Access[:]),
 	))
 	return res, err
 }
 
 func HandleListUsers(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessOpenUser) {
+	if !cc.Authorize(accessOpenUser) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to view accounts."))
 		return res, err
 	}
@@ -736,7 +736,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			login := DecodeUserString(getField(fieldData, &subFields).Data)
 			cc.logger.Infow("DeleteUser", "login", login)
 
-			if !authorize(cc.Account.Access, accessDeleteUser) {
+			if !cc.Authorize(accessDeleteUser) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to delete accounts."))
 				return res, err
 			}
@@ -754,7 +754,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			cc.logger.Infow("UpdateUser", "login", login)
 
 			// account dataFile, so this is an update action
-			if !authorize(cc.Account.Access, accessModifyUser) {
+			if !cc.Authorize(accessModifyUser) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to modify accounts."))
 				return res, err
 			}
@@ -767,7 +767,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			}
 
 			if getField(fieldUserAccess, &subFields) != nil {
-				acc.Access = &getField(fieldUserAccess, &subFields).Data
+				copy(acc.Access[:], getField(fieldUserAccess, &subFields).Data)
 			}
 
 			err = cc.Server.UpdateUser(
@@ -775,7 +775,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 				DecodeUserString(getField(fieldUserLogin, &subFields).Data),
 				string(getField(fieldUserName, &subFields).Data),
 				acc.Password,
-				*acc.Access,
+				acc.Access,
 			)
 			if err != nil {
 				return res, err
@@ -783,17 +783,15 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		} else {
 			cc.logger.Infow("CreateUser", "login", login)
 
-			if !authorize(cc.Account.Access, accessCreateUser) {
+			if !cc.Authorize(accessCreateUser) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to create new accounts."))
 				return res, err
 			}
 
-			err := cc.Server.NewUser(
-				login,
-				string(getField(fieldUserName, &subFields).Data),
-				string(getField(fieldUserPassword, &subFields).Data),
-				getField(fieldUserAccess, &subFields).Data,
-			)
+			newAccess := accessBitmap{}
+			copy(newAccess[:], getField(fieldUserAccess, &subFields).Data[:])
+
+			err := cc.Server.NewUser(login, string(getField(fieldUserName, &subFields).Data), string(getField(fieldUserPassword, &subFields).Data), newAccess)
 			if err != nil {
 				return []Transaction{}, err
 			}
@@ -806,7 +804,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 // HandleNewUser creates a new user account
 func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessCreateUser) {
+	if !cc.Authorize(accessCreateUser) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to create new accounts."))
 		return res, err
 	}
@@ -819,12 +817,10 @@ func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 		return res, err
 	}
 
-	if err := cc.Server.NewUser(
-		login,
-		string(t.GetField(fieldUserName).Data),
-		string(t.GetField(fieldUserPassword).Data),
-		t.GetField(fieldUserAccess).Data,
-	); err != nil {
+	newAccess := accessBitmap{}
+	copy(newAccess[:], t.GetField(fieldUserAccess).Data[:])
+
+	if err := cc.Server.NewUser(login, string(t.GetField(fieldUserName).Data), string(t.GetField(fieldUserPassword).Data), newAccess); err != nil {
 		return []Transaction{}, err
 	}
 
@@ -833,7 +829,7 @@ func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 }
 
 func HandleDeleteUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessDeleteUser) {
+	if !cc.Authorize(accessDeleteUser) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to delete accounts."))
 		return res, err
 	}
@@ -851,7 +847,7 @@ func HandleDeleteUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 // HandleUserBroadcast sends an Administrator Message to all connected clients of the server
 func HandleUserBroadcast(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessBroadcast) {
+	if !cc.Authorize(accessBroadcast) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to send broadcast messages."))
 		return res, err
 	}
@@ -886,7 +882,7 @@ func byteToInt(bytes []byte) (int, error) {
 // 102	User name
 // 101	Data		User info text string
 func HandleGetClientInfoText(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessGetClientInfo) {
+	if !cc.Authorize(accessGetClientInfo) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to get client info."))
 		return res, err
 	}
@@ -984,7 +980,7 @@ __________________________________________________________`
 // Fields used in this request:
 // 101	Data
 func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessNewsPostArt) {
+	if !cc.Authorize(accessNewsPostArt) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to post news."))
 		return res, err
 	}
@@ -1024,14 +1020,14 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 }
 
 func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessDisconUser) {
+	if !cc.Authorize(accessDisconUser) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to disconnect users."))
 		return res, err
 	}
 
 	clientConn := cc.Server.Clients[binary.BigEndian.Uint16(t.GetField(fieldUserID).Data)]
 
-	if authorize(clientConn.Account.Access, accessCannotBeDiscon) {
+	if clientConn.Authorize(accessCannotBeDiscon) {
 		res = append(res, cc.NewErrReply(t, clientConn.Account.Login+" is not allowed to be disconnected."))
 		return res, err
 	}
@@ -1084,7 +1080,7 @@ func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, er
 // Fields used in the request:
 // 325	News path	(Optional)
 func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessNewsReadArt) {
+	if !cc.Authorize(accessNewsReadArt) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to read news."))
 		return res, err
 	}
@@ -1116,7 +1112,7 @@ func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) (res []Transaction
 }
 
 func HandleNewNewsCat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessNewsCreateCat) {
+	if !cc.Authorize(accessNewsCreateCat) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to create news categories."))
 		return res, err
 	}
@@ -1143,7 +1139,7 @@ func HandleNewNewsCat(cc *ClientConn, t *Transaction) (res []Transaction, err er
 // 322	News category name
 // 325	News path
 func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessNewsCreateFldr) {
+	if !cc.Authorize(accessNewsCreateFldr) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to create news folders."))
 		return res, err
 	}
@@ -1173,7 +1169,7 @@ func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction, err e
 // Reply fields:
 // 321	News article list data	Optional
 func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessNewsReadArt) {
+	if !cc.Authorize(accessNewsReadArt) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to read news."))
 		return res, err
 	}
@@ -1194,7 +1190,7 @@ func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction
 }
 
 func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessNewsReadArt) {
+	if !cc.Authorize(accessNewsReadArt) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to read news."))
 		return res, err
 	}
@@ -1281,7 +1277,7 @@ func HandleDelNewsItem(cc *ClientConn, t *Transaction) (res []Transaction, err e
 }
 
 func HandleDelNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessNewsDeleteArt) {
+	if !cc.Authorize(accessNewsDeleteArt) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to delete news articles."))
 		return res, err
 	}
@@ -1318,7 +1314,7 @@ func HandleDelNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err er
 // 327	News article data flavor		Currently “text/plain”
 // 333	News article data
 func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessNewsPostArt) {
+	if !cc.Authorize(accessNewsPostArt) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to post news articles."))
 		return res, err
 	}
@@ -1381,7 +1377,7 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 
 // HandleGetMsgs returns the flat news data
 func HandleGetMsgs(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessNewsReadArt) {
+	if !cc.Authorize(accessNewsReadArt) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to read news."))
 		return res, err
 	}
@@ -1392,7 +1388,7 @@ func HandleGetMsgs(cc *ClientConn, t *Transaction) (res []Transaction, err error
 }
 
 func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessDownloadFile) {
+	if !cc.Authorize(accessDownloadFile) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to download files."))
 		return res, err
 	}
@@ -1454,7 +1450,7 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 
 // Download all files from the specified folder and sub-folders
 func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessDownloadFile) {
+	if !cc.Authorize(accessDownloadFile) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to download folders."))
 		return res, err
 	}
@@ -1506,7 +1502,7 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err 
 	}
 
 	// Handle special cases for Upload and Drop Box folders
-	if !authorize(cc.Account.Access, accessUploadAnywhere) {
+	if !cc.Authorize(accessUploadAnywhere) {
 		if !fp.IsUploadDir() && !fp.IsDropbox() {
 			res = append(res, cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload of the folder \"%v\" because you are only allowed to upload to the \"Uploads\" folder.", string(t.GetField(fieldFileName).Data))))
 			return res, err
@@ -1533,7 +1529,7 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err 
 // Used only to resume download, currently has value 2"
 // 108	File transfer size	"Optional used if download is not resumed"
 func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessUploadFile) {
+	if !cc.Authorize(accessUploadFile) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to upload files."))
 		return res, err
 	}
@@ -1551,7 +1547,7 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	}
 
 	// Handle special cases for Upload and Drop Box folders
-	if !authorize(cc.Account.Access, accessUploadAnywhere) {
+	if !cc.Authorize(accessUploadAnywhere) {
 		if !fp.IsUploadDir() && !fp.IsDropbox() {
 			res = append(res, cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload of the file \"%v\" because you are only allowed to upload to the \"Uploads\" folder.", string(fileName))))
 			return res, err
@@ -1668,7 +1664,7 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 	}
 
 	// Handle special case for drop box folders
-	if fp.IsDropbox() && !authorize(cc.Account.Access, accessViewDropBoxes) {
+	if fp.IsDropbox() && !cc.Authorize(accessViewDropBoxes) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to view drop boxes."))
 		return res, err
 	}
@@ -1697,7 +1693,7 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 
 // HandleInviteNewChat invites users to new private chat
 func HandleInviteNewChat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessOpenChat) {
+	if !cc.Authorize(accessOpenChat) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to request private chat."))
 		return res, err
 	}
@@ -1730,7 +1726,7 @@ func HandleInviteNewChat(cc *ClientConn, t *Transaction) (res []Transaction, err
 }
 
 func HandleInviteToChat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessOpenChat) {
+	if !cc.Authorize(accessOpenChat) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to request private chat."))
 		return res, err
 	}
@@ -1893,7 +1889,7 @@ func HandleSetChatSubject(cc *ClientConn, t *Transaction) (res []Transaction, er
 // Fields used in the reply:
 // None
 func HandleMakeAlias(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if !authorize(cc.Account.Access, accessMakeAlias) {
+	if !cc.Authorize(accessMakeAlias) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to make aliases."))
 		return res, err
 	}

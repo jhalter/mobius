@@ -392,7 +392,7 @@ func (s *Server) NewClientConn(conn io.ReadWriteCloser, remoteAddr string) *Clie
 }
 
 // NewUser creates a new user account entry in the server map and config file
-func (s *Server) NewUser(login, name, password string, access []byte) error {
+func (s *Server) NewUser(login, name, password string, access accessBitmap) error {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
@@ -400,7 +400,7 @@ func (s *Server) NewUser(login, name, password string, access []byte) error {
 		Login:    login,
 		Name:     name,
 		Password: hashAndSalt([]byte(password)),
-		Access:   &access,
+		Access:   access,
 	}
 	out, err := yaml.Marshal(&account)
 	if err != nil {
@@ -411,7 +411,7 @@ func (s *Server) NewUser(login, name, password string, access []byte) error {
 	return s.FS.WriteFile(filepath.Join(s.ConfigDir, "Users", login+".yaml"), out, 0666)
 }
 
-func (s *Server) UpdateUser(login, newLogin, name, password string, access []byte) error {
+func (s *Server) UpdateUser(login, newLogin, name, password string, access accessBitmap) error {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
@@ -426,7 +426,7 @@ func (s *Server) UpdateUser(login, newLogin, name, password string, access []byt
 	}
 
 	account := s.Accounts[newLogin]
-	account.Access = &access
+	account.Access = access
 	account.Name = name
 	account.Password = password
 
@@ -651,7 +651,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	)
 
 	// Send user access privs so client UI knows how to behave
-	c.Server.outbox <- *NewTransaction(tranUserAccess, c.ID, NewField(fieldUserAccess, *c.Account.Access))
+	c.Server.outbox <- *NewTransaction(tranUserAccess, c.ID, NewField(fieldUserAccess, c.Account.Access[:]))
 
 	// Accounts with accessNoAgreement do not receive the server agreement on login.  The behavior is different between
 	// client versions.  For 1.2.3 client, we do not send tranShowAgreement.  For other client versions, we send

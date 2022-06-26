@@ -36,13 +36,13 @@ func TestHandleSetChatSubject(t *testing.T) {
 								ClientConn: map[uint16]*ClientConn{
 									uint16(1): {
 										Account: &Account{
-											Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+											Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 										},
 										ID: &[]byte{0, 1},
 									},
 									uint16(2): {
 										Account: &Account{
-											Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+											Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 										},
 										ID: &[]byte{0, 2},
 									},
@@ -52,13 +52,13 @@ func TestHandleSetChatSubject(t *testing.T) {
 						Clients: map[uint16]*ClientConn{
 							uint16(1): {
 								Account: &Account{
-									Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
 								ID: &[]byte{0, 1},
 							},
 							uint16(2): {
 								Account: &Account{
-									Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
 								ID: &[]byte{0, 2},
 							},
@@ -144,13 +144,13 @@ func TestHandleLeaveChat(t *testing.T) {
 								ClientConn: map[uint16]*ClientConn{
 									uint16(1): {
 										Account: &Account{
-											Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+											Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 										},
 										ID: &[]byte{0, 1},
 									},
 									uint16(2): {
 										Account: &Account{
-											Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+											Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 										},
 										ID: &[]byte{0, 2},
 									},
@@ -160,13 +160,13 @@ func TestHandleLeaveChat(t *testing.T) {
 						Clients: map[uint16]*ClientConn{
 							uint16(1): {
 								Account: &Account{
-									Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
 								ID: &[]byte{0, 1},
 							},
 							uint16(2): {
 								Account: &Account{
-									Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
 								ID: &[]byte{0, 2},
 							},
@@ -306,11 +306,10 @@ func TestHandleChatSend(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessSendChat)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					UserName: []byte{0x00, 0x01},
@@ -318,13 +317,13 @@ func TestHandleChatSend(t *testing.T) {
 						Clients: map[uint16]*ClientConn{
 							uint16(1): {
 								Account: &Account{
-									Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
 								ID: &[]byte{0, 1},
 							},
 							uint16(2): {
 								Account: &Account{
-									Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
 								ID: &[]byte{0, 2},
 							},
@@ -368,10 +367,9 @@ func TestHandleChatSend(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -402,11 +400,10 @@ func TestHandleChatSend(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessSendChat)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					UserName: []byte("Testy McTest"),
@@ -414,13 +411,13 @@ func TestHandleChatSend(t *testing.T) {
 						Clients: map[uint16]*ClientConn{
 							uint16(1): {
 								Account: &Account{
-									Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
 								ID: &[]byte{0, 1},
 							},
 							uint16(2): {
 								Account: &Account{
-									Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
 								ID: &[]byte{0, 2},
 							},
@@ -465,11 +462,10 @@ func TestHandleChatSend(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessSendChat)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					UserName: []byte{0x00, 0x01},
@@ -477,13 +473,16 @@ func TestHandleChatSend(t *testing.T) {
 						Clients: map[uint16]*ClientConn{
 							uint16(1): {
 								Account: &Account{
-									Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
-								},
+									Access: func() accessBitmap {
+										var bits accessBitmap
+										bits.Set(accessReadChat)
+										return bits
+									}()},
 								ID: &[]byte{0, 1},
 							},
 							uint16(2): {
 								Account: &Account{
-									Access: &[]byte{0, 0, 0, 0, 0, 0, 0, 0},
+									Access: accessBitmap{0, 0, 0, 0, 0, 0, 0, 0},
 								},
 								ID: &[]byte{0, 2},
 							},
@@ -516,11 +515,10 @@ func TestHandleChatSend(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessSendChat)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					UserName: []byte{0x00, 0x01},
@@ -540,19 +538,19 @@ func TestHandleChatSend(t *testing.T) {
 						Clients: map[uint16]*ClientConn{
 							uint16(1): {
 								Account: &Account{
-									Access: &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
 								ID: &[]byte{0, 1},
 							},
 							uint16(2): {
 								Account: &Account{
-									Access: &[]byte{0, 0, 0, 0, 0, 0, 0, 0},
+									Access: accessBitmap{0, 0, 0, 0, 0, 0, 0, 0},
 								},
 								ID: &[]byte{0, 2},
 							},
 							uint16(3): {
 								Account: &Account{
-									Access: &[]byte{0, 0, 0, 0, 0, 0, 0, 0},
+									Access: accessBitmap{0, 0, 0, 0, 0, 0, 0, 0},
 								},
 								ID: &[]byte{0, 3},
 							},
@@ -702,10 +700,9 @@ func TestHandleNewFolder(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 				},
@@ -733,11 +730,10 @@ func TestHandleNewFolder(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessCreateFolder)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					ID: &[]byte{0, 1},
@@ -781,11 +777,10 @@ func TestHandleNewFolder(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessCreateFolder)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					ID: &[]byte{0, 1},
@@ -823,11 +818,10 @@ func TestHandleNewFolder(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessCreateFolder)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					ID: &[]byte{0, 1},
@@ -859,11 +853,10 @@ func TestHandleNewFolder(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessCreateFolder)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					ID: &[]byte{0, 1},
@@ -900,11 +893,10 @@ func TestHandleNewFolder(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessCreateFolder)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					ID: &[]byte{0, 1},
@@ -987,12 +979,11 @@ func TestHandleUploadFile(t *testing.T) {
 						FileUpload: {},
 					},
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessUploadFile)
 							bits.Set(accessUploadAnywhere)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 				},
@@ -1026,10 +1017,9 @@ func TestHandleUploadFile(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 				},
@@ -1091,11 +1081,10 @@ func TestHandleMakeAlias(t *testing.T) {
 				cc: &ClientConn{
 					logger: NewTestLogger(),
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessMakeAlias)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -1143,11 +1132,10 @@ func TestHandleMakeAlias(t *testing.T) {
 				cc: &ClientConn{
 					logger: NewTestLogger(),
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessMakeAlias)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -1197,10 +1185,9 @@ func TestHandleMakeAlias(t *testing.T) {
 				cc: &ClientConn{
 					logger: NewTestLogger(),
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -1273,11 +1260,10 @@ func TestHandleGetUser(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessOpenUser)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -1286,7 +1272,7 @@ func TestHandleGetUser(t *testing.T) {
 								Login:    "guest",
 								Name:     "Guest",
 								Password: "password",
-								Access:   &[]byte{1},
+								Access:   accessBitmap{},
 							},
 						},
 					},
@@ -1307,7 +1293,7 @@ func TestHandleGetUser(t *testing.T) {
 						NewField(fieldUserName, []byte("Guest")),
 						NewField(fieldUserLogin, negateString([]byte("guest"))),
 						NewField(fieldUserPassword, []byte("password")),
-						NewField(fieldUserAccess, []byte{1}),
+						NewField(fieldUserAccess, []byte{0, 0, 0, 0, 0, 0, 0, 0}),
 					},
 				},
 			},
@@ -1318,10 +1304,9 @@ func TestHandleGetUser(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -1352,11 +1337,10 @@ func TestHandleGetUser(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessOpenUser)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -1411,11 +1395,10 @@ func TestHandleDeleteUser(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessDeleteUser)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -1424,7 +1407,7 @@ func TestHandleDeleteUser(t *testing.T) {
 								Login:    "testuser",
 								Name:     "Testy McTest",
 								Password: "password",
-								Access:   &[]byte{1},
+								Access:   accessBitmap{},
 							},
 						},
 						FS: func() *MockFileStore {
@@ -1456,10 +1439,9 @@ func TestHandleDeleteUser(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -1514,11 +1496,10 @@ func TestHandleGetMsgs(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessNewsReadArt)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -1548,10 +1529,9 @@ func TestHandleGetMsgs(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -1605,10 +1585,9 @@ func TestHandleNewUser(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -1662,10 +1641,9 @@ func TestHandleListUsers(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -1695,11 +1673,10 @@ func TestHandleListUsers(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessOpenUser)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -1708,7 +1685,7 @@ func TestHandleListUsers(t *testing.T) {
 								Name:     "guest",
 								Login:    "guest",
 								Password: "zz",
-								Access:   &[]byte{255, 255, 255, 255, 255, 255, 255, 255},
+								Access:   accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 							},
 						},
 					},
@@ -1765,10 +1742,9 @@ func TestHandleDownloadFile(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{},
@@ -1797,11 +1773,10 @@ func TestHandleDownloadFile(t *testing.T) {
 						FileDownload: {},
 					},
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessDownloadFile)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -1844,11 +1819,10 @@ func TestHandleDownloadFile(t *testing.T) {
 					transfers: map[int]map[[4]byte]*FileTransfer{
 						FileDownload: {},
 					}, Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessDownloadFile)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -1962,10 +1936,9 @@ func TestHandleUpdateUser(t *testing.T) {
 						Logger: NewTestLogger(),
 					},
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 				},
@@ -2019,10 +1992,9 @@ func TestHandleUpdateUser(t *testing.T) {
 						},
 					},
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 				},
@@ -2075,10 +2047,9 @@ func TestHandleUpdateUser(t *testing.T) {
 						},
 					},
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 				},
@@ -2136,10 +2107,9 @@ func TestHandleDelNewsArt(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 				},
@@ -2190,10 +2160,9 @@ func TestHandleDisconnectUser(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 				},
@@ -2225,22 +2194,20 @@ func TestHandleDisconnectUser(t *testing.T) {
 							uint16(1): {
 								Account: &Account{
 									Login: "unnamed",
-									Access: func() *[]byte {
+									Access: func() accessBitmap {
 										var bits accessBitmap
 										bits.Set(accessCannotBeDiscon)
-										access := bits[:]
-										return &access
+										return bits
 									}(),
 								},
 							},
 						},
 					},
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessDisconUser)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 				},
@@ -2292,10 +2259,9 @@ func TestHandleSendInstantMsg(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 				},
@@ -2323,11 +2289,10 @@ func TestHandleSendInstantMsg(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessSendPrivMsg)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					ID:       &[]byte{0, 1},
@@ -2373,11 +2338,10 @@ func TestHandleSendInstantMsg(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessSendPrivMsg)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					ID:       &[]byte{0, 1},
@@ -2457,10 +2421,9 @@ func TestHandleDeleteFile(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -2517,11 +2480,10 @@ func TestHandleDeleteFile(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessDeleteFile)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -2607,10 +2569,9 @@ func TestHandleGetFileNameList(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -2728,10 +2689,9 @@ func TestHandleGetClientInfoText(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					Server: &Server{
@@ -2764,11 +2724,10 @@ func TestHandleGetClientInfoText(t *testing.T) {
 					UserName:   []byte("Testy McTest"),
 					RemoteAddr: "1.2.3.4:12345",
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessGetClientInfo)
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 						Name:  "test",
 						Login: "test",
@@ -2780,11 +2739,10 @@ func TestHandleGetClientInfoText(t *testing.T) {
 								UserName:   []byte("Testy McTest"),
 								RemoteAddr: "1.2.3.4:12345",
 								Account: &Account{
-									Access: func() *[]byte {
+									Access: func() accessBitmap {
 										var bits accessBitmap
 										bits.Set(accessGetClientInfo)
-										access := bits[:]
-										return &access
+										return bits
 									}(),
 									Name:  "test",
 									Login: "test",
@@ -2874,12 +2832,11 @@ func TestHandleTranAgreed(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
 							bits.Set(accessDisconUser)
 							bits.Set(accessAnyName)
-							access := bits[:]
-							return &access
+							return bits
 						}()},
 					Icon:    []byte{0, 1},
 					Flags:   []byte{0, 1},
@@ -2951,10 +2908,9 @@ func TestHandleSetClientUserInfo(t *testing.T) {
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
-						Access: func() *[]byte {
+						Access: func() accessBitmap {
 							var bits accessBitmap
-							access := bits[:]
-							return &access
+							return bits
 						}(),
 					},
 					ID:       &[]byte{0, 1},

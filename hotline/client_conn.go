@@ -135,9 +135,7 @@ func (cc *ClientConn) uint16ID() uint16 {
 
 // Authorize checks if the user account has the specified permission
 func (cc *ClientConn) Authorize(access int) bool {
-	i := big.NewInt(int64(binary.BigEndian.Uint64(*cc.Account.Access)))
-
-	return i.Bit(63-access) == 1
+	return cc.Account.Access.IsSet(access)
 }
 
 // Disconnect notifies other clients that a client has disconnected

@@ -1,10 +1,5 @@
 package hotline
 
-import (
-	"encoding/binary"
-	"math/big"
-)
-
 const (
 	accessDeleteFile       = 0  // File System Maintenance: Can Delete Files
 	accessUploadFile       = 1  // File System Maintenance: Can Upload Files
@@ -52,10 +47,6 @@ func (bits *accessBitmap) Set(i int) {
 	bits[i/8] |= 1 << uint(7-i%8)
 }
 
-// authorize checks if 64 bit access slice contain has accessBit set
-// TODO: refactor to use accessBitmap type
-func authorize(access *[]byte, accessBit int) bool {
-	bits := big.NewInt(int64(binary.BigEndian.Uint64(*access)))
-
-	return bits.Bit(63-accessBit) == 1
+func (bits *accessBitmap) IsSet(i int) bool {
+	return bits[i/8]&(1<<uint(7-i%8)) != 0
 }
