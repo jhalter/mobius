@@ -1668,7 +1668,7 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 		return res, err
 	}
 
-	fileNames, err := getFileNameList(fullPath)
+	fileNames, err := getFileNameList(fullPath, cc.Server.Config.IgnoreFiles)
 	if err != nil {
 		return res, err
 	}

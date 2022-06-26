@@ -19,8 +19,8 @@ EnableTrackerRegistration: false
 
 # List of trackers to register with
 Trackers:
-- hltracker.com:5499
-- tracker.preterhuman.net:5499
+  - hltracker.com:5499
+  - tracker.preterhuman.net:5499
 
 # Preserve resource forks and file type/creator codes for files uploaded by Macintosh clients.
 # This comes with trade-offs.  For more details, see:
@@ -42,3 +42,8 @@ MaxDownloadsPerClient: 0
 
 # Maximum simultaneous connections/IP; currently unimplemented
 MaxConnectionsPerIP: 0
+
+# List of Regular Expression filters for the Files list
+IgnoreFiles:
+  - '^\.*'     # Ignore all files starting with ".".  Leave this set if you are using the PreserveResourceForks option.
+  - '^@'       # Ignore all files starting with "@"

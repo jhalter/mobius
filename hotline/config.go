@@ -13,4 +13,5 @@ type Config struct {
 	MaxDownloadsPerClient     int      `yaml:"MaxDownloadsPerClient"`                   // Per client simultaneous download limit
 	MaxConnectionsPerIP       int      `yaml:"MaxConnectionsPerIP"`                     // Max connections per IP
 	PreserveResourceForks     bool     `yaml:"PreserveResourceForks"`                   // Enable preservation of file info and resource forks in sidecar files
+	IgnoreFiles               []string `yaml:"IgnoreFiles"`                             // List of regular expression for filtering files from the file list
 }
