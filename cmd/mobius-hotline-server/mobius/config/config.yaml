@@ -45,5 +45,5 @@ MaxConnectionsPerIP: 0
 
 # List of Regular Expression filters for the Files list
 IgnoreFiles:
-  - '^\.*'     # Ignore all files starting with ".".  Leave this set if you are using the PreserveResourceForks option.
+  - '^\.'     # Ignore all files starting with ".".  Leave this set if you are using the PreserveResourceForks option.
   - '^@'       # Ignore all files starting with "@"
