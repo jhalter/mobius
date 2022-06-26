@@ -653,8 +653,12 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	// Send user access privs so client UI knows how to behave
 	c.Server.outbox <- *NewTransaction(tranUserAccess, c.ID, NewField(fieldUserAccess, *c.Account.Access))
 
-	// Show agreement to client
-	c.Server.outbox <- *NewTransaction(tranShowAgreement, c.ID, NewField(fieldData, s.Agreement))
+	// Users with accessNoAgreement do not receive the server agreement on login
+	if c.Authorize(accessNoAgreement) {
+		c.Server.outbox <- *NewTransaction(tranShowAgreement, c.ID, NewField(fieldNoServerAgreement, []byte{1}))
+	} else {
+		c.Server.outbox <- *NewTransaction(tranShowAgreement, c.ID, NewField(fieldData, s.Agreement))
+	}
 
 	// Used simplified hotline v1.2.3 login flow for clients that do not send login info in tranAgreed
 	if c.Version == nil || bytes.Equal(c.Version, nostalgiaVersion) {
