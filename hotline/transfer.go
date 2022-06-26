@@ -42,7 +42,7 @@ func receiveFile(r io.Reader, targetFile, resForkFile, infoFork, counterWriter i
 		return err
 	}
 
-	if _, err = io.Copy(targetFile, io.TeeReader(r, counterWriter)); err != nil {
+	if _, err = io.CopyN(targetFile, io.TeeReader(r, counterWriter), ffo.dataSize()); err != nil {
 		return err
 	}
 
@@ -51,7 +51,7 @@ func receiveFile(r io.Reader, targetFile, resForkFile, infoFork, counterWriter i
 			return err
 		}
 
-		if _, err = io.Copy(resForkFile, io.TeeReader(r, counterWriter)); err != nil {
+		if _, err = io.CopyN(resForkFile, io.TeeReader(r, counterWriter), ffo.rsrcSize()); err != nil {
 			return err
 		}
 	}
