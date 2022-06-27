@@ -651,7 +651,7 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 			res = append(res, *newT)
 
 			flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(c.Flags)))
-			if cc.Authorize(accessDisconUser) {
+			if c.Authorize(accessDisconUser) {
 				flagBitmap.SetBit(flagBitmap, userFlagAdmin, 1)
 			} else {
 				flagBitmap.SetBit(flagBitmap, userFlagAdmin, 0)
