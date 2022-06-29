@@ -202,6 +202,7 @@ func (newscat *NewsCategoryListData15) nameLen() []byte {
 	return []byte{uint8(len(newscat.Name))}
 }
 
+// TODO: re-implement as bufio.Scanner interface
 func ReadNewsPath(newsPath []byte) []string {
 	if len(newsPath) == 0 {
 		return []string{}

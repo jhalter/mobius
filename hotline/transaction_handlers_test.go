@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"io/fs"
 	"math/rand"
 	"os"
@@ -2955,6 +2956,175 @@ func TestHandleSetClientUserInfo(t *testing.T) {
 				return
 			}
 
+			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}
+
+func TestHandleDelNewsItem(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "when user does not have permission to delete a news category",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: accessBitmap{},
+					},
+					ID: &[]byte{0, 1},
+					Server: &Server{
+						ThreadedNews: &ThreadedNews{Categories: map[string]NewsCategoryListData15{
+							"test": {
+								Type:     []byte{0, 3},
+								Count:    nil,
+								NameSize: 0,
+								Name:     "zz",
+							},
+						}},
+					},
+				},
+				t: NewTransaction(
+					tranDelNewsItem, nil,
+					NewField(fieldNewsPath,
+						[]byte{
+							0, 1,
+							0, 0,
+							4,
+							0x74, 0x65, 0x73, 0x74,
+						},
+					),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to delete news categories.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "when user does not have permission to delete a news folder",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: accessBitmap{},
+					},
+					ID: &[]byte{0, 1},
+					Server: &Server{
+						ThreadedNews: &ThreadedNews{Categories: map[string]NewsCategoryListData15{
+							"testcat": {
+								Type:     []byte{0, 2},
+								Count:    nil,
+								NameSize: 0,
+								Name:     "test",
+							},
+						}},
+					},
+				},
+				t: NewTransaction(
+					tranDelNewsItem, nil,
+					NewField(fieldNewsPath,
+						[]byte{
+							0, 1,
+							0, 0,
+							4,
+							0x74, 0x65, 0x73, 0x74,
+						},
+					),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to delete news folders.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "when user deletes a news folder",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							bits.Set(accessNewsDeleteFldr)
+							return bits
+						}(),
+					},
+					ID: &[]byte{0, 1},
+					Server: &Server{
+						ConfigDir: "/fakeConfigRoot",
+						FS: func() *MockFileStore {
+							mfs := &MockFileStore{}
+							mfs.On("WriteFile", "/fakeConfigRoot/ThreadedNews.yaml", mock.Anything, mock.Anything).Return(nil, os.ErrNotExist)
+							return mfs
+						}(),
+						ThreadedNews: &ThreadedNews{Categories: map[string]NewsCategoryListData15{
+							"testcat": {
+								Type:     []byte{0, 2},
+								Count:    nil,
+								NameSize: 0,
+								Name:     "test",
+							},
+						}},
+					},
+				},
+				t: NewTransaction(
+					tranDelNewsItem, nil,
+					NewField(fieldNewsPath,
+						[]byte{
+							0, 1,
+							0, 0,
+							4,
+							0x74, 0x65, 0x73, 0x74,
+						},
+					),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0x01, 0x7c},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields:    []Field{},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes, err := HandleDelNewsItem(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleDelNewsItem(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
