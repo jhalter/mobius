@@ -1,6 +1,7 @@
 package hotline
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -161,6 +162,80 @@ func Test_readPath(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("readPath() got = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func Test_fileItemScanner(t *testing.T) {
+	type args struct {
+		data []byte
+		in1  bool
+	}
+	tests := []struct {
+		name        string
+		args        args
+		wantAdvance int
+		wantToken   []byte
+		wantErr     assert.ErrorAssertionFunc
+	}{
+		{
+			name: "when a full fileItem is provided",
+			args: args{
+				data: []byte{
+					0, 0,
+					0x09,
+					0x73, 0x75, 0x62, 0x66, 0x6f, 0x6c, 0x64, 0x65, 0x72,
+				},
+				in1: false,
+			},
+			wantAdvance: 12,
+			wantToken: []byte{
+				0, 0,
+				0x09,
+				0x73, 0x75, 0x62, 0x66, 0x6f, 0x6c, 0x64, 0x65, 0x72,
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "when a full fileItem with extra bytes is provided",
+			args: args{
+				data: []byte{
+					0, 0,
+					0x09,
+					0x73, 0x75, 0x62, 0x66, 0x6f, 0x6c, 0x64, 0x65, 0x72,
+					1, 1, 1, 1, 1, 1,
+				},
+				in1: false,
+			},
+			wantAdvance: 12,
+			wantToken: []byte{
+				0, 0,
+				0x09,
+				0x73, 0x75, 0x62, 0x66, 0x6f, 0x6c, 0x64, 0x65, 0x72,
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "when insufficient bytes are provided",
+			args: args{
+				data: []byte{
+					0, 0,
+				},
+				in1: false,
+			},
+			wantAdvance: 0,
+			wantToken:   []byte(nil),
+			wantErr:     assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotAdvance, gotToken, err := fileItemScanner(tt.args.data, tt.args.in1)
+			if !tt.wantErr(t, err, fmt.Sprintf("fileItemScanner(%v, %v)", tt.args.data, tt.args.in1)) {
+				return
+			}
+			assert.Equalf(t, tt.wantAdvance, gotAdvance, "fileItemScanner(%v, %v)", tt.args.data, tt.args.in1)
+			assert.Equalf(t, tt.wantToken, gotToken, "fileItemScanner(%v, %v)", tt.args.data, tt.args.in1)
 		})
 	}
 }
