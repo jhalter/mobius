@@ -669,7 +669,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	if c.Version == nil || bytes.Equal(c.Version, nostalgiaVersion) {
 		c.Agreed = true
 		c.logger = c.logger.With("name", string(c.UserName))
-		c.logger.Infow("Login successful", "clientVersion", fmt.Sprintf("%x", c.Version))
+		c.logger.Infow("Login successful", "clientVersion", fmt.Sprintf("%v", func() int { i, _ := byteToInt(c.Version); return i }()))
 
 		for _, t := range c.notifyOthers(
 			*NewTransaction(
