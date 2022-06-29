@@ -43,12 +43,10 @@ const (
 var nostalgiaVersion = []byte{0, 0, 2, 0x2c} // version ID used by the Nostalgia client
 
 type Server struct {
-	Port         int
-	Accounts     map[string]*Account
-	Agreement    []byte
-	Clients      map[uint16]*ClientConn
-	ThreadedNews *ThreadedNews
-
+	Port          int
+	Accounts      map[string]*Account
+	Agreement     []byte
+	Clients       map[uint16]*ClientConn
 	fileTransfers map[[4]byte]*FileTransfer
 
 	Config        *Config
@@ -63,6 +61,9 @@ type Server struct {
 
 	outbox chan Transaction
 	mux    sync.Mutex
+
+	threadedNewsMux sync.Mutex
+	ThreadedNews    *ThreadedNews
 
 	flatNewsMux sync.Mutex
 	FlatNews    []byte
@@ -342,14 +343,14 @@ func (s *Server) writeBanList() error {
 }
 
 func (s *Server) writeThreadedNews() error {
-	s.mux.Lock()
-	defer s.mux.Unlock()
+	s.threadedNewsMux.Lock()
+	defer s.threadedNewsMux.Unlock()
 
 	out, err := yaml.Marshal(s.ThreadedNews)
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(
+	err = s.FS.WriteFile(
 		filepath.Join(s.ConfigDir, "ThreadedNews.yaml"),
 		out,
 		0666,

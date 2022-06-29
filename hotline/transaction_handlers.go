@@ -1244,18 +1244,15 @@ func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, er
 	return res, err
 }
 
+// HandleDelNewsItem deletes an existing threaded news folder or category from the server.
+// Fields used in the request:
+// 325	News path
+// Fields used in the reply:
+// None
 func HandleDelNewsItem(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	// Has multiple access flags: News Delete Folder (37) or News Delete Category (35)
-	// TODO: Implement
-
 	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
 
-	// TODO: determine if path is a Folder (Bundle) or Category and check for permission
-
-	cc.logger.Infof("DelNewsItem %v", pathStrs)
-
 	cats := cc.Server.ThreadedNews.Categories
-
 	delName := pathStrs[len(pathStrs)-1]
 	if len(pathStrs) > 1 {
 		for _, fp := range pathStrs[0 : len(pathStrs)-1] {
@@ -1263,17 +1260,23 @@ func HandleDelNewsItem(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		}
 	}
 
+	if bytes.Compare(cats[delName].Type, []byte{0, 3}) == 0 {
+		if !cc.Authorize(accessNewsDeleteCat) {
+			return append(res, cc.NewErrReply(t, "You are not allowed to delete news categories.")), nil
+		}
+	} else {
+		if !cc.Authorize(accessNewsDeleteFldr) {
+			return append(res, cc.NewErrReply(t, "You are not allowed to delete news folders.")), nil
+		}
+	}
+
 	delete(cats, delName)
 
-	err = cc.Server.writeThreadedNews()
-	if err != nil {
+	if err := cc.Server.writeThreadedNews(); err != nil {
 		return res, err
 	}
 
-	// Reply params: none
-	res = append(res, cc.NewReply(t))
-
-	return res, err
+	return append(res, cc.NewReply(t)), nil
 }
 
 func HandleDelNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
