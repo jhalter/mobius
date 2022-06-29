@@ -582,7 +582,7 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err err
 	// fieldFilePath is only present for nested paths
 	if t.GetField(fieldFilePath).Data != nil {
 		var newFp FilePath
-		err := newFp.UnmarshalBinary(t.GetField(fieldFilePath).Data)
+		_, err := newFp.Write(t.GetField(fieldFilePath).Data)
 		if err != nil {
 			return nil, err
 		}
@@ -1472,7 +1472,7 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 	fileTransfer := cc.newFileTransfer(FolderDownload, t.GetField(fieldFileName).Data, t.GetField(fieldFilePath).Data, transferSize)
 
 	var fp FilePath
-	err = fp.UnmarshalBinary(t.GetField(fieldFilePath).Data)
+	_, err = fp.Write(t.GetField(fieldFilePath).Data)
 	if err != nil {
 		return res, err
 	}
@@ -1496,7 +1496,7 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	var fp FilePath
 	if t.GetField(fieldFilePath).Data != nil {
-		if err = fp.UnmarshalBinary(t.GetField(fieldFilePath).Data); err != nil {
+		if _, err = fp.Write(t.GetField(fieldFilePath).Data); err != nil {
 			return res, err
 		}
 	}
@@ -1541,7 +1541,7 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	var fp FilePath
 	if filePath != nil {
-		if err = fp.UnmarshalBinary(filePath); err != nil {
+		if _, err = fp.Write(filePath); err != nil {
 			return res, err
 		}
 	}
@@ -1658,7 +1658,7 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 
 	var fp FilePath
 	if t.GetField(fieldFilePath).Data != nil {
-		if err = fp.UnmarshalBinary(t.GetField(fieldFilePath).Data); err != nil {
+		if _, err = fp.Write(t.GetField(fieldFilePath).Data); err != nil {
 			return res, err
 		}
 	}

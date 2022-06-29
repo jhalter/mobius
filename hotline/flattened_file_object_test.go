@@ -37,7 +37,7 @@ func TestFlatFileInformationFork_UnmarshalBinary(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ffif := &FlatFileInformationFork{}
-			tt.wantErr(t, ffif.UnmarshalBinary(tt.args.b), fmt.Sprintf("UnmarshalBinary(%v)", tt.args.b))
+			tt.wantErr(t, ffif.UnmarshalBinary(tt.args.b), fmt.Sprintf("Write(%v)", tt.args.b))
 		})
 	}
 }

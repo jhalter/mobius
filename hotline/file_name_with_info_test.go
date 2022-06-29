@@ -72,7 +72,7 @@ func TestFileNameWithInfo_UnmarshalBinary(t *testing.T) {
 		name    string
 		fields  fields
 		args    args
-		want *FileNameWithInfo
+		want    *FileNameWithInfo
 		wantErr bool
 	}{
 		{
@@ -109,7 +109,7 @@ func TestFileNameWithInfo_UnmarshalBinary(t *testing.T) {
 				name:                   tt.fields.name,
 			}
 			if err := f.UnmarshalBinary(tt.args.data); (err != nil) != tt.wantErr {
-				t.Errorf("UnmarshalBinary() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("Write() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if !assert.Equal(t, tt.want, f) {
 				t.Errorf("Read() got = %v, want %v", f, tt.want)

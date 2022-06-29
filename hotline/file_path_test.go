@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestFilePath_UnmarshalBinary(t *testing.T) {
+func TestFilePath_Write(t *testing.T) {
 	type args struct {
 		b []byte
 	}
@@ -56,8 +56,8 @@ func TestFilePath_UnmarshalBinary(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var fp FilePath
-			if err := fp.UnmarshalBinary(tt.args.b); (err != nil) != tt.wantErr {
-				t.Errorf("UnmarshalBinary() error = %v, wantErr %v", err, tt.wantErr)
+			if _, err := fp.Write(tt.args.b); (err != nil) != tt.wantErr {
+				t.Errorf("Write() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if !assert.Equal(t, tt.want, fp) {
 				t.Errorf("Read() got = %v, want %v", fp, tt.want)

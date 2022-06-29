@@ -814,7 +814,7 @@ func TestHandleNewFolder(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "when UnmarshalBinary returns an err",
+			name: "when Write returns an err",
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{

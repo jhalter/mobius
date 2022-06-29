@@ -1,6 +1,7 @@
 package hotline
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -10,12 +11,33 @@ import (
 )
 
 // FilePathItem represents the file or directory portion of a delimited file path (e.g. foo and bar in "/foo/bar")
+// Example bytes:
 // 00 00
 // 09
-// 73 75 62 66 6f 6c 64 65 72 // "subfolder"
+// 73 75 62 66 6f 6c 64 65 72  "subfolder"
 type FilePathItem struct {
 	Len  byte
 	Name []byte
+}
+
+const fileItemMinLen = 3
+
+// fileItemScanner implements bufio.SplitFunc for parsing incoming byte slices into complete tokens
+func fileItemScanner(data []byte, _ bool) (advance int, token []byte, err error) {
+	if len(data) < fileItemMinLen {
+		return 0, nil, nil
+	}
+
+	advance = fileItemMinLen + int(data[2])
+	return advance, data[0:advance], nil
+}
+
+// Write implements the io.Writer interface for FilePathItem
+func (fpi *FilePathItem) Write(b []byte) (n int, err error) {
+	fpi.Len = b[2]
+	fpi.Name = b[fileItemMinLen : fpi.Len+fileItemMinLen]
+
+	return int(fpi.Len) + fileItemMinLen, nil
 }
 
 type FilePath struct {
@@ -23,39 +45,32 @@ type FilePath struct {
 	Items     []FilePathItem
 }
 
-func (fp *FilePath) UnmarshalBinary(b []byte) error {
+func (fp *FilePath) Write(b []byte) (n int, err error) {
 	reader := bytes.NewReader(b)
-	err := binary.Read(reader, binary.BigEndian, &fp.ItemCount)
+	err = binary.Read(reader, binary.BigEndian, &fp.ItemCount)
 	if err != nil && !errors.Is(err, io.EOF) {
-		return err
+		return n, err
 	}
 	if errors.Is(err, io.EOF) {
-		return nil
+		return n, nil
 	}
 
-	for i := uint16(0); i < fp.Len(); i++ {
-		// skip two bytes for the file path delimiter
-		_, _ = reader.Seek(2, io.SeekCurrent)
+	scanner := bufio.NewScanner(reader)
+	scanner.Split(fileItemScanner)
 
-		// read the length of the next pathItem
-		segLen, err := reader.ReadByte()
-		if err != nil {
-			return err
+	for i := 0; i < int(binary.BigEndian.Uint16(fp.ItemCount[:])); i++ {
+		var fpi FilePathItem
+		scanner.Scan()
+		if _, err := fpi.Write(scanner.Bytes()); err != nil {
+			return n, err
 		}
-
-		pBytes := make([]byte, segLen)
-
-		_, err = reader.Read(pBytes)
-		if err != nil && !errors.Is(err, io.EOF) {
-			return err
-		}
-
-		fp.Items = append(fp.Items, FilePathItem{Len: segLen, Name: pBytes})
+		fp.Items = append(fp.Items, fpi)
 	}
 
-	return nil
+	return n, nil
 }
 
+// IsDropbox checks if a FilePath matches the special drop box folder type
 func (fp *FilePath) IsDropbox() bool {
 	if fp.Len() == 0 {
 		return false
@@ -79,7 +94,7 @@ func (fp *FilePath) Len() uint16 {
 func readPath(fileRoot string, filePath, fileName []byte) (fullPath string, err error) {
 	var fp FilePath
 	if filePath != nil {
-		if err = fp.UnmarshalBinary(filePath); err != nil {
+		if _, err = fp.Write(filePath); err != nil {
 			return "", err
 		}
 	}
