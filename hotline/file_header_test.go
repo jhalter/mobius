@@ -85,7 +85,7 @@ func TestFileHeader_Payload(t *testing.T) {
 				FilePath: tt.fields.FilePath,
 			}
 			if got := fh.Payload(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Payload() = %v, want %v", got, tt.want)
+				t.Errorf("Read() = %v, want %v", got, tt.want)
 			}
 		})
 	}

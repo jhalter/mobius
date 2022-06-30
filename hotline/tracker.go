@@ -1,9 +1,8 @@
 package hotline
 
 import (
-	"bytes"
+	"bufio"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"github.com/jhalter/mobius/concat"
 	"net"
@@ -11,6 +10,7 @@ import (
 	"time"
 )
 
+// TrackerRegistration represents the payload a Hotline server sends to a Tracker to register
 type TrackerRegistration struct {
 	Port        [2]byte // Server listening port number
 	UserCount   int     // Number of users connected to this particular server
@@ -19,7 +19,8 @@ type TrackerRegistration struct {
 	Description string  // Description of the server
 }
 
-func (tr *TrackerRegistration) Payload() []byte {
+// TODO: reimplement as io.Reader
+func (tr *TrackerRegistration) Read() []byte {
 	userCount := make([]byte, 2)
 	binary.BigEndian.PutUint16(userCount, uint16(tr.UserCount))
 
@@ -42,7 +43,9 @@ func register(tracker string, tr *TrackerRegistration) error {
 		return err
 	}
 
-	if _, err := conn.Write(tr.Payload()); err != nil {
+	b := tr.Read()
+
+	if _, err := conn.Write(b); err != nil {
 		return err
 	}
 
@@ -103,64 +106,61 @@ func GetListing(addr string) ([]ServerRecord, error) {
 		return nil, err
 	}
 
-	totalRead := 0
-
-	buf := make([]byte, 4096)
-	var readLen int
-	if readLen, err = conn.Read(buf); err != nil {
-		return nil, err
-	}
-	totalRead += readLen // 1514
-
 	var th TrackerHeader
-	if err := binary.Read(bytes.NewReader(buf[:6]), binary.BigEndian, &th); err != nil {
+	if err := binary.Read(conn, binary.BigEndian, &th); err != nil {
 		return nil, err
 	}
 
 	var info ServerInfoHeader
-	if err := binary.Read(bytes.NewReader(buf[6:14]), binary.BigEndian, &info); err != nil {
+	if err := binary.Read(conn, binary.BigEndian, &info); err != nil {
 		return nil, err
 	}
 
-	payloadSize := int(binary.BigEndian.Uint16(info.MsgDataSize[:]))
-
-	buf = buf[:readLen]
-	if totalRead < payloadSize {
-		for {
-			tmpBuf := make([]byte, 4096)
-			if readLen, err = conn.Read(tmpBuf); err != nil {
-				return nil, err
-			}
-			buf = append(buf, tmpBuf[:readLen]...)
-			totalRead += readLen
-			if totalRead >= payloadSize {
-				break
-			}
-		}
-	}
 	totalSrv := int(binary.BigEndian.Uint16(info.SrvCount[:]))
 
-	srvBuf := buf[14:totalRead]
+	scanner := bufio.NewScanner(conn)
+	scanner.Split(serverScanner)
 
 	var servers []ServerRecord
-
 	for {
+		scanner.Scan()
 		var srv ServerRecord
-		n, _ := srv.Read(srvBuf)
+		_, _ = srv.Read(scanner.Bytes())
+
 		servers = append(servers, srv)
-
-		srvBuf = srvBuf[n:]
-
 		if len(servers) == totalSrv {
-			return servers, nil
-		}
-
-		if len(srvBuf) == 0 {
-			return servers, errors.New("tracker sent too few bytes for server count")
+			break
 		}
 	}
+
+	return servers, nil
 }
 
+// serverScanner implements bufio.SplitFunc for parsing the tracker list into ServerRecords tokens
+// Example payload:
+// 00000000  18 05 30 63 15 7c 00 02  00 00 10 54 68 65 20 4d  |..0c.|.....The M|
+// 00000010  6f 62 69 75 73 20 53 74  72 69 70 40 48 6f 6d 65  |obius Strip@Home|
+// 00000020  20 6f 66 20 74 68 65 20  4d 6f 62 69 75 73 20 48  | of the Mobius H|
+// 00000030  6f 74 6c 69 6e 65 20 73  65 72 76 65 72 20 61 6e  |otline server an|
+// 00000040  64 20 63 6c 69 65 6e 74  20 7c 20 54 52 54 50 48  |d client | TRTPH|
+// 00000050  4f 54 4c 2e 63 6f 6d 3a  35 35 30 30 2d 4f 3a b2  |OTL.com:5500-O:.|
+// 00000060  15 7c 00 00 00 00 08 53  65 6e 65 63 74 75 73 20  |.|.....Senectus |
+func serverScanner(data []byte, _ bool) (advance int, token []byte, err error) {
+	if len(data) < 10 {
+		return 0, nil, nil
+	}
+
+	// A server entry has two variable length fields: the name and description.
+	// To get the token length, we first need the name length from the 10th byte:
+	nameLen := int(data[10])
+
+	// Next we need the description length from the 11+nameLen byte:
+	descLen := int(data[11+nameLen])
+
+	return 12 + nameLen + descLen, data[0 : 12+nameLen+descLen], nil
+}
+
+// Read implements io.Reader for ServerRecord
 func (s *ServerRecord) Read(b []byte) (n int, err error) {
 	copy(s.IPAddr[:], b[0:4])
 	copy(s.Port[:], b[4:6])
@@ -172,11 +172,6 @@ func (s *ServerRecord) Read(b []byte) (n int, err error) {
 	s.Description = b[12+nameLen : 12+nameLen+int(s.DescriptionSize)]
 
 	return 12 + nameLen + int(s.DescriptionSize), nil
-}
-
-func (s *ServerRecord) PortInt() int {
-	data := binary.BigEndian.Uint16(s.Port[:])
-	return int(data)
 }
 
 func (s *ServerRecord) Addr() string {
