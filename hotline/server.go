@@ -278,7 +278,7 @@ func NewServer(configDir string, netPort int, logger *zap.SugaredLogger, FS File
 					if err := register(t, tr); err != nil {
 						server.Logger.Errorw("unable to register with tracker %v", "error", err)
 					}
-					server.Logger.Infow("Sent Tracker registration", "data", tr)
+					server.Logger.Debugw("Sent Tracker registration", "addr", t)
 				}
 
 				time.Sleep(trackerUpdateFrequency * time.Second)
