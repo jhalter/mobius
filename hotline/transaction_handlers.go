@@ -1921,6 +1921,12 @@ func HandleMakeAlias(cc *ClientConn, t *Transaction) (res []Transaction, err err
 	return res, err
 }
 
+// HandleDownloadBanner handles requests for a new banner from the server
+// Fields used in the request:
+// None
+// Fields used in the reply:
+// 107	fieldRefNum			Used later for transfer
+// 108	fieldTransferSize	Size of data to be downloaded
 func HandleDownloadBanner(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	fi, err := cc.Server.FS.Stat(filepath.Join(cc.Server.ConfigDir, cc.Server.Config.BannerFile))
 	if err != nil {

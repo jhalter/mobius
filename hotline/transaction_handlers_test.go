@@ -3129,3 +3129,69 @@ func TestHandleDelNewsItem(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleDownloadBanner(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "returns expected response",
+			args: args{
+				cc: &ClientConn{
+					ID: &[]byte{0, 1},
+					transfers: map[int]map[[4]byte]*FileTransfer{
+						bannerDownload: {},
+					},
+					Server: &Server{
+						ConfigDir: "/config",
+						Config: &Config{
+							BannerFile: "banner.jpg",
+						},
+						fileTransfers: map[[4]byte]*FileTransfer{},
+						FS: func() *MockFileStore {
+							mfi := &MockFileInfo{}
+							mfi.On("Size").Return(int64(100))
+
+							mfs := &MockFileStore{}
+							mfs.On("Stat", "/config/banner.jpg").Return(mfi, nil)
+							return mfs
+						}(),
+					},
+				},
+				t: NewTransaction(tranDownloadBanner, nil),
+			},
+			wantRes: []Transaction{
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0x00, 0xd4},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(fieldRefNum, []byte{1, 2, 3, 4}),
+						NewField(fieldTransferSize, []byte{0, 0, 0, 0x64}),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes, err := HandleDownloadBanner(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleDownloadBanner(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
+
+			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}
