@@ -3195,3 +3195,94 @@ func TestHandleDownloadBanner(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleTranOldPostNews(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "when user does not have required permission",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							return bits
+						}(),
+					},
+				},
+				t: NewTransaction(
+					tranOldPostNews, &[]byte{0, 1},
+					NewField(fieldData, []byte("hai")),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to post news.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "when user posts news update",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							bits.Set(accessNewsPostArt)
+							return bits
+						}(),
+					},
+					Server: &Server{
+						FS: func() *MockFileStore {
+							mfs := &MockFileStore{}
+							mfs.On("WriteFile", "/fakeConfigRoot/MessageBoard.txt", mock.Anything, mock.Anything).Return(nil, os.ErrNotExist)
+							return mfs
+						}(),
+						ConfigDir: "/fakeConfigRoot",
+						Config:    &Config{},
+					},
+				},
+				t: NewTransaction(
+					tranOldPostNews, &[]byte{0, 1},
+					NewField(fieldData, []byte("hai")),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x67},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 0},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes, err := HandleTranOldPostNews(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleTranOldPostNews(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
+
+			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}
