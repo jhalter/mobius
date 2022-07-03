@@ -1,6 +1,7 @@
 package hotline
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -237,4 +238,8 @@ func (t *Transaction) GetField(id int) Field {
 	}
 
 	return Field{}
+}
+
+func (t *Transaction) IsError() bool {
+	return bytes.Compare(t.ErrorCode, []byte{0, 0, 0, 1}) == 0
 }
