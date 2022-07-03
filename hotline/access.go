@@ -38,7 +38,7 @@ const (
 	accessNewsDeleteCat    = 35 // News: Can Delete Categories
 	accessNewsCreateFldr   = 36 // News: Can Create News Bundles
 	accessNewsDeleteFldr   = 37 // News: Can Delete News Bundles
-	accessSendPrivMsg      = 40 // Messaging: Can Send Messages
+	accessSendPrivMsg      = 40 // Messaging: Can Send Messages (Note: 1.9 protocol doc incorrectly says this is bit 19)
 )
 
 type accessBitmap [8]byte
