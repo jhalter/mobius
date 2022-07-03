@@ -20,7 +20,6 @@ const (
 	accessOpenUser         = 16 // User Maintenance: Can Read Accounts
 	accessModifyUser       = 17 // User Maintenance: Can Modify Accounts
 	accessChangeOwnPass    = 18 // Present in the Hotline 1.9 protocol documentation, but seemingly unused
-	accessSendPrivMsg      = 19 // Messaging: Can Send Messages
 	accessNewsReadArt      = 20 // News: Can Read Articles
 	accessNewsPostArt      = 21 // News: Can Post Articles
 	accessDisconUser       = 22 // User Maintenance: Can Disconnect Users (Note: Turns username red in user list)
@@ -39,6 +38,7 @@ const (
 	accessNewsDeleteCat    = 35 // News: Can Delete Categories
 	accessNewsCreateFldr   = 36 // News: Can Create News Bundles
 	accessNewsDeleteFldr   = 37 // News: Can Delete News Bundles
+	accessSendPrivMsg      = 40 // Messaging: Can Send Messages
 )
 
 type accessBitmap [8]byte
