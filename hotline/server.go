@@ -18,7 +18,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -540,14 +539,6 @@ func (s *Server) loadConfig(path string) error {
 		return err
 	}
 	return nil
-}
-
-// dontPanic logs panics instead of crashing
-func dontPanic(logger *zap.SugaredLogger) {
-	if r := recover(); r != nil {
-		fmt.Println("stacktrace from panic: \n" + string(debug.Stack()))
-		logger.Errorw("PANIC", "err", r, "trace", string(debug.Stack()))
-	}
 }
 
 // handleNewConnection takes a new net.Conn and performs the initial login sequence
