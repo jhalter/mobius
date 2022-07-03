@@ -3,6 +3,7 @@ package hotline
 import (
 	"encoding/binary"
 	"golang.org/x/crypto/bcrypt"
+	"log"
 )
 
 const GuestAccount = "guest" // default account used when no login is provided for a connection
@@ -36,4 +37,14 @@ func (a *Account) Read(p []byte) (n int, err error) {
 	}
 
 	return len(p), nil
+}
+
+// hashAndSalt generates a password hash from a users obfuscated plaintext password
+func hashAndSalt(pwd []byte) string {
+	hash, err := bcrypt.GenerateFromPassword(pwd, bcrypt.MinCost)
+	if err != nil {
+		log.Println(err)
+	}
+
+	return string(hash)
 }

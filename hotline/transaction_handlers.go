@@ -462,7 +462,7 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 				return res, err
 			}
 			if err != nil {
-				panic(err)
+				return res, err
 			}
 		}
 	}

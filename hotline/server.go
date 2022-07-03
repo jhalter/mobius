@@ -766,7 +766,6 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 	switch fileTransfer.Type {
 	case bannerDownload:
 		if err := s.bannerDownload(rwc); err != nil {
-			panic(err)
 			return err
 		}
 	case FileDownload:
