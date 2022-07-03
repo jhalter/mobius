@@ -102,34 +102,33 @@ func NewTransaction(t int, clientID *[]byte, fields ...Field) *Transaction {
 	}
 }
 
-// ReadTransaction parses a byte slice into a struct.  The input slice may be shorter or longer
-// that the transaction size depending on what was read from the network connection.
-func ReadTransaction(buf []byte) (*Transaction, int, error) {
-	totalSize := binary.BigEndian.Uint32(buf[12:16])
+// Write implements io.Writer interface for Transaction
+func (t *Transaction) Write(p []byte) (n int, err error) {
+	totalSize := binary.BigEndian.Uint32(p[12:16])
 
 	// the buf may include extra bytes that are not part of the transaction
 	// tranLen represents the length of bytes that are part of the transaction
 	tranLen := int(20 + totalSize)
 
-	if tranLen > len(buf) {
-		return nil, 0, errors.New("buflen too small for tranLen")
+	if tranLen > len(p) {
+		return n, errors.New("buflen too small for tranLen")
 	}
-	fields, err := ReadFields(buf[20:22], buf[22:tranLen])
+	fields, err := ReadFields(p[20:22], p[22:tranLen])
 	if err != nil {
-		return nil, 0, err
+		return n, err
 	}
 
-	return &Transaction{
-		Flags:      buf[0],
-		IsReply:    buf[1],
-		Type:       buf[2:4],
-		ID:         buf[4:8],
-		ErrorCode:  buf[8:12],
-		TotalSize:  buf[12:16],
-		DataSize:   buf[16:20],
-		ParamCount: buf[20:22],
-		Fields:     fields,
-	}, tranLen, nil
+	t.Flags = p[0]
+	t.IsReply = p[1]
+	t.Type = p[2:4]
+	t.ID = p[4:8]
+	t.ErrorCode = p[8:12]
+	t.TotalSize = p[12:16]
+	t.DataSize = p[16:20]
+	t.ParamCount = p[20:22]
+	t.Fields = fields
+
+	return len(p), err
 }
 
 const tranHeaderLen = 20 // fixed length of transaction fields before the variable length fields

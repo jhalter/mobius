@@ -111,80 +111,6 @@ func TestReadFields(t *testing.T) {
 	}
 }
 
-func TestReadTransaction(t *testing.T) {
-	sampleTransaction := &Transaction{
-		Flags:      byte(0),
-		IsReply:    byte(0),
-		Type:       []byte{0x000, 0x93},
-		ID:         []byte{0x000, 0x00, 0x00, 0x01},
-		ErrorCode:  []byte{0x000, 0x00, 0x00, 0x00},
-		TotalSize:  []byte{0x000, 0x00, 0x00, 0x08},
-		DataSize:   []byte{0x000, 0x00, 0x00, 0x08},
-		ParamCount: []byte{0x00, 0x01},
-		Fields: []Field{
-			{
-				ID:        []byte{0x00, 0x01},
-				FieldSize: []byte{0x00, 0x02},
-				Data:      []byte{0xff, 0xff},
-			},
-		},
-	}
-
-	type args struct {
-		buf []byte
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    *Transaction
-		want1   int
-		wantErr bool
-	}{
-		{
-			name: "when buf contains all bytes for a single transaction",
-			args: args{
-				buf: func() []byte {
-					b, _ := sampleTransaction.MarshalBinary()
-					return b
-				}(),
-			},
-			want: sampleTransaction,
-			want1: func() int {
-				b, _ := sampleTransaction.MarshalBinary()
-				return len(b)
-			}(),
-			wantErr: false,
-		},
-		{
-			name: "when len(buf) is less than the length of the transaction",
-			args: args{
-				buf: func() []byte {
-					b, _ := sampleTransaction.MarshalBinary()
-					return b[:len(b)-1]
-				}(),
-			},
-			want:    nil,
-			want1:   0,
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, got1, err := ReadTransaction(tt.args.buf)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ReadTransaction() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !assert.Equal(t, tt.want, got) {
-				t.Errorf("ReadTransaction() got = %v, want %v", got, tt.want)
-			}
-			if got1 != tt.want1 {
-				t.Errorf("ReadTransaction() got1 = %v, want %v", got1, tt.want1)
-			}
-		})
-	}
-}
-
 func Test_transactionScanner(t *testing.T) {
 	type args struct {
 		data []byte
@@ -369,6 +295,83 @@ func Test_transactionScanner(t *testing.T) {
 			}
 			assert.Equalf(t, tt.wantAdvance, gotAdvance, "transactionScanner(%v, %v)", tt.args.data, tt.args.in1)
 			assert.Equalf(t, tt.wantToken, gotToken, "transactionScanner(%v, %v)", tt.args.data, tt.args.in1)
+		})
+	}
+}
+
+func TestTransaction_Write(t1 *testing.T) {
+	sampleTransaction := &Transaction{
+		Flags:      byte(0),
+		IsReply:    byte(0),
+		Type:       []byte{0x000, 0x93},
+		ID:         []byte{0x000, 0x00, 0x00, 0x01},
+		ErrorCode:  []byte{0x000, 0x00, 0x00, 0x00},
+		TotalSize:  []byte{0x000, 0x00, 0x00, 0x08},
+		DataSize:   []byte{0x000, 0x00, 0x00, 0x08},
+		ParamCount: []byte{0x00, 0x01},
+		Fields: []Field{
+			{
+				ID:        []byte{0x00, 0x01},
+				FieldSize: []byte{0x00, 0x02},
+				Data:      []byte{0xff, 0xff},
+			},
+		},
+	}
+
+	type fields struct {
+		clientID   *[]byte
+		Flags      byte
+		IsReply    byte
+		Type       []byte
+		ID         []byte
+		ErrorCode  []byte
+		TotalSize  []byte
+		DataSize   []byte
+		ParamCount []byte
+		Fields     []Field
+	}
+	type args struct {
+		p []byte
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantN   int
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name:   "when buf contains all bytes for a single transaction",
+			fields: fields{},
+			args: args{
+				p: func() []byte {
+					b, _ := sampleTransaction.MarshalBinary()
+					return b
+				}(),
+			},
+			wantN:   28,
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t1.Run(tt.name, func(t1 *testing.T) {
+			t := &Transaction{
+				clientID:   tt.fields.clientID,
+				Flags:      tt.fields.Flags,
+				IsReply:    tt.fields.IsReply,
+				Type:       tt.fields.Type,
+				ID:         tt.fields.ID,
+				ErrorCode:  tt.fields.ErrorCode,
+				TotalSize:  tt.fields.TotalSize,
+				DataSize:   tt.fields.DataSize,
+				ParamCount: tt.fields.ParamCount,
+				Fields:     tt.fields.Fields,
+			}
+			gotN, err := t.Write(tt.args.p)
+			if !tt.wantErr(t1, err, fmt.Sprintf("Write(%v)", tt.args.p)) {
+				return
+			}
+			assert.Equalf(t1, tt.wantN, gotN, "Write(%v)", tt.args.p)
 		})
 	}
 }

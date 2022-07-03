@@ -555,9 +555,9 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 
 	scanner.Scan()
 
-	clientLogin, _, err := ReadTransaction(scanner.Bytes())
-	if err != nil {
-		panic(err)
+	var clientLogin Transaction
+	if _, err := clientLogin.Write(scanner.Bytes()); err != nil {
+		return err
 	}
 
 	c := s.NewClientConn(rwc, remoteAddr)
@@ -604,7 +604,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 
 	// If authentication fails, send error reply and close connection
 	if !c.Authenticate(login, encodedPassword) {
-		t := c.NewErrReply(clientLogin, "Incorrect login.")
+		t := c.NewErrReply(&clientLogin, "Incorrect login.")
 		b, err := t.MarshalBinary()
 		if err != nil {
 			return err
@@ -636,7 +636,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		c.Flags = []byte{0, 2}
 	}
 
-	s.outbox <- c.NewReply(clientLogin,
+	s.outbox <- c.NewReply(&clientLogin,
 		NewField(fieldVersion, []byte{0x00, 0xbe}),
 		NewField(fieldCommunityBannerID, []byte{0, 0}),
 		NewField(fieldServerName, []byte(s.Config.Name)),
@@ -685,11 +685,12 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		buf := make([]byte, len(scanner.Bytes()))
 		copy(buf, scanner.Bytes())
 
-		t, _, err := ReadTransaction(buf)
-		if err != nil {
-			panic(err)
+		var t Transaction
+		if _, err := t.Write(buf); err != nil {
+			return err
 		}
-		if err := c.handleTransaction(*t); err != nil {
+
+		if err := c.handleTransaction(t); err != nil {
 			c.logger.Errorw("Error handling transaction", "err", err)
 		}
 	}

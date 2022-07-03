@@ -208,11 +208,12 @@ func (ui *UI) joinServer(addr, login, password string) error {
 			buf := make([]byte, len(scanner.Bytes()))
 			copy(buf, scanner.Bytes())
 
-			t, _, err := ReadTransaction(buf)
+			var t Transaction
+			_, err := t.Write(buf)
 			if err != nil {
 				break
 			}
-			if err := ui.HLClient.HandleTransaction(t); err != nil {
+			if err := ui.HLClient.HandleTransaction(&t); err != nil {
 				ui.HLClient.Logger.Errorw("Error handling transaction", "err", err)
 			}
 		}
