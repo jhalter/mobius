@@ -3286,3 +3286,182 @@ func TestHandleTranOldPostNews(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleInviteNewChat(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "when user does not have required permission",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							return bits
+						}(),
+					},
+				},
+				t: NewTransaction(tranInviteNewChat, &[]byte{0, 1}),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to request private chat.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "when userA invites userB to new private chat",
+			args: args{
+				cc: &ClientConn{
+					ID: &[]byte{0, 1},
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							bits.Set(accessOpenChat)
+							return bits
+						}(),
+					},
+					UserName: []byte("UserA"),
+					Icon:     []byte{0, 1},
+					Flags:    []byte{0, 0},
+					Server: &Server{
+						Clients: map[uint16]*ClientConn{
+							uint16(2): {
+								ID:       &[]byte{0, 2},
+								UserName: []byte("UserB"),
+								Flags:    []byte{0, 0},
+							},
+						},
+						PrivateChats: make(map[uint32]*PrivateChat),
+					},
+				},
+				t: NewTransaction(
+					tranInviteNewChat, &[]byte{0, 1},
+					NewField(fieldUserID, []byte{0, 2}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					clientID:  &[]byte{0, 2},
+					Flags:     0x00,
+					IsReply:   0x00,
+					Type:      []byte{0, 0x71},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(fieldChatID, []byte{0x52, 0xfd, 0xfc, 0x07}),
+						NewField(fieldUserName, []byte("UserA")),
+						NewField(fieldUserID, []byte{0, 1}),
+					},
+				},
+
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x70},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(fieldChatID, []byte{0x52, 0xfd, 0xfc, 0x07}),
+						NewField(fieldUserName, []byte("UserA")),
+						NewField(fieldUserID, []byte{0, 1}),
+						NewField(fieldUserIconID, []byte{0, 1}),
+						NewField(fieldUserFlags, []byte{0, 0}),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "when userA invites userB to new private chat, but UserB has refuse private chat enabled",
+			args: args{
+				cc: &ClientConn{
+					ID: &[]byte{0, 1},
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							bits.Set(accessOpenChat)
+							return bits
+						}(),
+					},
+					UserName: []byte("UserA"),
+					Icon:     []byte{0, 1},
+					Flags:    []byte{0, 0},
+					Server: &Server{
+						Clients: map[uint16]*ClientConn{
+							uint16(2): {
+								ID:       &[]byte{0, 2},
+								UserName: []byte("UserB"),
+								Flags:    []byte{255, 255},
+							},
+						},
+						PrivateChats: make(map[uint32]*PrivateChat),
+					},
+				},
+				t: NewTransaction(
+					tranInviteNewChat, &[]byte{0, 1},
+					NewField(fieldUserID, []byte{0, 2}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x00,
+					Type:      []byte{0, 0x68},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(fieldData, []byte("UserB does not accept private messages.")),
+						NewField(fieldUserName, []byte("UserB")),
+						NewField(fieldUserID, []byte{0, 2}),
+						NewField(fieldOptions, []byte{0, 2}),
+					},
+				},
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x70},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(fieldChatID, []byte{0x52, 0xfd, 0xfc, 0x07}),
+						NewField(fieldUserName, []byte("UserA")),
+						NewField(fieldUserID, []byte{0, 1}),
+						NewField(fieldUserIconID, []byte{0, 1}),
+						NewField(fieldUserFlags, []byte{0, 0}),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rand.Seed(1)
+			gotRes, err := HandleInviteNewChat(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleInviteNewChat(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
+			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}
