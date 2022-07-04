@@ -48,10 +48,13 @@ type Server struct {
 	Clients       map[uint16]*ClientConn
 	fileTransfers map[[4]byte]*FileTransfer
 
-	Config        *Config
-	ConfigDir     string
-	Logger        *zap.SugaredLogger
-	PrivateChats  map[uint32]*PrivateChat
+	Config    *Config
+	ConfigDir string
+	Logger    *zap.SugaredLogger
+
+	PrivateChatsMu sync.Mutex
+	PrivateChats   map[uint32]*PrivateChat
+
 	NextGuestID   *uint16
 	TrackerPassID [4]byte
 	Stats         *Stats
@@ -698,15 +701,14 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 }
 
 func (s *Server) NewPrivateChat(cc *ClientConn) []byte {
-	s.mux.Lock()
-	defer s.mux.Unlock()
+	s.PrivateChatsMu.Lock()
+	defer s.PrivateChatsMu.Unlock()
 
 	randID := make([]byte, 4)
 	rand.Read(randID)
 	data := binary.BigEndian.Uint32(randID[:])
 
 	s.PrivateChats[data] = &PrivateChat{
-		Subject:    "",
 		ClientConn: make(map[uint16]*ClientConn),
 	}
 	s.PrivateChats[data].ClientConn[cc.uint16ID()] = cc
