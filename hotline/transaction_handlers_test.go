@@ -1613,6 +1613,48 @@ func TestHandleNewUser(t *testing.T) {
 			},
 			wantErr: assert.NoError,
 		},
+		{
+			name: "when user attempts to create account with greater access",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							bits.Set(accessCreateUser)
+							return bits
+						}(),
+					},
+					Server: &Server{
+						Accounts: map[string]*Account{},
+					},
+				},
+				t: NewTransaction(
+					tranNewUser, &[]byte{0, 1},
+					NewField(fieldUserLogin, []byte("userB")),
+					NewField(
+						fieldUserAccess,
+						func() []byte {
+							var bits accessBitmap
+							bits.Set(accessDisconUser)
+							return bits[:]
+						}(),
+					),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("Cannot create account with more access than yourself.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
