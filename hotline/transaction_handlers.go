@@ -805,6 +805,15 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			newAccess := accessBitmap{}
 			copy(newAccess[:], getField(fieldUserAccess, &subFields).Data[:])
 
+			// Prevent account from creating new account with greater permission
+			for i := 0; i < 64; i++ {
+				if newAccess.IsSet(i) {
+					if !cc.Authorize(i) {
+						return append(res, cc.NewErrReply(t, "Cannot create account with more access than yourself.")), err
+					}
+				}
+			}
+
 			err := cc.Server.NewUser(login, string(getField(fieldUserName, &subFields).Data), string(getField(fieldUserPassword, &subFields).Data), newAccess)
 			if err != nil {
 				return []Transaction{}, err
@@ -833,6 +842,16 @@ func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 
 	newAccess := accessBitmap{}
 	copy(newAccess[:], t.GetField(fieldUserAccess).Data[:])
+
+	// Prevent account from creating new account with greater permission
+	for i := 0; i < 64; i++ {
+		if newAccess.IsSet(i) {
+			if !cc.Authorize(i) {
+				res = append(res, cc.NewErrReply(t, "Cannot create account with more access than yourself."))
+				return res, err
+			}
+		}
+	}
 
 	if err := cc.Server.NewUser(login, string(t.GetField(fieldUserName).Data), string(t.GetField(fieldUserPassword).Data), newAccess); err != nil {
 		return []Transaction{}, err
