@@ -2302,6 +2302,7 @@ func TestHandleSendInstantMsg(t *testing.T) {
 						Clients: map[uint16]*ClientConn{
 							uint16(2): {
 								AutoReply: []byte(nil),
+								Flags:     []byte{0, 0},
 							},
 						},
 					},
@@ -2350,6 +2351,7 @@ func TestHandleSendInstantMsg(t *testing.T) {
 					Server: &Server{
 						Clients: map[uint16]*ClientConn{
 							uint16(2): {
+								Flags:     []byte{0, 0},
 								ID:        &[]byte{0, 2},
 								UserName:  []byte("User2"),
 								AutoReply: []byte("autohai"),
@@ -2380,6 +2382,57 @@ func TestHandleSendInstantMsg(t *testing.T) {
 					NewField(fieldUserName, []byte("User2")),
 					NewField(fieldUserID, []byte{0, 2}),
 					NewField(fieldOptions, []byte{0, 1}),
+				),
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0x0, 0x6c},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields:    []Field(nil),
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "when client 2 has refuse private messages enabled",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							bits.Set(accessSendPrivMsg)
+							return bits
+						}(),
+					},
+					ID:       &[]byte{0, 1},
+					UserName: []byte("User1"),
+					Server: &Server{
+						Clients: map[uint16]*ClientConn{
+							uint16(2): {
+								Flags:    []byte{255, 255},
+								ID:       &[]byte{0, 2},
+								UserName: []byte("User2"),
+							},
+						},
+					},
+				},
+				t: NewTransaction(
+					tranSendInstantMsg,
+					&[]byte{0, 1},
+					NewField(fieldData, []byte("hai")),
+					NewField(fieldUserID, []byte{0, 2}),
+				),
+			},
+			wantRes: []Transaction{
+				*NewTransaction(
+					tranServerMsg,
+					&[]byte{0, 1},
+					NewField(fieldData, []byte("User2 does not accept private messages.")),
+					NewField(fieldUserName, []byte("User2")),
+					NewField(fieldUserID, []byte{0, 2}),
+					NewField(fieldOptions, []byte{0, 2}),
 				),
 				{
 					clientID:  &[]byte{0, 1},
