@@ -3429,7 +3429,7 @@ func TestHandleInviteNewChat(t *testing.T) {
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
-						NewField(fieldData, []byte("UserB does not accept private messages.")),
+						NewField(fieldData, []byte("UserB does not accept private chats.")),
 						NewField(fieldUserName, []byte("UserB")),
 						NewField(fieldUserID, []byte{0, 2}),
 						NewField(fieldOptions, []byte{0, 2}),

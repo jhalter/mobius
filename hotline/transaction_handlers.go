@@ -1704,8 +1704,6 @@ func HandleInviteNewChat(cc *ClientConn, t *Transaction) (res []Transaction, err
 	targetID := t.GetField(fieldUserID).Data
 	newChatID := cc.Server.NewPrivateChat(cc)
 
-	// Halcyon does not accept private chats.
-
 	// Check if target user has "Refuse private chat" flag
 	binary.BigEndian.Uint16(targetID)
 	targetClient := cc.Server.Clients[binary.BigEndian.Uint16(targetID)]
@@ -1716,7 +1714,7 @@ func HandleInviteNewChat(cc *ClientConn, t *Transaction) (res []Transaction, err
 			*NewTransaction(
 				tranServerMsg,
 				cc.ID,
-				NewField(fieldData, []byte(string(targetClient.UserName)+" does not accept private messages.")),
+				NewField(fieldData, []byte(string(targetClient.UserName)+" does not accept private chats.")),
 				NewField(fieldUserName, targetClient.UserName),
 				NewField(fieldUserID, *targetClient.ID),
 				NewField(fieldOptions, []byte{0, 2}),
