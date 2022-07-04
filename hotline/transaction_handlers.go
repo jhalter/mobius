@@ -321,12 +321,27 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 		reply.Fields = append(reply.Fields, NewField(fieldQuotingMsg, t.GetField(fieldQuotingMsg).Data))
 	}
 
-	res = append(res, *reply)
-
 	id, _ := byteToInt(ID.Data)
 	otherClient, ok := cc.Server.Clients[uint16(id)]
 	if !ok {
 		return res, errors.New("invalid client ID")
+	}
+
+	// Check if target user has "Refuse private messages" flag
+	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(otherClient.Flags)))
+	if flagBitmap.Bit(userFLagRefusePChat) == 1 {
+		res = append(res,
+			*NewTransaction(
+				tranServerMsg,
+				cc.ID,
+				NewField(fieldData, []byte(string(otherClient.UserName)+" does not accept private messages.")),
+				NewField(fieldUserName, otherClient.UserName),
+				NewField(fieldUserID, *otherClient.ID),
+				NewField(fieldOptions, []byte{0, 2}),
+			),
+		)
+	} else {
+		res = append(res, *reply)
 	}
 
 	// Respond with auto reply if other client has it enabled
