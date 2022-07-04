@@ -57,7 +57,9 @@ type Server struct {
 
 	NextGuestID   *uint16
 	TrackerPassID [4]byte
-	Stats         *Stats
+
+	StatsMu sync.Mutex
+	Stats   *Stats
 
 	FS FileStore // Storage backend to use for File storage
 
@@ -72,6 +74,16 @@ type Server struct {
 
 	banListMU sync.Mutex
 	banList   map[string]*time.Time
+}
+
+func (s *Server) CurrentStats() Stats {
+	s.StatsMu.Lock()
+	defer s.StatsMu.Unlock()
+
+	stats := s.Stats
+	stats.CurrentlyConnected = len(s.Clients)
+
+	return *stats
 }
 
 type PrivateChat struct {
@@ -219,7 +231,7 @@ func NewServer(configDir string, netPort int, logger *zap.SugaredLogger, FS File
 		Logger:        logger,
 		NextGuestID:   new(uint16),
 		outbox:        make(chan Transaction),
-		Stats:         &Stats{StartTime: time.Now()},
+		Stats:         &Stats{Since: time.Now()},
 		ThreadedNews:  &ThreadedNews{},
 		FS:            FS,
 		banList:       make(map[string]*time.Time),
@@ -679,7 +691,10 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		}
 	}
 
-	c.Server.Stats.LoginCount += 1
+	c.Server.Stats.ConnectionCounter += 1
+	if len(s.Clients) > c.Server.Stats.ConnectionPeak {
+		c.Server.Stats.ConnectionPeak = len(s.Clients)
+	}
 
 	// Scan for new transactions and handle them as they come in.
 	for scanner.Scan() {
@@ -772,6 +787,8 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 		}
 	case FileDownload:
 		s.Stats.DownloadCounter += 1
+		s.Stats.DownloadsInProgress += 1
+		defer func() { s.Stats.DownloadsInProgress -= 1 }()
 
 		var dataOffset int64
 		if fileTransfer.fileResumeData != nil {
@@ -826,6 +843,8 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 
 	case FileUpload:
 		s.Stats.UploadCounter += 1
+		s.Stats.UploadsInProgress += 1
+		defer func() { s.Stats.UploadsInProgress -= 1 }()
 
 		var file *os.File
 
@@ -882,7 +901,12 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 		}
 
 		rLogger.Infow("File upload complete", "dstFile", fullPath)
+
 	case FolderDownload:
+		s.Stats.DownloadCounter += 1
+		s.Stats.DownloadsInProgress += 1
+		defer func() { s.Stats.DownloadsInProgress -= 1 }()
+
 		// Folder Download flow:
 		// 1. Get filePath from the transfer
 		// 2. Iterate over files
@@ -1046,6 +1070,9 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 		}
 
 	case FolderUpload:
+		s.Stats.UploadCounter += 1
+		s.Stats.UploadsInProgress += 1
+		defer func() { s.Stats.UploadsInProgress -= 1 }()
 		rLogger.Infow(
 			"Folder upload started",
 			"dstPath", fullPath,

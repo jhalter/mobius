@@ -8,10 +8,10 @@ type Stats struct {
 	CurrentlyConnected  int
 	DownloadsInProgress int
 	UploadsInProgress   int
+	WaitingDownloads    int
 	ConnectionPeak      int
+	ConnectionCounter   int
 	DownloadCounter     int
 	UploadCounter       int
-
-	LoginCount int       `yaml:"login count"`
-	StartTime  time.Time `yaml:"start time"`
+	Since               time.Time
 }
