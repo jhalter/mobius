@@ -118,7 +118,7 @@ type statHandler struct {
 }
 
 func (sh *statHandler) RenderStats(w http.ResponseWriter, _ *http.Request) {
-	u, err := json.Marshal(sh.hlServer.Stats)
+	u, err := json.Marshal(sh.hlServer.CurrentStats())
 	if err != nil {
 		panic(err)
 	}
