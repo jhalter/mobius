@@ -1034,13 +1034,13 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 	newsPost := fmt.Sprintf(newsTemplate+"\r", cc.UserName, time.Now().Format(newsDateTemplate), t.GetField(fieldData).Data)
 	newsPost = strings.Replace(newsPost, "\n", "\r", -1)
 
+	// update news in memory
+	cc.Server.FlatNews = append([]byte(newsPost), cc.Server.FlatNews...)
+
 	// update news on disk
 	if err := cc.Server.FS.WriteFile(filepath.Join(cc.Server.ConfigDir, "MessageBoard.txt"), cc.Server.FlatNews, 0644); err != nil {
 		return res, err
 	}
-
-	// update news in memory
-	cc.Server.FlatNews = append([]byte(newsPost), cc.Server.FlatNews...)
 
 	// Notify all clients of updated news
 	cc.sendAll(
