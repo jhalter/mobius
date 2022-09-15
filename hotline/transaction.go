@@ -240,5 +240,5 @@ func (t *Transaction) GetField(id int) Field {
 }
 
 func (t *Transaction) IsError() bool {
-	return bytes.Compare(t.ErrorCode, []byte{0, 0, 0, 1}) == 0
+	return bytes.Equal(t.ErrorCode, []byte{0, 0, 0, 1})
 }

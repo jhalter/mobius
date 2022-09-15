@@ -58,10 +58,12 @@ const fieldNewsArtDate = 330
 const fieldNewsArtPrevArt = 331
 const fieldNewsArtNextArt = 332
 const fieldNewsArtData = 333
-const fieldNewsArtFlags = 334
+
+// const fieldNewsArtFlags = 334
 const fieldNewsArtParentArt = 335
 const fieldNewsArt1stChildArt = 336
-const fieldNewsArtRecurseDel = 337
+
+// const fieldNewsArtRecurseDel = 337
 
 type Field struct {
 	ID        []byte // Type of field

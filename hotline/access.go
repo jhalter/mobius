@@ -1,25 +1,25 @@
 package hotline
 
 const (
-	accessDeleteFile       = 0  // File System Maintenance: Can Delete Files
-	accessUploadFile       = 1  // File System Maintenance: Can Upload Files
-	accessDownloadFile     = 2  // File System Maintenance: Can Download Files
-	accessRenameFile       = 3  // File System Maintenance: Can Rename Files
-	accessMoveFile         = 4  // File System Maintenance: Can Move Files
-	accessCreateFolder     = 5  // File System Maintenance: Can Create Folders
-	accessDeleteFolder     = 6  // File System Maintenance: Can Delete Folders
-	accessRenameFolder     = 7  // File System Maintenance: Can Rename Folders
-	accessMoveFolder       = 8  // File System Maintenance: Can Move Folders
-	accessReadChat         = 9  // Chat: Can Read Chat
-	accessSendChat         = 10 // Chat: Can Send Chat
-	accessOpenChat         = 11 // Chat: Can Initial Private Chat
-	accessCloseChat        = 12 // Present in the Hotline 1.9 protocol documentation, but seemingly unused
-	accessShowInList       = 13 // Present in the Hotline 1.9 protocol documentation, but seemingly unused
-	accessCreateUser       = 14 // User Maintenance: Can Create Accounts
-	accessDeleteUser       = 15 // User Maintenance: Can Delete Accounts
-	accessOpenUser         = 16 // User Maintenance: Can Read Accounts
-	accessModifyUser       = 17 // User Maintenance: Can Modify Accounts
-	accessChangeOwnPass    = 18 // Present in the Hotline 1.9 protocol documentation, but seemingly unused
+	accessDeleteFile   = 0  // File System Maintenance: Can Delete Files
+	accessUploadFile   = 1  // File System Maintenance: Can Upload Files
+	accessDownloadFile = 2  // File System Maintenance: Can Download Files
+	accessRenameFile   = 3  // File System Maintenance: Can Rename Files
+	accessMoveFile     = 4  // File System Maintenance: Can Move Files
+	accessCreateFolder = 5  // File System Maintenance: Can Create Folders
+	accessDeleteFolder = 6  // File System Maintenance: Can Delete Folders
+	accessRenameFolder = 7  // File System Maintenance: Can Rename Folders
+	accessMoveFolder   = 8  // File System Maintenance: Can Move Folders
+	accessReadChat     = 9  // Chat: Can Read Chat
+	accessSendChat     = 10 // Chat: Can Send Chat
+	accessOpenChat     = 11 // Chat: Can Initial Private Chat
+	// accessCloseChat        = 12 // Present in the Hotline 1.9 protocol documentation, but seemingly unused
+	// accessShowInList       = 13 // Present in the Hotline 1.9 protocol documentation, but seemingly unused
+	accessCreateUser = 14 // User Maintenance: Can Create Accounts
+	accessDeleteUser = 15 // User Maintenance: Can Delete Accounts
+	accessOpenUser   = 16 // User Maintenance: Can Read Accounts
+	accessModifyUser = 17 // User Maintenance: Can Modify Accounts
+	// accessChangeOwnPass    = 18 // Present in the Hotline 1.9 protocol documentation, but seemingly unused
 	accessNewsReadArt      = 20 // News: Can Read Articles
 	accessNewsPostArt      = 21 // News: Can Post Articles
 	accessDisconUser       = 22 // User Maintenance: Can Disconnect Users (Note: Turns username red in user list)

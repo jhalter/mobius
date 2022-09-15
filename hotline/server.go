@@ -33,12 +33,6 @@ type requestCtx struct {
 	name       string
 }
 
-const (
-	userIdleSeconds        = 300 // time in seconds before an inactive user is marked idle
-	idleCheckInterval      = 10  // time in seconds to check for idle users
-	trackerUpdateFrequency = 300 // time in seconds between tracker re-registration
-)
-
 var nostalgiaVersion = []byte{0, 0, 2, 0x2c} // version ID used by the Nostalgia client
 
 type Server struct {

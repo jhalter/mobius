@@ -1,5 +1,11 @@
 package hotline
 
+const (
+	userIdleSeconds        = 300 // time in seconds before an inactive user is marked idle
+	idleCheckInterval      = 10  // time in seconds to check for idle users
+	trackerUpdateFrequency = 300 // time in seconds between tracker re-registration
+)
+
 type Config struct {
 	Name                      string   `yaml:"Name" validate:"required,max=50"`         // Name used for Tracker registration
 	Description               string   `yaml:"Description" validate:"required,max=200"` // Description used for Tracker registration

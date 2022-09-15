@@ -1293,7 +1293,7 @@ func HandleDelNewsItem(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		}
 	}
 
-	if bytes.Compare(cats[delName].Type, []byte{0, 3}) == 0 {
+	if bytes.Equal(cats[delName].Type, []byte{0, 3}) {
 		if !cc.Authorize(accessNewsDeleteCat) {
 			return append(res, cc.NewErrReply(t, "You are not allowed to delete news categories.")), nil
 		}

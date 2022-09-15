@@ -41,7 +41,6 @@ func TestServer_handleFileTransfer(t *testing.T) {
 		TrackerPassID [4]byte
 		Stats         *Stats
 		FS            FileStore
-		outbox        chan Transaction
 		mux           sync.Mutex
 		flatNewsMux   sync.Mutex
 		FlatNews      []byte

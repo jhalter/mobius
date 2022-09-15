@@ -26,7 +26,6 @@ type fileWrapper struct {
 	rsrcPath       string // path to the file resource fork
 	infoPath       string // path to the file information fork
 	incompletePath string // path to partially transferred temp file
-	saveMetaData   bool   // if true, enables saving of info and resource forks in sidecar files
 	infoFork       *FlatFileInformationFork
 	ffo            *flattenedFileObject
 }
