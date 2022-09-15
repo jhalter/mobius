@@ -4,7 +4,7 @@ jobs:
   build:
     working_directory: ~/repo
     docker:
-      - image: cimg/go:1.18.3
+      - image: cimg/go:1.19.1
     steps:
       - checkout
 #      - restore_cache:
@@ -27,13 +27,13 @@ jobs:
 
   deploy:
     docker:
-      - image: cimg/go:1.16.6
+      - image: cimg/go:1.19.1
 #    working_directory: /go/src/github.com/jhalter/mobius
     steps:
       - checkout
       - run: go get -u github.com/mitchellh/gox
       - run: go get -u github.com/tcnksm/ghr
-      - run: go get -u github.com/stevenmatthewt/semantics
+      - run: go install github.com/stevenmatthewt/semantics@latest
       - run:
           name: cross compile
           command: |
@@ -42,7 +42,7 @@ jobs:
       - run:
           name: create release
           command: |
-            tag=$(semantics --output-tag)
+            tag=$(/home/circleci/go/bin/semantics --output-tag)
             if [ "$tag" ]; then
               ghr -t $GITHUB_TOKEN -u $CIRCLE_PROJECT_USERNAME -r $CIRCLE_PROJECT_REPONAME --replace $tag dist/
             else
