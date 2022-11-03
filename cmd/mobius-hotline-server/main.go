@@ -9,6 +9,7 @@ import (
 	"github.com/jhalter/mobius/hotline"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"log"
 	"math/rand"
@@ -51,6 +52,8 @@ func main() {
 	configDir := flag.String("config", defaultConfigPath(), "Path to config root")
 	version := flag.Bool("version", false, "print version and exit")
 	logLevel := flag.String("log-level", "info", "Log level")
+	logFile := flag.String("log-file", "", "Path to log file")
+
 	init := flag.Bool("init", false, "Populate the config dir with default configuration")
 
 	flag.Parse()
@@ -66,7 +69,14 @@ func main() {
 		os.Exit(0)
 	}
 
-	cores := []zapcore.Core{newStdoutCore(zapLvl)}
+	cores := []zapcore.Core{
+		newStdoutCore(zapLvl),
+	}
+
+	if *logFile != "" {
+		cores = append(cores, newLogFileCore(*logFile, zapLvl))
+	}
+
 	l := zap.New(zapcore.NewTee(cores...))
 	defer func() { _ = l.Sync() }()
 	logger := l.Sugar()
@@ -134,6 +144,24 @@ func newStdoutCore(level zapcore.Level) zapcore.Core {
 	return zapcore.NewCore(
 		zapcore.NewConsoleEncoder(encoderCfg),
 		zapcore.Lock(os.Stdout),
+		level,
+	)
+}
+
+func newLogFileCore(path string, level zapcore.Level) zapcore.Core {
+	encoderCfg := zap.NewProductionEncoderConfig()
+	encoderCfg.TimeKey = "timestamp"
+	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+	writer := zapcore.AddSync(&lumberjack.Logger{
+		Filename:   path,
+		MaxSize:    100, // MB
+		MaxBackups: 3,
+		MaxAge:     365, // days
+	})
+
+	return zapcore.NewCore(
+		zapcore.NewConsoleEncoder(encoderCfg),
+		writer,
 		level,
 	)
 }
