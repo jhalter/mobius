@@ -32,7 +32,7 @@ jobs:
     steps:
       - checkout
       - run: go get -u github.com/mitchellh/gox
-      - run: go get -u github.com/tcnksm/ghr
+      - run: go install github.com/tcnksm/ghr
       - run: go install github.com/stevenmatthewt/semantics@latest
       - run:
           name: cross compile
