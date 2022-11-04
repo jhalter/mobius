@@ -32,7 +32,7 @@ jobs:
     steps:
       - checkout
       - run: go get -u github.com/mitchellh/gox
-      - run: go install github.com/tcnksm/ghr
+      - run: go get -u github.com/tcnksm/ghr
       - run: go install github.com/stevenmatthewt/semantics@latest
       - run:
           name: cross compile
@@ -43,6 +43,8 @@ jobs:
           name: create release
           command: |
             tag=$(/home/circleci/go/bin/semantics --output-tag)
+            # temp troubleshooting >:(
+            find / -name ghr
             if [ "$tag" ]; then
               /home/circleci/go/bin/ghr -t $GITHUB_TOKEN -u $CIRCLE_PROJECT_USERNAME -r $CIRCLE_PROJECT_REPONAME --replace $tag dist/
             else
