@@ -34,6 +34,7 @@ type requestCtx struct {
 }
 
 var nostalgiaVersion = []byte{0, 0, 2, 0x2c} // version ID used by the Nostalgia client
+var frogblastVersion = []byte{0, 0, 0, 0xb9} // version ID used by the Frogblast 1.2.4 client
 
 type Server struct {
 	Port          int
@@ -667,7 +668,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	}
 
 	// Used simplified hotline v1.2.3 login flow for clients that do not send login info in tranAgreed
-	if c.Version == nil || bytes.Equal(c.Version, nostalgiaVersion) {
+	if c.Version == nil || bytes.Equal(c.Version, nostalgiaVersion) || bytes.Equal(c.Version, frogblastVersion) {
 		c.Agreed = true
 		c.logger = c.logger.With("name", string(c.UserName))
 		c.logger.Infow("Login successful", "clientVersion", fmt.Sprintf("%v", func() int { i, _ := byteToInt(c.Version); return i }()))
