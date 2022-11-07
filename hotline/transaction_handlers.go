@@ -253,9 +253,10 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 		formattedMsg = fmt.Sprintf("\r*** %s %s", cc.UserName, t.GetField(fieldData).Data)
 	}
 
+	// The ChatID field is used to identify messages as belonging to a private chat.
+	// All clients *except* Frogblast omit this field for public chat, but Frogblast sends a value of 00 00 00 00.
 	chatID := t.GetField(fieldChatID).Data
-	// a non-nil chatID indicates the message belongs to a private chat
-	if chatID != nil {
+	if chatID != nil && !bytes.Equal([]byte{0, 0, 0, 0}, chatID) {
 		chatInt := binary.BigEndian.Uint32(chatID)
 		privChat := cc.Server.PrivateChats[chatInt]
 

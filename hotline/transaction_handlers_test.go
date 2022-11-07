@@ -364,6 +364,68 @@ func TestHandleChatSend(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "treats Chat ID 00 00 00 00 as a public chat message",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							bits.Set(accessSendChat)
+							return bits
+						}(),
+					},
+					UserName: []byte{0x00, 0x01},
+					Server: &Server{
+						Clients: map[uint16]*ClientConn{
+							uint16(1): {
+								Account: &Account{
+									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
+								},
+								ID: &[]byte{0, 1},
+							},
+							uint16(2): {
+								Account: &Account{
+									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
+								},
+								ID: &[]byte{0, 2},
+							},
+						},
+					},
+				},
+				t: &Transaction{
+					Fields: []Field{
+						NewField(fieldData, []byte("hai")),
+						NewField(fieldChatID, []byte{0, 0, 0, 0}),
+					},
+				},
+			},
+			want: []Transaction{
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x00,
+					Type:      []byte{0, 0x6a},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(fieldData, []byte{0x0d, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x01, 0x3a, 0x20, 0x20, 0x68, 0x61, 0x69}),
+					},
+				},
+				{
+					clientID:  &[]byte{0, 2},
+					Flags:     0x00,
+					IsReply:   0x00,
+					Type:      []byte{0, 0x6a},
+					ID:        []byte{0xf0, 0xc5, 0x34, 0x1e}, // Random ID from rand.Seed(1)
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(fieldData, []byte{0x0d, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x01, 0x3a, 0x20, 0x20, 0x68, 0x61, 0x69}),
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
 			name: "when user does not have required permission",
 			args: args{
 				cc: &ClientConn{
