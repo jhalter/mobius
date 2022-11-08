@@ -749,6 +749,10 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 		delete(s.fileTransfers, t.ReferenceNumber)
 		s.mux.Unlock()
 
+		// Wait a few seconds before closing the connection: this is a workaround for problems
+		// observed with Windows clients where the client must initiate close of the TCP connection before
+		// the server does.  This is gross and seems unnecessary.  TODO: Revisit?
+		time.Sleep(3 * time.Second)
 	}()
 
 	s.mux.Lock()
@@ -783,7 +787,9 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 	case FileDownload:
 		s.Stats.DownloadCounter += 1
 		s.Stats.DownloadsInProgress += 1
-		defer func() { s.Stats.DownloadsInProgress -= 1 }()
+		defer func() {
+			s.Stats.DownloadsInProgress -= 1
+		}()
 
 		var dataOffset int64
 		if fileTransfer.fileResumeData != nil {
