@@ -565,8 +565,13 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 
 	scanner.Scan()
 
+	// Make a new []byte slice and copy the scanner bytes to it.  This is critical to avoid a data race as the
+	// scanner re-uses the buffer for subsequent scans.
+	buf := make([]byte, len(scanner.Bytes()))
+	copy(buf, scanner.Bytes())
+
 	var clientLogin Transaction
-	if _, err := clientLogin.Write(scanner.Bytes()); err != nil {
+	if _, err := clientLogin.Write(buf); err != nil {
 		return err
 	}
 
