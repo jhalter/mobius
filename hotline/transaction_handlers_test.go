@@ -459,7 +459,7 @@ func TestHandleChatSend(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "sends chat msg as emote if fieldChatOptions is set",
+			name: "sends chat msg as emote if fieldChatOptions is set to 1",
 			args: args{
 				cc: &ClientConn{
 					Account: &Account{
@@ -515,6 +515,68 @@ func TestHandleChatSend(t *testing.T) {
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
 						NewField(fieldData, []byte("\r*** Testy McTest performed action")),
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "does not send chat msg as emote if fieldChatOptions is set to 0",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							bits.Set(accessSendChat)
+							return bits
+						}(),
+					},
+					UserName: []byte("Testy McTest"),
+					Server: &Server{
+						Clients: map[uint16]*ClientConn{
+							uint16(1): {
+								Account: &Account{
+									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
+								},
+								ID: &[]byte{0, 1},
+							},
+							uint16(2): {
+								Account: &Account{
+									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
+								},
+								ID: &[]byte{0, 2},
+							},
+						},
+					},
+				},
+				t: &Transaction{
+					Fields: []Field{
+						NewField(fieldData, []byte("hello")),
+						NewField(fieldChatOptions, []byte{0x00, 0x00}),
+					},
+				},
+			},
+			want: []Transaction{
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x00,
+					Type:      []byte{0, 0x6a},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(fieldData, []byte("\r Testy McTest:  hello")),
+					},
+				},
+				{
+					clientID:  &[]byte{0, 2},
+					Flags:     0x00,
+					IsReply:   0x00,
+					Type:      []byte{0, 0x6a},
+					ID:        []byte{0xf0, 0xc5, 0x34, 0x1e},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(fieldData, []byte("\r Testy McTest:  hello")),
 					},
 				},
 			},

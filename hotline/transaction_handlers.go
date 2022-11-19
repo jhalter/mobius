@@ -248,8 +248,9 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 
 	// By holding the option key, Hotline chat allows users to send /me formatted messages like:
 	// *** Halcyon does stuff
-	// This is indicated by the presence of the optional field fieldChatOptions in the transaction payload
-	if t.GetField(fieldChatOptions).Data != nil {
+	// This is indicated by the presence of the optional field fieldChatOptions set to a value of 1.
+	// Most clients do not send this option for normal chat messages.
+	if t.GetField(fieldChatOptions).Data != nil && bytes.Equal(t.GetField(fieldChatOptions).Data, []byte{0, 1}) {
 		formattedMsg = fmt.Sprintf("\r*** %s %s", cc.UserName, t.GetField(fieldData).Data)
 	}
 
