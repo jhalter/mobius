@@ -261,7 +261,7 @@ func TestHandleGetUserNameList(t *testing.T) {
 					clientID:  &[]byte{1, 1},
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 1},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 1},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
@@ -770,7 +770,7 @@ func TestHandleGetFileInfo(t *testing.T) {
 					clientID:  &[]byte{0, 1},
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0xce},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
@@ -890,7 +890,7 @@ func TestHandleNewFolder(t *testing.T) {
 					clientID:  &[]byte{0, 1},
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0xcd},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
 					ErrorCode: []byte{0, 0, 0, 0},
 				},
@@ -931,7 +931,7 @@ func TestHandleNewFolder(t *testing.T) {
 					clientID:  &[]byte{0, 1},
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0xcd},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
 					ErrorCode: []byte{0, 0, 0, 0},
 				},
@@ -1007,7 +1007,7 @@ func TestHandleNewFolder(t *testing.T) {
 					clientID:  &[]byte{0, 1},
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0xcd},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
 					ErrorCode: []byte{0, 0, 0, 0},
 				},
@@ -1056,7 +1056,7 @@ func TestHandleNewFolder(t *testing.T) {
 					clientID:  &[]byte{0, 1},
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0xcd},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
 					ErrorCode: []byte{0, 0, 0, 0},
 				},
@@ -1127,7 +1127,7 @@ func TestHandleUploadFile(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0xcb},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
@@ -1243,7 +1243,7 @@ func TestHandleMakeAlias(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0xd1},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields:    []Field(nil),
@@ -1411,7 +1411,7 @@ func TestHandleGetUser(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0x01, 0x60},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
@@ -1551,7 +1551,7 @@ func TestHandleDeleteUser(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0x1, 0x5f},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields:    []Field(nil),
@@ -1639,7 +1639,7 @@ func TestHandleGetMsgs(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x65},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
@@ -1866,7 +1866,7 @@ func TestHandleListUsers(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0x01, 0x2f},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
@@ -1966,7 +1966,7 @@ func TestHandleDownloadFile(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x2},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
@@ -2057,7 +2057,7 @@ func TestHandleDownloadFile(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x2},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
@@ -2493,7 +2493,7 @@ func TestHandleSendInstantMsg(t *testing.T) {
 					clientID:  &[]byte{0, 1},
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0x0, 0x6c},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields:    []Field(nil),
@@ -2553,7 +2553,7 @@ func TestHandleSendInstantMsg(t *testing.T) {
 					clientID:  &[]byte{0, 1},
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0x0, 0x6c},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields:    []Field(nil),
@@ -2604,7 +2604,7 @@ func TestHandleSendInstantMsg(t *testing.T) {
 					clientID:  &[]byte{0, 1},
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0x0, 0x6c},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields:    []Field(nil),
@@ -2750,7 +2750,7 @@ func TestHandleDeleteFile(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0x0, 0xcc},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x0, 0x0, 0x0, 0x0},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields:    []Field(nil),
@@ -2853,7 +2853,7 @@ func TestHandleGetFileNameList(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0xc8},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
@@ -2986,7 +2986,7 @@ func TestHandleGetClientInfoText(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0x1, 0x2f},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
@@ -3092,7 +3092,7 @@ func TestHandleTranAgreed(t *testing.T) {
 					clientID:  &[]byte{0, 1},
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x79},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields:    []Field{},
@@ -3329,7 +3329,7 @@ func TestHandleDelNewsItem(t *testing.T) {
 					clientID:  &[]byte{0, 1},
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0x01, 0x7c},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields:    []Field{},
@@ -3391,7 +3391,7 @@ func TestHandleDownloadBanner(t *testing.T) {
 					clientID:  &[]byte{0, 1},
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0x00, 0xd4},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
@@ -3486,7 +3486,7 @@ func TestHandleTranOldPostNews(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x67},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 0},
 				},
@@ -3594,7 +3594,7 @@ func TestHandleInviteNewChat(t *testing.T) {
 					clientID:  &[]byte{0, 1},
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x70},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
@@ -3658,7 +3658,7 @@ func TestHandleInviteNewChat(t *testing.T) {
 					clientID:  &[]byte{0, 1},
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x70},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
