@@ -170,7 +170,7 @@ func (cc *ClientConn) NewReply(t *Transaction, fields ...Field) Transaction {
 	reply := Transaction{
 		Flags:     0x00,
 		IsReply:   0x01,
-		Type:      t.Type,
+		Type:      []byte{0x00, 0x00},
 		ID:        t.ID,
 		clientID:  cc.ID,
 		ErrorCode: []byte{0, 0, 0, 0},
