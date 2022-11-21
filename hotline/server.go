@@ -152,8 +152,8 @@ func (s *Server) sendTransaction(t Transaction) error {
 	}
 
 	s.mux.Lock()
-	defer s.mux.Unlock()
 	client := s.Clients[uint16(clientID)]
+	s.mux.Unlock()
 	if client == nil {
 		return fmt.Errorf("invalid client id %v", *t.clientID)
 	}
@@ -163,7 +163,8 @@ func (s *Server) sendTransaction(t Transaction) error {
 		return err
 	}
 
-	if _, err := client.Connection.Write(b); err != nil {
+	_, err = client.Connection.Write(b)
+	if err != nil {
 		return err
 	}
 
