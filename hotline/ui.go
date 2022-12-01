@@ -145,6 +145,7 @@ func (ui *UI) renderSettingsForm() *tview.Flex {
 		return err == nil
 	}, nil)
 	settingsForm.AddInputField("Tracker", ui.HLClient.pref.Tracker, 0, nil, nil)
+	settingsForm.AddCheckbox("Enable Terminal Bell", ui.HLClient.pref.EnableBell, nil)
 	settingsForm.AddButton("Save", func() {
 		usernameInput := settingsForm.GetFormItem(0).(*tview.InputField).GetText()
 		if len(usernameInput) == 0 {
@@ -154,6 +155,7 @@ func (ui *UI) renderSettingsForm() *tview.Flex {
 		iconStr = settingsForm.GetFormItem(1).(*tview.InputField).GetText()
 		ui.HLClient.pref.IconID, _ = strconv.Atoi(iconStr)
 		ui.HLClient.pref.Tracker = settingsForm.GetFormItem(2).(*tview.InputField).GetText()
+		ui.HLClient.pref.EnableBell = settingsForm.GetFormItem(3).(*tview.Checkbox).IsChecked()
 
 		out, err := yaml.Marshal(&ui.HLClient.pref)
 		if err != nil {
