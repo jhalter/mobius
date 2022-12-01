@@ -35,10 +35,11 @@ type Bookmark struct {
 }
 
 type ClientPrefs struct {
-	Username  string     `yaml:"Username"`
-	IconID    int        `yaml:"IconID"`
-	Bookmarks []Bookmark `yaml:"Bookmarks"`
-	Tracker   string     `yaml:"Tracker"`
+	Username   string     `yaml:"Username"`
+	IconID     int        `yaml:"IconID"`
+	Bookmarks  []Bookmark `yaml:"Bookmarks"`
+	Tracker    string     `yaml:"Tracker"`
+	EnableBell bool       `yaml:"EnableBell"`
 }
 
 func (cp *ClientPrefs) IconBytes() []byte {
@@ -466,6 +467,10 @@ func (c *Client) renderUserList() {
 }
 
 func handleClientChatMsg(c *Client, t *Transaction) (res []Transaction, err error) {
+	if c.pref.EnableBell {
+		fmt.Println("\a")
+	}
+
 	_, _ = fmt.Fprintf(c.UI.chatBox, "%s \n", t.GetField(fieldData).Data)
 
 	return res, err
