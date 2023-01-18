@@ -287,6 +287,7 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 
 // HandleSendInstantMsg sends instant message to the user on the current server.
 // Fields used in the request:
+//
 //	103	User ID
 //	113	Options
 //		One of the following values:
@@ -897,17 +898,6 @@ func HandleUserBroadcast(cc *ClientConn, t *Transaction) (res []Transaction, err
 	return res, err
 }
 
-func byteToInt(bytes []byte) (int, error) {
-	switch len(bytes) {
-	case 2:
-		return int(binary.BigEndian.Uint16(bytes)), nil
-	case 4:
-		return int(binary.BigEndian.Uint32(bytes)), nil
-	}
-
-	return 0, errors.New("unknown byte length")
-}
-
 // HandleGetClientInfoText returns user information for the specific user.
 //
 // Fields used in the request:
@@ -1198,10 +1188,12 @@ func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	return res, err
 }
 
+// HandleGetNewsArtData gets the list of article names at the specified news path.
+
 // Fields used in the request:
 // 325	News path	Optional
-//
-// Reply fields:
+
+// Fields used in the reply:
 // 321	News article list data	Optional
 func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	if !cc.Authorize(accessNewsReadArt) {
@@ -1224,46 +1216,50 @@ func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction
 	return res, err
 }
 
+// HandleGetNewsArtData requests information about the specific news article.
+// Fields used in the request:
+//
+// Request fields
+// 325	News path
+// 326	News article ID
+// 327	News article data flavor
+//
+// Fields used in the reply:
+// 328	News article title
+// 329	News article poster
+// 330	News article date
+// 331	Previous article ID
+// 332	Next article ID
+// 335	Parent article ID
+// 336	First child article ID
+// 327	News article data flavor	"Should be “text/plain”
+// 333	News article data	Optional (if data flavor is “text/plain”)
 func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	if !cc.Authorize(accessNewsReadArt) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to read news."))
 		return res, err
 	}
 
-	// Request fields
-	// 325	News fp
-	// 326	News article ID
-	// 327	News article data flavor
-
-	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
-
 	var cat NewsCategoryListData15
 	cats := cc.Server.ThreadedNews.Categories
 
-	for _, fp := range pathStrs {
+	for _, fp := range ReadNewsPath(t.GetField(fieldNewsPath).Data) {
 		cat = cats[fp]
 		cats = cats[fp].SubCats
 	}
-	newsArtID := t.GetField(fieldNewsArtID).Data
 
-	convertedArtID := binary.BigEndian.Uint16(newsArtID)
+	// The official Hotline clients will send the article ID as 2 bytes if possible, but
+	// some third party clients such as Frogblast and Heildrun will always send 4 bytes
+	convertedID, err := byteToInt(t.GetField(fieldNewsArtID).Data)
+	if err != nil {
+		return res, err
+	}
 
-	art := cat.Articles[uint32(convertedArtID)]
+	art := cat.Articles[uint32(convertedID)]
 	if art == nil {
 		res = append(res, cc.NewReply(t))
 		return res, err
 	}
-
-	// Reply fields
-	// 328	News article title
-	// 329	News article poster
-	// 330	News article date
-	// 331	Previous article ID
-	// 332	Next article ID
-	// 335	Parent article ID
-	// 336	First child article ID
-	// 327	News article data flavor	"Should be “text/plain”
-	// 333	News article data	Optional (if data flavor is “text/plain”)
 
 	res = append(res, cc.NewReply(t,
 		NewField(fieldNewsArtTitle, []byte(art.Title)),
@@ -1882,7 +1878,8 @@ func HandleJoinChat(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 
 // HandleLeaveChat is sent from a v1.8+ Hotline client when the user exits a private chat
 // Fields used in the request:
-//	* 114	fieldChatID
+//   - 114	fieldChatID
+//
 // Reply is not expected.
 func HandleLeaveChat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	chatID := t.GetField(fieldChatID).Data
