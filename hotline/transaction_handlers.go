@@ -933,8 +933,6 @@ func HandleGetUserNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 }
 
 func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	cc.Agreed = true
-
 	if t.GetField(fieldUserName).Data != nil {
 		if cc.Authorize(accessAnyName) {
 			cc.UserName = t.GetField(fieldUserName).Data

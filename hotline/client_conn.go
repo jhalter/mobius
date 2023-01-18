@@ -44,7 +44,6 @@ type ClientConn struct {
 	transfersMU sync.Mutex
 	transfers   map[int]map[[4]byte]*FileTransfer
 
-	Agreed bool
 	logger *zap.SugaredLogger
 }
 
@@ -157,7 +156,7 @@ func (cc *ClientConn) Disconnect() {
 // notifyOthers sends transaction t to other clients connected to the server
 func (cc *ClientConn) notifyOthers(t Transaction) (trans []Transaction) {
 	for _, c := range sortedClients(cc.Server.Clients) {
-		if c.ID != cc.ID && c.Agreed {
+		if c.ID != cc.ID {
 			t.clientID = c.ID
 			trans = append(trans, t)
 		}

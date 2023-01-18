@@ -2,7 +2,6 @@ package hotline
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -32,13 +31,6 @@ type requestCtx struct {
 	login      string
 	name       string
 }
-
-var nostalgiaVersion = []byte{0, 0, 2, 0x2c} // version ID used by the Nostalgia client
-var frogblastVersion = []byte{0, 0, 0, 0xb9} // version ID used by the Frogblast 1.2.4 client
-
-var heildrun = []byte{0, 0x97}
-
-var obsessionVersion = []byte{0xbe, 0x00} // version ID used by the Obsession client
 
 type Server struct {
 	Port          int
@@ -385,7 +377,6 @@ func (s *Server) NewClientConn(conn io.ReadWriteCloser, remoteAddr string) *Clie
 		Version:    []byte{},
 		AutoReply:  []byte{},
 		transfers:  map[int]map[[4]byte]*FileTransfer{},
-		Agreed:     false,
 		RemoteAddr: remoteAddr,
 	}
 	clientConn.transfers = map[int]map[[4]byte]*FileTransfer{
@@ -472,9 +463,6 @@ func (s *Server) connectedUsers() []Field {
 
 	var connectedUsers []Field
 	for _, c := range sortedClients(s.Clients) {
-		if !c.Agreed {
-			continue
-		}
 		user := User{
 			ID:    *c.ID,
 			Icon:  c.Icon,
@@ -678,22 +666,19 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 
 	// Used simplified hotline v1.2.3 login flow for clients that do not send login info in tranAgreed
 	// TODO: figure out a generalized solution that doesn't require playing whack-a-mole for specific client versions
-	if c.Version == nil || bytes.Equal(c.Version, nostalgiaVersion) || bytes.Equal(c.Version, frogblastVersion) || bytes.Equal(c.Version, obsessionVersion) || bytes.Equal(c.Version, heildrun) {
-		c.Agreed = true
-		c.logger = c.logger.With("name", string(c.UserName))
-		c.logger.Infow("Login successful", "clientVersion", fmt.Sprintf("%v", func() int { i, _ := byteToInt(c.Version); return i }()))
+	c.logger = c.logger.With("name", string(c.UserName))
+	c.logger.Infow("Login successful", "clientVersion", fmt.Sprintf("%v", func() int { i, _ := byteToInt(c.Version); return i }()))
 
-		for _, t := range c.notifyOthers(
-			*NewTransaction(
-				tranNotifyChangeUser, nil,
-				NewField(fieldUserName, c.UserName),
-				NewField(fieldUserID, *c.ID),
-				NewField(fieldUserIconID, c.Icon),
-				NewField(fieldUserFlags, c.Flags),
-			),
-		) {
-			c.Server.outbox <- t
-		}
+	for _, t := range c.notifyOthers(
+		*NewTransaction(
+			tranNotifyChangeUser, nil,
+			NewField(fieldUserName, c.UserName),
+			NewField(fieldUserID, *c.ID),
+			NewField(fieldUserIconID, c.Icon),
+			NewField(fieldUserFlags, c.Flags),
+		),
+	) {
+		c.Server.outbox <- t
 	}
 
 	c.Server.Stats.ConnectionCounter += 1
