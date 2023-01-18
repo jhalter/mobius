@@ -1321,7 +1321,10 @@ func HandleDelNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	// 326	News article ID
 	// 337	News article – recursive delete	Delete child articles (1) or not (0)
 	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
-	ID := binary.BigEndian.Uint16(t.GetField(fieldNewsArtID).Data)
+	ID, err := byteToInt(t.GetField(fieldNewsArtID).Data)
+	if err != nil {
+		return res, err
+	}
 
 	// TODO: Delete recursive
 	cats := cc.Server.GetNewsCatByPath(pathStrs[:len(pathStrs)-1])
@@ -1359,13 +1362,21 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	catName := pathStrs[len(pathStrs)-1]
 	cat := cats[catName]
 
+	artID, err := byteToInt(t.GetField(fieldNewsArtID).Data)
+	if err != nil {
+		return res, err
+	}
+	convertedArtID := uint32(artID)
+	bs := make([]byte, 4)
+	binary.LittleEndian.PutUint32(bs, convertedArtID)
+
 	newArt := NewsArtData{
 		Title:         string(t.GetField(fieldNewsArtTitle).Data),
 		Poster:        string(cc.UserName),
 		Date:          toHotlineTime(time.Now()),
 		PrevArt:       []byte{0, 0, 0, 0},
 		NextArt:       []byte{0, 0, 0, 0},
-		ParentArt:     append([]byte{0, 0}, t.GetField(fieldNewsArtID).Data...),
+		ParentArt:     bs,
 		FirstChildArt: []byte{0, 0, 0, 0},
 		DataFlav:      []byte("text/plain"),
 		Data:          string(t.GetField(fieldNewsArtData).Data),
@@ -1389,9 +1400,9 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	}
 
 	// Update parent article with first child reply
-	parentID := binary.BigEndian.Uint16(t.GetField(fieldNewsArtID).Data)
+	parentID := convertedArtID
 	if parentID != 0 {
-		parentArt := cat.Articles[uint32(parentID)]
+		parentArt := cat.Articles[parentID]
 
 		if bytes.Equal(parentArt.FirstChildArt, []byte{0, 0, 0, 0}) {
 			binary.BigEndian.PutUint32(parentArt.FirstChildArt, nextID)
