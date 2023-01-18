@@ -52,6 +52,7 @@ func (newscat *NewsCategoryListData15) GetNewsArtListData() NewsArtListData {
 
 	nald := NewsArtListData{
 		ID:          []byte{0, 0, 0, 0},
+		Count:       len(newsArts),
 		Name:        []byte{},
 		Description: []byte{},
 		NewsArtList: newsArtsPayload,
@@ -85,11 +86,12 @@ type NewsArtListData struct {
 	Name        []byte `yaml:"Name"`
 	Description []byte `yaml:"Description"` // not used?
 	NewsArtList []byte // List of articles			Optional (if article count > 0)
+	Count       int
 }
 
 func (nald *NewsArtListData) Payload() []byte {
 	count := make([]byte, 4)
-	binary.BigEndian.PutUint32(count, uint32(len(nald.NewsArtList)))
+	binary.BigEndian.PutUint32(count, uint32(nald.Count))
 
 	out := append(nald.ID, count...)
 	out = append(out, []byte{uint8(len(nald.Name))}...)

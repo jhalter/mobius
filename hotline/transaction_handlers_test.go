@@ -3684,3 +3684,58 @@ func TestHandleInviteNewChat(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleGetNewsArtData(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "when user does not have required permission",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							return bits
+						}(),
+					},
+					Server: &Server{
+						Accounts: map[string]*Account{},
+					},
+				},
+				t: NewTransaction(
+					tranGetNewsArtData, &[]byte{0, 1},
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0x00},
+					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to read news.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes, err := HandleGetNewsArtData(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleGetNewsArtData(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
+			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}

@@ -36,6 +36,8 @@ type requestCtx struct {
 var nostalgiaVersion = []byte{0, 0, 2, 0x2c} // version ID used by the Nostalgia client
 var frogblastVersion = []byte{0, 0, 0, 0xb9} // version ID used by the Frogblast 1.2.4 client
 
+var heildrun = []byte{0, 0x97}
+
 var obsessionVersion = []byte{0xbe, 0x00} // version ID used by the Obsession client
 
 type Server struct {
@@ -676,7 +678,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 
 	// Used simplified hotline v1.2.3 login flow for clients that do not send login info in tranAgreed
 	// TODO: figure out a generalized solution that doesn't require playing whack-a-mole for specific client versions
-	if c.Version == nil || bytes.Equal(c.Version, nostalgiaVersion) || bytes.Equal(c.Version, frogblastVersion) || bytes.Equal(c.Version, obsessionVersion) {
+	if c.Version == nil || bytes.Equal(c.Version, nostalgiaVersion) || bytes.Equal(c.Version, frogblastVersion) || bytes.Equal(c.Version, obsessionVersion) || bytes.Equal(c.Version, heildrun) {
 		c.Agreed = true
 		c.logger = c.logger.With("name", string(c.UserName))
 		c.logger.Infow("Login successful", "clientVersion", fmt.Sprintf("%v", func() int { i, _ := byteToInt(c.Version); return i }()))
