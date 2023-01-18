@@ -239,12 +239,6 @@ func TestHandleGetUserNameList(t *testing.T) {
 								Flags:    []byte{0, 3},
 								UserName: []byte{0, 4},
 							},
-							uint16(3): {
-								ID:       &[]byte{0, 3},
-								Icon:     []byte{0, 2},
-								Flags:    []byte{0, 3},
-								UserName: []byte{0, 4},
-							},
 						},
 					},
 				},
