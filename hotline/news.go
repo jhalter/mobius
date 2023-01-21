@@ -7,6 +7,14 @@ import (
 	"sort"
 )
 
+const defaultNewsDateFormat = "Jan02 15:04" // Jun23 20:49
+
+const defaultNewsTemplate = `From %s (%s):
+
+%s
+
+__________________________________________________________`
+
 type ThreadedNews struct {
 	Categories map[string]NewsCategoryListData15 `yaml:"Categories"`
 }

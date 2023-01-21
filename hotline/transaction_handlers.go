@@ -990,15 +990,6 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	return res, err
 }
 
-const defaultNewsDateFormat = "Jan02 15:04" // Jun23 20:49
-//  "Mon, 02 Jan 2006 15:04:05 MST"
-
-const defaultNewsTemplate = `From %s (%s):
-
-%s
-
-__________________________________________________________`
-
 // HandleTranOldPostNews updates the flat news
 // Fields used in this request:
 // 101	Data
@@ -1919,7 +1910,7 @@ func HandleLeaveChat(cc *ClientConn, t *Transaction) (res []Transaction, err err
 // HandleSetChatSubject is sent from a v1.8+ Hotline client when the user sets a private chat subject
 // Fields used in the request:
 // * 114	Chat ID
-// * 115	Chat subject	Chat subject string
+// * 115	Chat subject
 // Reply is not expected.
 func HandleSetChatSubject(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	chatID := t.GetField(fieldChatID).Data
@@ -1942,7 +1933,7 @@ func HandleSetChatSubject(cc *ClientConn, t *Transaction) (res []Transaction, er
 	return res, err
 }
 
-// HandleMakeAlias makes a filer alias using the specified path.
+// HandleMakeAlias makes a file alias using the specified path.
 // Fields used in the request:
 // 201	File name
 // 202	File path
