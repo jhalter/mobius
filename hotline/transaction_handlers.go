@@ -1357,7 +1357,7 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	}
 	convertedArtID := uint32(artID)
 	bs := make([]byte, 4)
-	binary.LittleEndian.PutUint32(bs, convertedArtID)
+	binary.BigEndian.PutUint32(bs, convertedArtID)
 
 	newArt := NewsArtData{
 		Title:         string(t.GetField(fieldNewsArtTitle).Data),
