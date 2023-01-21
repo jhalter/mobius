@@ -664,21 +664,28 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		c.Server.outbox <- *NewTransaction(tranShowAgreement, c.ID, NewField(fieldData, s.Agreement))
 	}
 
-	// Used simplified hotline v1.2.3 login flow for clients that do not send login info in tranAgreed
-	// TODO: figure out a generalized solution that doesn't require playing whack-a-mole for specific client versions
-	c.logger = c.logger.With("name", string(c.UserName))
-	c.logger.Infow("Login successful", "clientVersion", fmt.Sprintf("%v", func() int { i, _ := byteToInt(c.Version); return i }()))
+	// If the client has provided a username as part of the login, we can infer that it is using the 1.2.3 login
+	// flow and not the 1.5+ flow.
+	if len(c.UserName) != 0 {
+		// Add the client username to the logger.  For 1.5+ clients, we don't have this information yet as it comes as
+		// part of tranAgreed
+		c.logger = c.logger.With("name", string(c.UserName))
 
-	for _, t := range c.notifyOthers(
-		*NewTransaction(
-			tranNotifyChangeUser, nil,
-			NewField(fieldUserName, c.UserName),
-			NewField(fieldUserID, *c.ID),
-			NewField(fieldUserIconID, c.Icon),
-			NewField(fieldUserFlags, c.Flags),
-		),
-	) {
-		c.Server.outbox <- t
+		c.logger.Infow("Login successful", "clientVersion", "Not sent (probably 1.2.3)")
+
+		// Notify other clients on the server that the new user has logged in.  For 1.5+ clients we don't have this
+		// information yet, so we do it in tranAgreed instead
+		for _, t := range c.notifyOthers(
+			*NewTransaction(
+				tranNotifyChangeUser, nil,
+				NewField(fieldUserName, c.UserName),
+				NewField(fieldUserID, *c.ID),
+				NewField(fieldUserIconID, c.Icon),
+				NewField(fieldUserFlags, c.Flags),
+			),
+		) {
+			c.Server.outbox <- t
+		}
 	}
 
 	c.Server.Stats.ConnectionCounter += 1
