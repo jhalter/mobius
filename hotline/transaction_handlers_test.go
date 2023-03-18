@@ -439,7 +439,7 @@ func TestHandleChatSend(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -831,7 +831,7 @@ func TestHandleNewFolder(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -1154,7 +1154,7 @@ func TestHandleUploadFile(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -1285,7 +1285,7 @@ func TestHandleMakeAlias(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -1336,7 +1336,7 @@ func TestHandleMakeAlias(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -1438,7 +1438,7 @@ func TestHandleGetUser(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -1472,7 +1472,7 @@ func TestHandleGetUser(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -1573,7 +1573,7 @@ func TestHandleDeleteUser(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -1662,7 +1662,7 @@ func TestHandleGetMsgs(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -1718,7 +1718,7 @@ func TestHandleNewUser(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -1760,7 +1760,7 @@ func TestHandleNewUser(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -1816,7 +1816,7 @@ func TestHandleListUsers(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -1913,7 +1913,7 @@ func TestHandleDownloadFile(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -2128,7 +2128,7 @@ func TestHandleUpdateUser(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -2184,7 +2184,7 @@ func TestHandleUpdateUser(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -2226,7 +2226,7 @@ func TestHandleUpdateUser(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -2280,7 +2280,7 @@ func TestHandleDelNewsArt(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -2333,7 +2333,7 @@ func TestHandleDisconnectUser(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -2379,7 +2379,7 @@ func TestHandleDisconnectUser(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -2432,7 +2432,7 @@ func TestHandleSendInstantMsg(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -2676,7 +2676,7 @@ func TestHandleDeleteFile(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -2809,7 +2809,7 @@ func TestHandleGetFileNameList(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -2918,7 +2918,7 @@ func TestHandleGetClientInfoText(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -3218,7 +3218,7 @@ func TestHandleDelNewsItem(t *testing.T) {
 					clientID:  &[]byte{0, 1},
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -3264,7 +3264,7 @@ func TestHandleDelNewsItem(t *testing.T) {
 					clientID:  &[]byte{0, 1},
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -3437,7 +3437,7 @@ func TestHandleTranOldPostNews(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -3525,7 +3525,7 @@ func TestHandleInviteNewChat(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0, 0, 0, 0},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -3709,7 +3709,7 @@ func TestHandleGetNewsArtData(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0x00},
+					Type:      []byte{0, 0},
 					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -3724,6 +3724,230 @@ func TestHandleGetNewsArtData(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			gotRes, err := HandleGetNewsArtData(tt.args.cc, tt.args.t)
 			if !tt.wantErr(t, err, fmt.Sprintf("HandleGetNewsArtData(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
+			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}
+
+func TestHandleGetNewsArtNameList(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "when user does not have required permission",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							return bits
+						}(),
+					},
+					Server: &Server{
+						Accounts: map[string]*Account{},
+					},
+				},
+				t: NewTransaction(
+					tranGetNewsArtNameList, &[]byte{0, 1},
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to read news.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes, err := HandleGetNewsArtNameList(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleGetNewsArtNameList(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
+			tranAssertEqual(t, tt.wantRes, gotRes)
+
+		})
+	}
+}
+
+func TestHandleNewNewsFldr(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "when user does not have required permission",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							return bits
+						}(),
+					},
+					Server: &Server{
+						Accounts: map[string]*Account{},
+					},
+				},
+				t: NewTransaction(
+					tranGetNewsArtNameList, &[]byte{0, 1},
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0},
+					ErrorCode: []byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(fieldError, []byte("You are not allowed to create news folders.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "with a valid request",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							bits.Set(accessNewsCreateFldr)
+							return bits
+						}(),
+					},
+					logger: NewTestLogger(),
+					ID:     &[]byte{0, 1},
+					Server: &Server{
+						ConfigDir: "/fakeConfigRoot",
+						FS: func() *MockFileStore {
+							mfs := &MockFileStore{}
+							mfs.On("WriteFile", "/fakeConfigRoot/ThreadedNews.yaml", mock.Anything, mock.Anything).Return(nil)
+							return mfs
+						}(),
+						ThreadedNews: &ThreadedNews{Categories: map[string]NewsCategoryListData15{
+							"test": {
+								Type:     []byte{0, 2},
+								Count:    nil,
+								NameSize: 0,
+								Name:     "test",
+								SubCats:  make(map[string]NewsCategoryListData15),
+							},
+						}},
+					},
+				},
+				t: NewTransaction(
+					tranGetNewsArtNameList, &[]byte{0, 1},
+					NewField(fieldFileName, []byte("testFolder")),
+					NewField(fieldNewsPath,
+						[]byte{
+							0, 1,
+							0, 0,
+							4,
+							0x74, 0x65, 0x73, 0x74,
+						},
+					),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					clientID:  &[]byte{0, 1},
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0},
+					ID:        []byte{0, 0, 0, 0},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields:    []Field{},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		//{
+		//	name: "when there is an error writing the threaded news file",
+		//	args: args{
+		//		cc: &ClientConn{
+		//			Account: &Account{
+		//				Access: func() accessBitmap {
+		//					var bits accessBitmap
+		//					bits.Set(accessNewsCreateFldr)
+		//					return bits
+		//				}(),
+		//			},
+		//			logger: NewTestLogger(),
+		//			ID:     &[]byte{0, 1},
+		//			Server: &Server{
+		//				ConfigDir: "/fakeConfigRoot",
+		//				FS: func() *MockFileStore {
+		//					mfs := &MockFileStore{}
+		//					mfs.On("WriteFile", "/fakeConfigRoot/ThreadedNews.yaml", mock.Anything, mock.Anything).Return(os.ErrNotExist)
+		//					return mfs
+		//				}(),
+		//				ThreadedNews: &ThreadedNews{Categories: map[string]NewsCategoryListData15{
+		//					"test": {
+		//						Type:     []byte{0, 2},
+		//						Count:    nil,
+		//						NameSize: 0,
+		//						Name:     "test",
+		//						SubCats:  make(map[string]NewsCategoryListData15),
+		//					},
+		//				}},
+		//			},
+		//		},
+		//		t: NewTransaction(
+		//			tranGetNewsArtNameList, &[]byte{0, 1},
+		//			NewField(fieldFileName, []byte("testFolder")),
+		//			NewField(fieldNewsPath,
+		//				[]byte{
+		//					0, 1,
+		//					0, 0,
+		//					4,
+		//					0x74, 0x65, 0x73, 0x74,
+		//				},
+		//			),
+		//		),
+		//	},
+		//	wantRes: []Transaction{
+		//		{
+		//			clientID:  &[]byte{0, 1},
+		//			Flags:     0x00,
+		//			IsReply:   0x01,
+		//			Type:      []byte{0, 0},
+		//			ErrorCode: []byte{0, 0, 0, 1},
+		//			Fields: []Field{
+		//				NewField(fieldError, []byte("Error creating news folder.")),
+		//			},
+		//		},
+		//	},
+		//	wantErr: assert.Error,
+		//},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes, err := HandleNewNewsFldr(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleNewNewsFldr(%v, %v)", tt.args.cc, tt.args.t)) {
 				return
 			}
 			tranAssertEqual(t, tt.wantRes, gotRes)
