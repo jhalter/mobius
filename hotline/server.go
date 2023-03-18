@@ -567,32 +567,55 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		return err
 	}
 
-	c := s.NewClientConn(rwc, remoteAddr)
-
 	// check if remoteAddr is present in the ban list
 	if banUntil, ok := s.banList[strings.Split(remoteAddr, ":")[0]]; ok {
 		// permaban
 		if banUntil == nil {
-			s.outbox <- *NewTransaction(
+			t := NewTransaction(
 				tranServerMsg,
-				c.ID,
+				&[]byte{0, 0},
 				NewField(fieldData, []byte("You are permanently banned on this server")),
 				NewField(fieldChatOptions, []byte{0, 0}),
 			)
-			time.Sleep(1 * time.Second)
-			return nil
-		} else if time.Now().Before(*banUntil) {
-			s.outbox <- *NewTransaction(
-				tranServerMsg,
-				c.ID,
-				NewField(fieldData, []byte("You are temporarily banned on this server")),
-				NewField(fieldChatOptions, []byte{0, 0}),
-			)
+
+			b, err := t.MarshalBinary()
+			if err != nil {
+				return err
+			}
+
+			_, err = rwc.Write(b)
+			if err != nil {
+				return err
+			}
+
 			time.Sleep(1 * time.Second)
 			return nil
 		}
 
+		// temporary ban
+		if time.Now().Before(*banUntil) {
+			t := NewTransaction(
+				tranServerMsg,
+				&[]byte{0, 0},
+				NewField(fieldData, []byte("You are temporarily banned on this server")),
+				NewField(fieldChatOptions, []byte{0, 0}),
+			)
+			b, err := t.MarshalBinary()
+			if err != nil {
+				return err
+			}
+
+			_, err = rwc.Write(b)
+			if err != nil {
+				return err
+			}
+
+			time.Sleep(1 * time.Second)
+			return nil
+		}
 	}
+
+	c := s.NewClientConn(rwc, remoteAddr)
 	defer c.Disconnect()
 
 	encodedLogin := clientLogin.GetField(fieldUserLogin).Data
