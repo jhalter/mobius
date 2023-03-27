@@ -15,223 +15,225 @@ import (
 	"time"
 )
 
+type HandlerFunc func(*ClientConn, *Transaction) ([]Transaction, error)
+
 type TransactionType struct {
-	Handler        func(*ClientConn, *Transaction) ([]Transaction, error) // function for handling the transaction type
-	Name           string                                                 // Name of transaction as it will appear in logging
+	Handler        HandlerFunc // function for handling the transaction type
+	Name           string      // Name of transaction as it will appear in logging
 	RequiredFields []requiredField
 }
 
 var TransactionHandlers = map[uint16]TransactionType{
 	// Server initiated
-	tranChatMsg: {
-		Name: "tranChatMsg",
+	TranChatMsg: {
+		Name: "TranChatMsg",
 	},
 	// Server initiated
-	tranNotifyChangeUser: {
-		Name: "tranNotifyChangeUser",
+	TranNotifyChangeUser: {
+		Name: "TranNotifyChangeUser",
 	},
-	tranError: {
-		Name: "tranError",
+	TranError: {
+		Name: "TranError",
 	},
-	tranShowAgreement: {
-		Name: "tranShowAgreement",
+	TranShowAgreement: {
+		Name: "TranShowAgreement",
 	},
-	tranUserAccess: {
-		Name: "tranUserAccess",
+	TranUserAccess: {
+		Name: "TranUserAccess",
 	},
-	tranNotifyDeleteUser: {
-		Name: "tranNotifyDeleteUser",
+	TranNotifyDeleteUser: {
+		Name: "TranNotifyDeleteUser",
 	},
-	tranAgreed: {
-		Name:    "tranAgreed",
+	TranAgreed: {
+		Name:    "TranAgreed",
 		Handler: HandleTranAgreed,
 	},
-	tranChatSend: {
-		Name:    "tranChatSend",
+	TranChatSend: {
+		Name:    "TranChatSend",
 		Handler: HandleChatSend,
 		RequiredFields: []requiredField{
 			{
-				ID:     fieldData,
+				ID:     FieldData,
 				minLen: 0,
 			},
 		},
 	},
-	tranDelNewsArt: {
-		Name:    "tranDelNewsArt",
+	TranDelNewsArt: {
+		Name:    "TranDelNewsArt",
 		Handler: HandleDelNewsArt,
 	},
-	tranDelNewsItem: {
-		Name:    "tranDelNewsItem",
+	TranDelNewsItem: {
+		Name:    "TranDelNewsItem",
 		Handler: HandleDelNewsItem,
 	},
-	tranDeleteFile: {
-		Name:    "tranDeleteFile",
+	TranDeleteFile: {
+		Name:    "TranDeleteFile",
 		Handler: HandleDeleteFile,
 	},
-	tranDeleteUser: {
-		Name:    "tranDeleteUser",
+	TranDeleteUser: {
+		Name:    "TranDeleteUser",
 		Handler: HandleDeleteUser,
 	},
-	tranDisconnectUser: {
-		Name:    "tranDisconnectUser",
+	TranDisconnectUser: {
+		Name:    "TranDisconnectUser",
 		Handler: HandleDisconnectUser,
 	},
-	tranDownloadFile: {
-		Name:    "tranDownloadFile",
+	TranDownloadFile: {
+		Name:    "TranDownloadFile",
 		Handler: HandleDownloadFile,
 	},
-	tranDownloadFldr: {
-		Name:    "tranDownloadFldr",
+	TranDownloadFldr: {
+		Name:    "TranDownloadFldr",
 		Handler: HandleDownloadFolder,
 	},
-	tranGetClientInfoText: {
-		Name:    "tranGetClientInfoText",
+	TranGetClientInfoText: {
+		Name:    "TranGetClientInfoText",
 		Handler: HandleGetClientInfoText,
 	},
-	tranGetFileInfo: {
-		Name:    "tranGetFileInfo",
+	TranGetFileInfo: {
+		Name:    "TranGetFileInfo",
 		Handler: HandleGetFileInfo,
 	},
-	tranGetFileNameList: {
-		Name:    "tranGetFileNameList",
+	TranGetFileNameList: {
+		Name:    "TranGetFileNameList",
 		Handler: HandleGetFileNameList,
 	},
-	tranGetMsgs: {
-		Name:    "tranGetMsgs",
+	TranGetMsgs: {
+		Name:    "TranGetMsgs",
 		Handler: HandleGetMsgs,
 	},
-	tranGetNewsArtData: {
-		Name:    "tranGetNewsArtData",
+	TranGetNewsArtData: {
+		Name:    "TranGetNewsArtData",
 		Handler: HandleGetNewsArtData,
 	},
-	tranGetNewsArtNameList: {
-		Name:    "tranGetNewsArtNameList",
+	TranGetNewsArtNameList: {
+		Name:    "TranGetNewsArtNameList",
 		Handler: HandleGetNewsArtNameList,
 	},
-	tranGetNewsCatNameList: {
-		Name:    "tranGetNewsCatNameList",
+	TranGetNewsCatNameList: {
+		Name:    "TranGetNewsCatNameList",
 		Handler: HandleGetNewsCatNameList,
 	},
-	tranGetUser: {
-		Name:    "tranGetUser",
+	TranGetUser: {
+		Name:    "TranGetUser",
 		Handler: HandleGetUser,
 	},
-	tranGetUserNameList: {
+	TranGetUserNameList: {
 		Name:    "tranHandleGetUserNameList",
 		Handler: HandleGetUserNameList,
 	},
-	tranInviteNewChat: {
-		Name:    "tranInviteNewChat",
+	TranInviteNewChat: {
+		Name:    "TranInviteNewChat",
 		Handler: HandleInviteNewChat,
 	},
-	tranInviteToChat: {
-		Name:    "tranInviteToChat",
+	TranInviteToChat: {
+		Name:    "TranInviteToChat",
 		Handler: HandleInviteToChat,
 	},
-	tranJoinChat: {
-		Name:    "tranJoinChat",
+	TranJoinChat: {
+		Name:    "TranJoinChat",
 		Handler: HandleJoinChat,
 	},
-	tranKeepAlive: {
-		Name:    "tranKeepAlive",
+	TranKeepAlive: {
+		Name:    "TranKeepAlive",
 		Handler: HandleKeepAlive,
 	},
-	tranLeaveChat: {
-		Name:    "tranJoinChat",
+	TranLeaveChat: {
+		Name:    "TranJoinChat",
 		Handler: HandleLeaveChat,
 	},
-	tranListUsers: {
-		Name:    "tranListUsers",
+	TranListUsers: {
+		Name:    "TranListUsers",
 		Handler: HandleListUsers,
 	},
-	tranMoveFile: {
-		Name:    "tranMoveFile",
+	TranMoveFile: {
+		Name:    "TranMoveFile",
 		Handler: HandleMoveFile,
 	},
-	tranNewFolder: {
-		Name:    "tranNewFolder",
+	TranNewFolder: {
+		Name:    "TranNewFolder",
 		Handler: HandleNewFolder,
 	},
-	tranNewNewsCat: {
-		Name:    "tranNewNewsCat",
+	TranNewNewsCat: {
+		Name:    "TranNewNewsCat",
 		Handler: HandleNewNewsCat,
 	},
-	tranNewNewsFldr: {
-		Name:    "tranNewNewsFldr",
+	TranNewNewsFldr: {
+		Name:    "TranNewNewsFldr",
 		Handler: HandleNewNewsFldr,
 	},
-	tranNewUser: {
-		Name:    "tranNewUser",
+	TranNewUser: {
+		Name:    "TranNewUser",
 		Handler: HandleNewUser,
 	},
-	tranUpdateUser: {
-		Name:    "tranUpdateUser",
+	TranUpdateUser: {
+		Name:    "TranUpdateUser",
 		Handler: HandleUpdateUser,
 	},
-	tranOldPostNews: {
-		Name:    "tranOldPostNews",
+	TranOldPostNews: {
+		Name:    "TranOldPostNews",
 		Handler: HandleTranOldPostNews,
 	},
-	tranPostNewsArt: {
-		Name:    "tranPostNewsArt",
+	TranPostNewsArt: {
+		Name:    "TranPostNewsArt",
 		Handler: HandlePostNewsArt,
 	},
-	tranRejectChatInvite: {
-		Name:    "tranRejectChatInvite",
+	TranRejectChatInvite: {
+		Name:    "TranRejectChatInvite",
 		Handler: HandleRejectChatInvite,
 	},
-	tranSendInstantMsg: {
-		Name:    "tranSendInstantMsg",
+	TranSendInstantMsg: {
+		Name:    "TranSendInstantMsg",
 		Handler: HandleSendInstantMsg,
 		RequiredFields: []requiredField{
 			{
-				ID:     fieldData,
+				ID:     FieldData,
 				minLen: 0,
 			},
 			{
-				ID: fieldUserID,
+				ID: FieldUserID,
 			},
 		},
 	},
-	tranSetChatSubject: {
-		Name:    "tranSetChatSubject",
+	TranSetChatSubject: {
+		Name:    "TranSetChatSubject",
 		Handler: HandleSetChatSubject,
 	},
-	tranMakeFileAlias: {
-		Name:    "tranMakeFileAlias",
+	TranMakeFileAlias: {
+		Name:    "TranMakeFileAlias",
 		Handler: HandleMakeAlias,
 		RequiredFields: []requiredField{
-			{ID: fieldFileName, minLen: 1},
-			{ID: fieldFilePath, minLen: 1},
-			{ID: fieldFileNewPath, minLen: 1},
+			{ID: FieldFileName, minLen: 1},
+			{ID: FieldFilePath, minLen: 1},
+			{ID: FieldFileNewPath, minLen: 1},
 		},
 	},
-	tranSetClientUserInfo: {
-		Name:    "tranSetClientUserInfo",
+	TranSetClientUserInfo: {
+		Name:    "TranSetClientUserInfo",
 		Handler: HandleSetClientUserInfo,
 	},
-	tranSetFileInfo: {
-		Name:    "tranSetFileInfo",
+	TranSetFileInfo: {
+		Name:    "TranSetFileInfo",
 		Handler: HandleSetFileInfo,
 	},
-	tranSetUser: {
-		Name:    "tranSetUser",
+	TranSetUser: {
+		Name:    "TranSetUser",
 		Handler: HandleSetUser,
 	},
-	tranUploadFile: {
-		Name:    "tranUploadFile",
+	TranUploadFile: {
+		Name:    "TranUploadFile",
 		Handler: HandleUploadFile,
 	},
-	tranUploadFldr: {
-		Name:    "tranUploadFldr",
+	TranUploadFldr: {
+		Name:    "TranUploadFldr",
 		Handler: HandleUploadFolder,
 	},
-	tranUserBroadcast: {
-		Name:    "tranUserBroadcast",
+	TranUserBroadcast: {
+		Name:    "TranUserBroadcast",
 		Handler: HandleUserBroadcast,
 	},
-	tranDownloadBanner: {
-		Name:    "tranDownloadBanner",
+	TranDownloadBanner: {
+		Name:    "TranDownloadBanner",
 		Handler: HandleDownloadBanner,
 	},
 }
@@ -244,19 +246,19 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 
 	// Truncate long usernames
 	trunc := fmt.Sprintf("%13s", cc.UserName)
-	formattedMsg := fmt.Sprintf("\r%.14s:  %s", trunc, t.GetField(fieldData).Data)
+	formattedMsg := fmt.Sprintf("\r%.14s:  %s", trunc, t.GetField(FieldData).Data)
 
 	// By holding the option key, Hotline chat allows users to send /me formatted messages like:
 	// *** Halcyon does stuff
-	// This is indicated by the presence of the optional field fieldChatOptions set to a value of 1.
+	// This is indicated by the presence of the optional field FieldChatOptions set to a value of 1.
 	// Most clients do not send this option for normal chat messages.
-	if t.GetField(fieldChatOptions).Data != nil && bytes.Equal(t.GetField(fieldChatOptions).Data, []byte{0, 1}) {
-		formattedMsg = fmt.Sprintf("\r*** %s %s", cc.UserName, t.GetField(fieldData).Data)
+	if t.GetField(FieldChatOptions).Data != nil && bytes.Equal(t.GetField(FieldChatOptions).Data, []byte{0, 1}) {
+		formattedMsg = fmt.Sprintf("\r*** %s %s", cc.UserName, t.GetField(FieldData).Data)
 	}
 
 	// The ChatID field is used to identify messages as belonging to a private chat.
 	// All clients *except* Frogblast omit this field for public chat, but Frogblast sends a value of 00 00 00 00.
-	chatID := t.GetField(fieldChatID).Data
+	chatID := t.GetField(FieldChatID).Data
 	if chatID != nil && !bytes.Equal([]byte{0, 0, 0, 0}, chatID) {
 		chatInt := binary.BigEndian.Uint32(chatID)
 		privChat := cc.Server.PrivateChats[chatInt]
@@ -266,10 +268,10 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 		// send the message to all connected clients of the private chat
 		for _, c := range clients {
 			res = append(res, *NewTransaction(
-				tranChatMsg,
+				TranChatMsg,
 				c.ID,
-				NewField(fieldChatID, chatID),
-				NewField(fieldData, []byte(formattedMsg)),
+				NewField(FieldChatID, chatID),
+				NewField(FieldData, []byte(formattedMsg)),
 			))
 		}
 		return res, err
@@ -278,7 +280,7 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 	for _, c := range sortedClients(cc.Server.Clients) {
 		// Filter out clients that do not have the read chat permission
 		if c.Authorize(accessReadChat) {
-			res = append(res, *NewTransaction(tranChatMsg, c.ID, NewField(fieldData, []byte(formattedMsg))))
+			res = append(res, *NewTransaction(TranChatMsg, c.ID, NewField(FieldData, []byte(formattedMsg))))
 		}
 	}
 
@@ -306,22 +308,22 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 		return res, err
 	}
 
-	msg := t.GetField(fieldData)
-	ID := t.GetField(fieldUserID)
+	msg := t.GetField(FieldData)
+	ID := t.GetField(FieldUserID)
 
 	reply := NewTransaction(
-		tranServerMsg,
+		TranServerMsg,
 		&ID.Data,
-		NewField(fieldData, msg.Data),
-		NewField(fieldUserName, cc.UserName),
-		NewField(fieldUserID, *cc.ID),
-		NewField(fieldOptions, []byte{0, 1}),
+		NewField(FieldData, msg.Data),
+		NewField(FieldUserName, cc.UserName),
+		NewField(FieldUserID, *cc.ID),
+		NewField(FieldOptions, []byte{0, 1}),
 	)
 
-	// Later versions of Hotline include the original message in the fieldQuotingMsg field so
+	// Later versions of Hotline include the original message in the FieldQuotingMsg field so
 	//  the receiving client can display both the received message and what it is in reply to
-	if t.GetField(fieldQuotingMsg).Data != nil {
-		reply.Fields = append(reply.Fields, NewField(fieldQuotingMsg, t.GetField(fieldQuotingMsg).Data))
+	if t.GetField(FieldQuotingMsg).Data != nil {
+		reply.Fields = append(reply.Fields, NewField(FieldQuotingMsg, t.GetField(FieldQuotingMsg).Data))
 	}
 
 	id, _ := byteToInt(ID.Data)
@@ -335,12 +337,12 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 	if flagBitmap.Bit(userFLagRefusePChat) == 1 {
 		res = append(res,
 			*NewTransaction(
-				tranServerMsg,
+				TranServerMsg,
 				cc.ID,
-				NewField(fieldData, []byte(string(otherClient.UserName)+" does not accept private messages.")),
-				NewField(fieldUserName, otherClient.UserName),
-				NewField(fieldUserID, *otherClient.ID),
-				NewField(fieldOptions, []byte{0, 2}),
+				NewField(FieldData, []byte(string(otherClient.UserName)+" does not accept private messages.")),
+				NewField(FieldUserName, otherClient.UserName),
+				NewField(FieldUserID, *otherClient.ID),
+				NewField(FieldOptions, []byte{0, 2}),
 			),
 		)
 	} else {
@@ -351,12 +353,12 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 	if len(otherClient.AutoReply) > 0 {
 		res = append(res,
 			*NewTransaction(
-				tranServerMsg,
+				TranServerMsg,
 				cc.ID,
-				NewField(fieldData, otherClient.AutoReply),
-				NewField(fieldUserName, otherClient.UserName),
-				NewField(fieldUserID, *otherClient.ID),
-				NewField(fieldOptions, []byte{0, 1}),
+				NewField(FieldData, otherClient.AutoReply),
+				NewField(FieldUserName, otherClient.UserName),
+				NewField(FieldUserID, *otherClient.ID),
+				NewField(FieldOptions, []byte{0, 1}),
 			),
 		)
 	}
@@ -367,8 +369,8 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 }
 
 func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	fileName := t.GetField(fieldFileName).Data
-	filePath := t.GetField(fieldFilePath).Data
+	fileName := t.GetField(FieldFileName).Data
+	filePath := t.GetField(FieldFilePath).Data
 
 	fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
 	if err != nil {
@@ -381,14 +383,14 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	}
 
 	res = append(res, cc.NewReply(t,
-		NewField(fieldFileName, []byte(fw.name)),
-		NewField(fieldFileTypeString, fw.ffo.FlatFileInformationFork.friendlyType()),
-		NewField(fieldFileCreatorString, fw.ffo.FlatFileInformationFork.friendlyCreator()),
-		NewField(fieldFileComment, fw.ffo.FlatFileInformationFork.Comment),
-		NewField(fieldFileType, fw.ffo.FlatFileInformationFork.TypeSignature),
-		NewField(fieldFileCreateDate, fw.ffo.FlatFileInformationFork.CreateDate),
-		NewField(fieldFileModifyDate, fw.ffo.FlatFileInformationFork.ModifyDate),
-		NewField(fieldFileSize, fw.totalSize()),
+		NewField(FieldFileName, []byte(fw.name)),
+		NewField(FieldFileTypeString, fw.ffo.FlatFileInformationFork.friendlyType()),
+		NewField(FieldFileCreatorString, fw.ffo.FlatFileInformationFork.friendlyCreator()),
+		NewField(FieldFileComment, fw.ffo.FlatFileInformationFork.Comment),
+		NewField(FieldFileType, fw.ffo.FlatFileInformationFork.TypeSignature),
+		NewField(FieldFileCreateDate, fw.ffo.FlatFileInformationFork.CreateDate),
+		NewField(FieldFileModifyDate, fw.ffo.FlatFileInformationFork.ModifyDate),
+		NewField(FieldFileSize, fw.totalSize()),
 	))
 	return res, err
 }
@@ -401,8 +403,8 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 // * 210	File comment	Optional
 // Fields used in the reply:	None
 func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	fileName := t.GetField(fieldFileName).Data
-	filePath := t.GetField(fieldFilePath).Data
+	fileName := t.GetField(FieldFileName).Data
+	filePath := t.GetField(FieldFilePath).Data
 
 	fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
 	if err != nil {
@@ -418,7 +420,7 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	if err != nil {
 		return res, err
 	}
-	if t.GetField(fieldFileComment).Data != nil {
+	if t.GetField(FieldFileComment).Data != nil {
 		switch mode := fi.Mode(); {
 		case mode.IsDir():
 			if !cc.Authorize(accessSetFolderComment) {
@@ -432,7 +434,7 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 			}
 		}
 
-		if err := hlFile.ffo.FlatFileInformationFork.setComment(t.GetField(fieldFileComment).Data); err != nil {
+		if err := hlFile.ffo.FlatFileInformationFork.setComment(t.GetField(FieldFileComment).Data); err != nil {
 			return res, err
 		}
 		w, err := hlFile.infoForkWriter()
@@ -445,12 +447,12 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		}
 	}
 
-	fullNewFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, t.GetField(fieldFileNewName).Data)
+	fullNewFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, t.GetField(FieldFileNewName).Data)
 	if err != nil {
 		return nil, err
 	}
 
-	fileNewName := t.GetField(fieldFileNewName).Data
+	fileNewName := t.GetField(FieldFileNewName).Data
 
 	if fileNewName != nil {
 		switch mode := fi.Mode(); {
@@ -495,8 +497,8 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 // * 202	File path
 // Fields used in the reply: none
 func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	fileName := t.GetField(fieldFileName).Data
-	filePath := t.GetField(fieldFilePath).Data
+	fileName := t.GetField(FieldFileName).Data
+	filePath := t.GetField(FieldFilePath).Data
 
 	fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
 	if err != nil {
@@ -537,14 +539,14 @@ func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 // HandleMoveFile moves files or folders. Note: seemingly not documented
 func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	fileName := string(t.GetField(fieldFileName).Data)
+	fileName := string(t.GetField(FieldFileName).Data)
 
-	filePath, err := readPath(cc.Server.Config.FileRoot, t.GetField(fieldFilePath).Data, t.GetField(fieldFileName).Data)
+	filePath, err := readPath(cc.Server.Config.FileRoot, t.GetField(FieldFilePath).Data, t.GetField(FieldFileName).Data)
 	if err != nil {
 		return res, err
 	}
 
-	fileNewPath, err := readPath(cc.Server.Config.FileRoot, t.GetField(fieldFileNewPath).Data, nil)
+	fileNewPath, err := readPath(cc.Server.Config.FileRoot, t.GetField(FieldFileNewPath).Data, nil)
 	if err != nil {
 		return res, err
 	}
@@ -590,16 +592,16 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err err
 		res = append(res, cc.NewErrReply(t, "You are not allowed to create folders."))
 		return res, err
 	}
-	folderName := string(t.GetField(fieldFileName).Data)
+	folderName := string(t.GetField(FieldFileName).Data)
 
 	folderName = path.Join("/", folderName)
 
 	var subPath string
 
-	// fieldFilePath is only present for nested paths
-	if t.GetField(fieldFilePath).Data != nil {
+	// FieldFilePath is only present for nested paths
+	if t.GetField(FieldFilePath).Data != nil {
 		var newFp FilePath
-		_, err := newFp.Write(t.GetField(fieldFilePath).Data)
+		_, err := newFp.Write(t.GetField(FieldFilePath).Data)
 		if err != nil {
 			return nil, err
 		}
@@ -634,22 +636,22 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 		return res, err
 	}
 
-	login := DecodeUserString(t.GetField(fieldUserLogin).Data)
-	userName := string(t.GetField(fieldUserName).Data)
+	login := DecodeUserString(t.GetField(FieldUserLogin).Data)
+	userName := string(t.GetField(FieldUserName).Data)
 
-	newAccessLvl := t.GetField(fieldUserAccess).Data
+	newAccessLvl := t.GetField(FieldUserAccess).Data
 
 	account := cc.Server.Accounts[login]
 	account.Name = userName
 	copy(account.Access[:], newAccessLvl)
 
 	// If the password field is cleared in the Hotline edit user UI, the SetUser transaction does
-	// not include fieldUserPassword
-	if t.GetField(fieldUserPassword).Data == nil {
+	// not include FieldUserPassword
+	if t.GetField(FieldUserPassword).Data == nil {
 		account.Password = hashAndSalt([]byte(""))
 	}
-	if len(t.GetField(fieldUserPassword).Data) > 1 {
-		account.Password = hashAndSalt(t.GetField(fieldUserPassword).Data)
+	if len(t.GetField(FieldUserPassword).Data) > 1 {
+		account.Password = hashAndSalt(t.GetField(FieldUserPassword).Data)
 	}
 
 	out, err := yaml.Marshal(&account)
@@ -664,7 +666,7 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 	for _, c := range cc.Server.Clients {
 		if c.Account.Login == login {
 			// Note: comment out these two lines to test server-side deny messages
-			newT := NewTransaction(tranUserAccess, c.ID, NewField(fieldUserAccess, newAccessLvl))
+			newT := NewTransaction(TranUserAccess, c.ID, NewField(FieldUserAccess, newAccessLvl))
 			res = append(res, *newT)
 
 			flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(c.Flags)))
@@ -678,11 +680,11 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 			c.Account.Access = account.Access
 
 			cc.sendAll(
-				tranNotifyChangeUser,
-				NewField(fieldUserID, *c.ID),
-				NewField(fieldUserFlags, c.Flags),
-				NewField(fieldUserName, c.UserName),
-				NewField(fieldUserIconID, c.Icon),
+				TranNotifyChangeUser,
+				NewField(FieldUserID, *c.ID),
+				NewField(FieldUserFlags, c.Flags),
+				NewField(FieldUserName, c.UserName),
+				NewField(FieldUserIconID, c.Icon),
 			)
 		}
 	}
@@ -697,17 +699,17 @@ func HandleGetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 		return res, err
 	}
 
-	account := cc.Server.Accounts[string(t.GetField(fieldUserLogin).Data)]
+	account := cc.Server.Accounts[string(t.GetField(FieldUserLogin).Data)]
 	if account == nil {
 		res = append(res, cc.NewErrReply(t, "Account does not exist."))
 		return res, err
 	}
 
 	res = append(res, cc.NewReply(t,
-		NewField(fieldUserName, []byte(account.Name)),
-		NewField(fieldUserLogin, negateString(t.GetField(fieldUserLogin).Data)),
-		NewField(fieldUserPassword, []byte(account.Password)),
-		NewField(fieldUserAccess, account.Access[:]),
+		NewField(FieldUserName, []byte(account.Name)),
+		NewField(FieldUserLogin, negateString(t.GetField(FieldUserLogin).Data)),
+		NewField(FieldUserPassword, []byte(account.Password)),
+		NewField(FieldUserAccess, account.Access[:]),
 	))
 	return res, err
 }
@@ -726,7 +728,7 @@ func HandleListUsers(cc *ClientConn, t *Transaction) (res []Transaction, err err
 			return res, err
 		}
 
-		userFields = append(userFields, NewField(fieldData, b[:n]))
+		userFields = append(userFields, NewField(FieldData, b[:n]))
 	}
 
 	res = append(res, cc.NewReply(t, userFields...))
@@ -750,7 +752,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		}
 
 		if len(subFields) == 1 {
-			login := DecodeUserString(getField(fieldData, &subFields).Data)
+			login := DecodeUserString(getField(FieldData, &subFields).Data)
 			cc.logger.Infow("DeleteUser", "login", login)
 
 			if !cc.Authorize(accessDeleteUser) {
@@ -764,7 +766,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			continue
 		}
 
-		login := DecodeUserString(getField(fieldUserLogin, &subFields).Data)
+		login := DecodeUserString(getField(FieldUserLogin, &subFields).Data)
 
 		// check if the login dataFile; if so, we know we are updating an existing user
 		if acc, ok := cc.Server.Accounts[login]; ok {
@@ -776,21 +778,21 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 				return res, err
 			}
 
-			if getField(fieldUserPassword, &subFields) != nil {
-				newPass := getField(fieldUserPassword, &subFields).Data
+			if getField(FieldUserPassword, &subFields) != nil {
+				newPass := getField(FieldUserPassword, &subFields).Data
 				acc.Password = hashAndSalt(newPass)
 			} else {
 				acc.Password = hashAndSalt([]byte(""))
 			}
 
-			if getField(fieldUserAccess, &subFields) != nil {
-				copy(acc.Access[:], getField(fieldUserAccess, &subFields).Data)
+			if getField(FieldUserAccess, &subFields) != nil {
+				copy(acc.Access[:], getField(FieldUserAccess, &subFields).Data)
 			}
 
 			err = cc.Server.UpdateUser(
-				DecodeUserString(getField(fieldData, &subFields).Data),
-				DecodeUserString(getField(fieldUserLogin, &subFields).Data),
-				string(getField(fieldUserName, &subFields).Data),
+				DecodeUserString(getField(FieldData, &subFields).Data),
+				DecodeUserString(getField(FieldUserLogin, &subFields).Data),
+				string(getField(FieldUserName, &subFields).Data),
 				acc.Password,
 				acc.Access,
 			)
@@ -806,7 +808,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			}
 
 			newAccess := accessBitmap{}
-			copy(newAccess[:], getField(fieldUserAccess, &subFields).Data[:])
+			copy(newAccess[:], getField(FieldUserAccess, &subFields).Data[:])
 
 			// Prevent account from creating new account with greater permission
 			for i := 0; i < 64; i++ {
@@ -817,7 +819,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 				}
 			}
 
-			err := cc.Server.NewUser(login, string(getField(fieldUserName, &subFields).Data), string(getField(fieldUserPassword, &subFields).Data), newAccess)
+			err := cc.Server.NewUser(login, string(getField(FieldUserName, &subFields).Data), string(getField(FieldUserPassword, &subFields).Data), newAccess)
 			if err != nil {
 				return []Transaction{}, err
 			}
@@ -835,7 +837,7 @@ func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 		return res, err
 	}
 
-	login := DecodeUserString(t.GetField(fieldUserLogin).Data)
+	login := DecodeUserString(t.GetField(FieldUserLogin).Data)
 
 	// If the account already dataFile, reply with an error
 	if _, ok := cc.Server.Accounts[login]; ok {
@@ -844,7 +846,7 @@ func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 	}
 
 	newAccess := accessBitmap{}
-	copy(newAccess[:], t.GetField(fieldUserAccess).Data[:])
+	copy(newAccess[:], t.GetField(FieldUserAccess).Data[:])
 
 	// Prevent account from creating new account with greater permission
 	for i := 0; i < 64; i++ {
@@ -856,7 +858,7 @@ func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 		}
 	}
 
-	if err := cc.Server.NewUser(login, string(t.GetField(fieldUserName).Data), string(t.GetField(fieldUserPassword).Data), newAccess); err != nil {
+	if err := cc.Server.NewUser(login, string(t.GetField(FieldUserName).Data), string(t.GetField(FieldUserPassword).Data), newAccess); err != nil {
 		return []Transaction{}, err
 	}
 
@@ -871,7 +873,7 @@ func HandleDeleteUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	}
 
 	// TODO: Handle case where account doesn't exist; e.g. delete race condition
-	login := DecodeUserString(t.GetField(fieldUserLogin).Data)
+	login := DecodeUserString(t.GetField(FieldUserLogin).Data)
 
 	if err := cc.Server.DeleteUser(login); err != nil {
 		return res, err
@@ -889,9 +891,9 @@ func HandleUserBroadcast(cc *ClientConn, t *Transaction) (res []Transaction, err
 	}
 
 	cc.sendAll(
-		tranServerMsg,
-		NewField(fieldData, t.GetField(tranGetMsgs).Data),
-		NewField(fieldChatOptions, []byte{0}),
+		TranServerMsg,
+		NewField(FieldData, t.GetField(TranGetMsgs).Data),
+		NewField(FieldChatOptions, []byte{0}),
 	)
 
 	res = append(res, cc.NewReply(t))
@@ -912,7 +914,7 @@ func HandleGetClientInfoText(cc *ClientConn, t *Transaction) (res []Transaction,
 		return res, err
 	}
 
-	clientID, _ := byteToInt(t.GetField(fieldUserID).Data)
+	clientID, _ := byteToInt(t.GetField(FieldUserID).Data)
 
 	clientConn := cc.Server.Clients[uint16(clientID)]
 	if clientConn == nil {
@@ -920,8 +922,8 @@ func HandleGetClientInfoText(cc *ClientConn, t *Transaction) (res []Transaction,
 	}
 
 	res = append(res, cc.NewReply(t,
-		NewField(fieldData, []byte(clientConn.String())),
-		NewField(fieldUserName, clientConn.UserName),
+		NewField(FieldData, []byte(clientConn.String())),
+		NewField(FieldUserName, clientConn.UserName),
 	))
 	return res, err
 }
@@ -933,20 +935,20 @@ func HandleGetUserNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 }
 
 func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if t.GetField(fieldUserName).Data != nil {
+	if t.GetField(FieldUserName).Data != nil {
 		if cc.Authorize(accessAnyName) {
-			cc.UserName = t.GetField(fieldUserName).Data
+			cc.UserName = t.GetField(FieldUserName).Data
 		} else {
 			cc.UserName = []byte(cc.Account.Name)
 		}
 	}
 
-	cc.Icon = t.GetField(fieldUserIconID).Data
+	cc.Icon = t.GetField(FieldUserIconID).Data
 
 	cc.logger = cc.logger.With("name", string(cc.UserName))
 	cc.logger.Infow("Login successful", "clientVersion", fmt.Sprintf("%v", func() int { i, _ := byteToInt(cc.Version); return i }()))
 
-	options := t.GetField(fieldOptions).Data
+	options := t.GetField(FieldOptions).Data
 	optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
 
 	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(cc.Flags)))
@@ -965,24 +967,24 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	// Check auto response
 	if optBitmap.Bit(autoResponse) == 1 {
-		cc.AutoReply = t.GetField(fieldAutomaticResponse).Data
+		cc.AutoReply = t.GetField(FieldAutomaticResponse).Data
 	} else {
 		cc.AutoReply = []byte{}
 	}
 
 	trans := cc.notifyOthers(
 		*NewTransaction(
-			tranNotifyChangeUser, nil,
-			NewField(fieldUserName, cc.UserName),
-			NewField(fieldUserID, *cc.ID),
-			NewField(fieldUserIconID, cc.Icon),
-			NewField(fieldUserFlags, cc.Flags),
+			TranNotifyChangeUser, nil,
+			NewField(FieldUserName, cc.UserName),
+			NewField(FieldUserID, *cc.ID),
+			NewField(FieldUserIconID, cc.Icon),
+			NewField(FieldUserFlags, cc.Flags),
 		),
 	)
 	res = append(res, trans...)
 
 	if cc.Server.Config.BannerFile != "" {
-		res = append(res, *NewTransaction(tranServerBanner, cc.ID, NewField(fieldBannerType, []byte("JPEG"))))
+		res = append(res, *NewTransaction(TranServerBanner, cc.ID, NewField(FieldBannerType, []byte("JPEG"))))
 	}
 
 	res = append(res, cc.NewReply(t))
@@ -1012,7 +1014,7 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 		newsTemplate = cc.Server.Config.NewsDelimiter
 	}
 
-	newsPost := fmt.Sprintf(newsTemplate+"\r", cc.UserName, time.Now().Format(newsDateTemplate), t.GetField(fieldData).Data)
+	newsPost := fmt.Sprintf(newsTemplate+"\r", cc.UserName, time.Now().Format(newsDateTemplate), t.GetField(FieldData).Data)
 	newsPost = strings.Replace(newsPost, "\n", "\r", -1)
 
 	// update news in memory
@@ -1025,8 +1027,8 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 
 	// Notify all clients of updated news
 	cc.sendAll(
-		tranNewMsg,
-		NewField(fieldData, []byte(newsPost)),
+		TranNewMsg,
+		NewField(FieldData, []byte(newsPost)),
 	)
 
 	res = append(res, cc.NewReply(t))
@@ -1039,27 +1041,27 @@ func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, er
 		return res, err
 	}
 
-	clientConn := cc.Server.Clients[binary.BigEndian.Uint16(t.GetField(fieldUserID).Data)]
+	clientConn := cc.Server.Clients[binary.BigEndian.Uint16(t.GetField(FieldUserID).Data)]
 
 	if clientConn.Authorize(accessCannotBeDiscon) {
 		res = append(res, cc.NewErrReply(t, clientConn.Account.Login+" is not allowed to be disconnected."))
 		return res, err
 	}
 
-	// If fieldOptions is set, then the client IP is banned in addition to disconnected.
+	// If FieldOptions is set, then the client IP is banned in addition to disconnected.
 	// 00 01 = temporary ban
 	// 00 02 = permanent ban
-	if t.GetField(fieldOptions).Data != nil {
-		switch t.GetField(fieldOptions).Data[1] {
+	if t.GetField(FieldOptions).Data != nil {
+		switch t.GetField(FieldOptions).Data[1] {
 		case 1:
 			// send message: "You are temporarily banned on this server"
 			cc.logger.Infow("Disconnect & temporarily ban " + string(clientConn.UserName))
 
 			res = append(res, *NewTransaction(
-				tranServerMsg,
+				TranServerMsg,
 				clientConn.ID,
-				NewField(fieldData, []byte("You are temporarily banned on this server")),
-				NewField(fieldChatOptions, []byte{0, 0}),
+				NewField(FieldData, []byte("You are temporarily banned on this server")),
+				NewField(FieldChatOptions, []byte{0, 0}),
 			))
 
 			banUntil := time.Now().Add(tempBanDuration)
@@ -1070,10 +1072,10 @@ func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, er
 			cc.logger.Infow("Disconnect & ban " + string(clientConn.UserName))
 
 			res = append(res, *NewTransaction(
-				tranServerMsg,
+				TranServerMsg,
 				clientConn.ID,
-				NewField(fieldData, []byte("You are permanently banned on this server")),
-				NewField(fieldChatOptions, []byte{0, 0}),
+				NewField(FieldData, []byte("You are permanently banned on this server")),
+				NewField(FieldChatOptions, []byte{0, 0}),
 			))
 
 			cc.Server.banList[strings.Split(clientConn.RemoteAddr, ":")[0]] = nil
@@ -1099,7 +1101,7 @@ func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) (res []Transaction
 		return res, err
 	}
 
-	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
+	pathStrs := ReadNewsPath(t.GetField(FieldNewsPath).Data)
 	cats := cc.Server.GetNewsCatByPath(pathStrs)
 
 	// To store the keys in slice in sorted order
@@ -1116,7 +1118,7 @@ func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) (res []Transaction
 		cat := cats[k]
 		b, _ := cat.MarshalBinary()
 		fieldData = append(fieldData, NewField(
-			fieldNewsCatListData15,
+			FieldNewsCatListData15,
 			b,
 		))
 	}
@@ -1131,8 +1133,8 @@ func HandleNewNewsCat(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		return res, err
 	}
 
-	name := string(t.GetField(fieldNewsCatName).Data)
-	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
+	name := string(t.GetField(FieldNewsCatName).Data)
+	pathStrs := ReadNewsPath(t.GetField(FieldNewsPath).Data)
 
 	cats := cc.Server.GetNewsCatByPath(pathStrs)
 	cats[name] = NewsCategoryListData15{
@@ -1158,8 +1160,8 @@ func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		return res, err
 	}
 
-	name := string(t.GetField(fieldFileName).Data)
-	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
+	name := string(t.GetField(FieldFileName).Data)
+	pathStrs := ReadNewsPath(t.GetField(FieldNewsPath).Data)
 
 	cc.logger.Infof("Creating new news folder %s", name)
 
@@ -1189,7 +1191,7 @@ func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction
 		res = append(res, cc.NewErrReply(t, "You are not allowed to read news."))
 		return res, err
 	}
-	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
+	pathStrs := ReadNewsPath(t.GetField(FieldNewsPath).Data)
 
 	var cat NewsCategoryListData15
 	cats := cc.Server.ThreadedNews.Categories
@@ -1201,7 +1203,7 @@ func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction
 
 	nald := cat.GetNewsArtListData()
 
-	res = append(res, cc.NewReply(t, NewField(fieldNewsArtListData, nald.Payload())))
+	res = append(res, cc.NewReply(t, NewField(FieldNewsArtListData, nald.Payload())))
 	return res, err
 }
 
@@ -1232,14 +1234,14 @@ func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, er
 	var cat NewsCategoryListData15
 	cats := cc.Server.ThreadedNews.Categories
 
-	for _, fp := range ReadNewsPath(t.GetField(fieldNewsPath).Data) {
+	for _, fp := range ReadNewsPath(t.GetField(FieldNewsPath).Data) {
 		cat = cats[fp]
 		cats = cats[fp].SubCats
 	}
 
 	// The official Hotline clients will send the article ID as 2 bytes if possible, but
 	// some third party clients such as Frogblast and Heildrun will always send 4 bytes
-	convertedID, err := byteToInt(t.GetField(fieldNewsArtID).Data)
+	convertedID, err := byteToInt(t.GetField(FieldNewsArtID).Data)
 	if err != nil {
 		return res, err
 	}
@@ -1251,15 +1253,15 @@ func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, er
 	}
 
 	res = append(res, cc.NewReply(t,
-		NewField(fieldNewsArtTitle, []byte(art.Title)),
-		NewField(fieldNewsArtPoster, []byte(art.Poster)),
-		NewField(fieldNewsArtDate, art.Date),
-		NewField(fieldNewsArtPrevArt, art.PrevArt),
-		NewField(fieldNewsArtNextArt, art.NextArt),
-		NewField(fieldNewsArtParentArt, art.ParentArt),
-		NewField(fieldNewsArt1stChildArt, art.FirstChildArt),
-		NewField(fieldNewsArtDataFlav, []byte("text/plain")),
-		NewField(fieldNewsArtData, []byte(art.Data)),
+		NewField(FieldNewsArtTitle, []byte(art.Title)),
+		NewField(FieldNewsArtPoster, []byte(art.Poster)),
+		NewField(FieldNewsArtDate, art.Date),
+		NewField(FieldNewsArtPrevArt, art.PrevArt),
+		NewField(FieldNewsArtNextArt, art.NextArt),
+		NewField(FieldNewsArtParentArt, art.ParentArt),
+		NewField(FieldNewsArt1stChildArt, art.FirstChildArt),
+		NewField(FieldNewsArtDataFlav, []byte("text/plain")),
+		NewField(FieldNewsArtData, []byte(art.Data)),
 	))
 	return res, err
 }
@@ -1270,7 +1272,7 @@ func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, er
 // Fields used in the reply:
 // None
 func HandleDelNewsItem(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
+	pathStrs := ReadNewsPath(t.GetField(FieldNewsPath).Data)
 
 	cats := cc.Server.ThreadedNews.Categories
 	delName := pathStrs[len(pathStrs)-1]
@@ -1309,8 +1311,8 @@ func HandleDelNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	// 325	News path
 	// 326	News article ID
 	// 337	News article – recursive delete	Delete child articles (1) or not (0)
-	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
-	ID, err := byteToInt(t.GetField(fieldNewsArtID).Data)
+	pathStrs := ReadNewsPath(t.GetField(FieldNewsPath).Data)
+	ID, err := byteToInt(t.GetField(FieldNewsArtID).Data)
 	if err != nil {
 		return res, err
 	}
@@ -1345,13 +1347,13 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		return res, err
 	}
 
-	pathStrs := ReadNewsPath(t.GetField(fieldNewsPath).Data)
+	pathStrs := ReadNewsPath(t.GetField(FieldNewsPath).Data)
 	cats := cc.Server.GetNewsCatByPath(pathStrs[:len(pathStrs)-1])
 
 	catName := pathStrs[len(pathStrs)-1]
 	cat := cats[catName]
 
-	artID, err := byteToInt(t.GetField(fieldNewsArtID).Data)
+	artID, err := byteToInt(t.GetField(FieldNewsArtID).Data)
 	if err != nil {
 		return res, err
 	}
@@ -1360,7 +1362,7 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	binary.BigEndian.PutUint32(bs, convertedArtID)
 
 	newArt := NewsArtData{
-		Title:         string(t.GetField(fieldNewsArtTitle).Data),
+		Title:         string(t.GetField(FieldNewsArtTitle).Data),
 		Poster:        string(cc.UserName),
 		Date:          toHotlineTime(time.Now()),
 		PrevArt:       []byte{0, 0, 0, 0},
@@ -1368,7 +1370,7 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		ParentArt:     bs,
 		FirstChildArt: []byte{0, 0, 0, 0},
 		DataFlav:      []byte("text/plain"),
-		Data:          string(t.GetField(fieldNewsArtData).Data),
+		Data:          string(t.GetField(FieldNewsArtData).Data),
 	}
 
 	var keys []int
@@ -1416,7 +1418,7 @@ func HandleGetMsgs(cc *ClientConn, t *Transaction) (res []Transaction, err error
 		return res, err
 	}
 
-	res = append(res, cc.NewReply(t, NewField(fieldData, cc.Server.FlatNews)))
+	res = append(res, cc.NewReply(t, NewField(FieldData, cc.Server.FlatNews)))
 
 	return res, err
 }
@@ -1427,14 +1429,14 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 		return res, err
 	}
 
-	fileName := t.GetField(fieldFileName).Data
-	filePath := t.GetField(fieldFilePath).Data
-	resumeData := t.GetField(fieldFileResumeData).Data
+	fileName := t.GetField(FieldFileName).Data
+	filePath := t.GetField(FieldFilePath).Data
+	resumeData := t.GetField(FieldFileResumeData).Data
 
 	var dataOffset int64
 	var frd FileResumeData
 	if resumeData != nil {
-		if err := frd.UnmarshalBinary(t.GetField(fieldFileResumeData).Data); err != nil {
+		if err := frd.UnmarshalBinary(t.GetField(FieldFileResumeData).Data); err != nil {
 			return res, err
 		}
 		// TODO: handle rsrc fork offset
@@ -1458,7 +1460,7 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 	// TODO: refactor to remove this
 	if resumeData != nil {
 		var frd FileResumeData
-		if err := frd.UnmarshalBinary(t.GetField(fieldFileResumeData).Data); err != nil {
+		if err := frd.UnmarshalBinary(t.GetField(FieldFileResumeData).Data); err != nil {
 			return res, err
 		}
 		ft.fileResumeData = &frd
@@ -1467,16 +1469,16 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 	// Optional field for when a HL v1.5+ client requests file preview
 	// Used only for TEXT, JPEG, GIFF, BMP or PICT files
 	// The value will always be 2
-	if t.GetField(fieldFileTransferOptions).Data != nil {
-		ft.options = t.GetField(fieldFileTransferOptions).Data
+	if t.GetField(FieldFileTransferOptions).Data != nil {
+		ft.options = t.GetField(FieldFileTransferOptions).Data
 		xferSize = hlFile.ffo.FlatFileDataForkHeader.DataSize[:]
 	}
 
 	res = append(res, cc.NewReply(t,
-		NewField(fieldRefNum, ft.refNum[:]),
-		NewField(fieldWaitingCount, []byte{0x00, 0x00}), // TODO: Implement waiting count
-		NewField(fieldTransferSize, xferSize),
-		NewField(fieldFileSize, hlFile.ffo.FlatFileDataForkHeader.DataSize[:]),
+		NewField(FieldRefNum, ft.refNum[:]),
+		NewField(FieldWaitingCount, []byte{0x00, 0x00}), // TODO: Implement waiting count
+		NewField(FieldTransferSize, xferSize),
+		NewField(FieldFileSize, hlFile.ffo.FlatFileDataForkHeader.DataSize[:]),
 	))
 
 	return res, err
@@ -1489,7 +1491,7 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 		return res, err
 	}
 
-	fullFilePath, err := readPath(cc.Server.Config.FileRoot, t.GetField(fieldFilePath).Data, t.GetField(fieldFileName).Data)
+	fullFilePath, err := readPath(cc.Server.Config.FileRoot, t.GetField(FieldFilePath).Data, t.GetField(FieldFileName).Data)
 	if err != nil {
 		return res, err
 	}
@@ -1503,19 +1505,19 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 		return res, err
 	}
 
-	fileTransfer := cc.newFileTransfer(FolderDownload, t.GetField(fieldFileName).Data, t.GetField(fieldFilePath).Data, transferSize)
+	fileTransfer := cc.newFileTransfer(FolderDownload, t.GetField(FieldFileName).Data, t.GetField(FieldFilePath).Data, transferSize)
 
 	var fp FilePath
-	_, err = fp.Write(t.GetField(fieldFilePath).Data)
+	_, err = fp.Write(t.GetField(FieldFilePath).Data)
 	if err != nil {
 		return res, err
 	}
 
 	res = append(res, cc.NewReply(t,
-		NewField(fieldRefNum, fileTransfer.ReferenceNumber),
-		NewField(fieldTransferSize, transferSize),
-		NewField(fieldFolderItemCount, itemCount),
-		NewField(fieldWaitingCount, []byte{0x00, 0x00}), // TODO: Implement waiting count
+		NewField(FieldRefNum, fileTransfer.ReferenceNumber),
+		NewField(FieldTransferSize, transferSize),
+		NewField(FieldFolderItemCount, itemCount),
+		NewField(FieldWaitingCount, []byte{0x00, 0x00}), // TODO: Implement waiting count
 	))
 	return res, err
 }
@@ -1529,8 +1531,8 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 // 204	File transfer options	"Optional Currently set to 1" (TODO: ??)
 func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	var fp FilePath
-	if t.GetField(fieldFilePath).Data != nil {
-		if _, err = fp.Write(t.GetField(fieldFilePath).Data); err != nil {
+	if t.GetField(FieldFilePath).Data != nil {
+		if _, err = fp.Write(t.GetField(FieldFilePath).Data); err != nil {
 			return res, err
 		}
 	}
@@ -1538,20 +1540,20 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err 
 	// Handle special cases for Upload and Drop Box folders
 	if !cc.Authorize(accessUploadAnywhere) {
 		if !fp.IsUploadDir() && !fp.IsDropbox() {
-			res = append(res, cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload of the folder \"%v\" because you are only allowed to upload to the \"Uploads\" folder.", string(t.GetField(fieldFileName).Data))))
+			res = append(res, cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload of the folder \"%v\" because you are only allowed to upload to the \"Uploads\" folder.", string(t.GetField(FieldFileName).Data))))
 			return res, err
 		}
 	}
 
 	fileTransfer := cc.newFileTransfer(FolderUpload,
-		t.GetField(fieldFileName).Data,
-		t.GetField(fieldFilePath).Data,
-		t.GetField(fieldTransferSize).Data,
+		t.GetField(FieldFileName).Data,
+		t.GetField(FieldFilePath).Data,
+		t.GetField(FieldTransferSize).Data,
 	)
 
-	fileTransfer.FolderItemCount = t.GetField(fieldFolderItemCount).Data
+	fileTransfer.FolderItemCount = t.GetField(FieldFolderItemCount).Data
 
-	res = append(res, cc.NewReply(t, NewField(fieldRefNum, fileTransfer.ReferenceNumber)))
+	res = append(res, cc.NewReply(t, NewField(FieldRefNum, fileTransfer.ReferenceNumber)))
 	return res, err
 }
 
@@ -1568,10 +1570,10 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		return res, err
 	}
 
-	fileName := t.GetField(fieldFileName).Data
-	filePath := t.GetField(fieldFilePath).Data
-	transferOptions := t.GetField(fieldFileTransferOptions).Data
-	transferSize := t.GetField(fieldTransferSize).Data // not sent for resume
+	fileName := t.GetField(FieldFileName).Data
+	filePath := t.GetField(FieldFilePath).Data
+	transferOptions := t.GetField(FieldFileTransferOptions).Data
+	transferSize := t.GetField(FieldTransferSize).Data // not sent for resume
 
 	var fp FilePath
 	if filePath != nil {
@@ -1599,7 +1601,7 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	ft := cc.newFileTransfer(FileUpload, fileName, filePath, transferSize)
 
-	replyT := cc.NewReply(t, NewField(fieldRefNum, ft.ReferenceNumber))
+	replyT := cc.NewReply(t, NewField(FieldRefNum, ft.ReferenceNumber))
 
 	// client has requested to resume a partially transferred file
 	if transferOptions != nil {
@@ -1620,7 +1622,7 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 		ft.TransferSize = offset
 
-		replyT.Fields = append(replyT.Fields, NewField(fieldFileResumeData, b))
+		replyT.Fields = append(replyT.Fields, NewField(FieldFileResumeData, b))
 	}
 
 	res = append(res, replyT)
@@ -1628,17 +1630,17 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 }
 
 func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	if len(t.GetField(fieldUserIconID).Data) == 4 {
-		cc.Icon = t.GetField(fieldUserIconID).Data[2:]
+	if len(t.GetField(FieldUserIconID).Data) == 4 {
+		cc.Icon = t.GetField(FieldUserIconID).Data[2:]
 	} else {
-		cc.Icon = t.GetField(fieldUserIconID).Data
+		cc.Icon = t.GetField(FieldUserIconID).Data
 	}
 	if cc.Authorize(accessAnyName) {
-		cc.UserName = t.GetField(fieldUserName).Data
+		cc.UserName = t.GetField(FieldUserName).Data
 	}
 
 	// the options field is only passed by the client versions > 1.2.3.
-	options := t.GetField(fieldOptions).Data
+	options := t.GetField(FieldOptions).Data
 	if options != nil {
 		optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
 		flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(cc.Flags)))
@@ -1651,7 +1653,7 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction,
 
 		// Check auto response
 		if optBitmap.Bit(autoResponse) == 1 {
-			cc.AutoReply = t.GetField(fieldAutomaticResponse).Data
+			cc.AutoReply = t.GetField(FieldAutomaticResponse).Data
 		} else {
 			cc.AutoReply = []byte{}
 		}
@@ -1659,12 +1661,12 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction,
 
 	for _, c := range sortedClients(cc.Server.Clients) {
 		res = append(res, *NewTransaction(
-			tranNotifyChangeUser,
+			TranNotifyChangeUser,
 			c.ID,
-			NewField(fieldUserID, *cc.ID),
-			NewField(fieldUserIconID, cc.Icon),
-			NewField(fieldUserFlags, cc.Flags),
-			NewField(fieldUserName, cc.UserName),
+			NewField(FieldUserID, *cc.ID),
+			NewField(FieldUserIconID, cc.Icon),
+			NewField(FieldUserFlags, cc.Flags),
+			NewField(FieldUserName, cc.UserName),
 		))
 	}
 
@@ -1683,7 +1685,7 @@ func HandleKeepAlive(cc *ClientConn, t *Transaction) (res []Transaction, err err
 func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	fullPath, err := readPath(
 		cc.Server.Config.FileRoot,
-		t.GetField(fieldFilePath).Data,
+		t.GetField(FieldFilePath).Data,
 		nil,
 	)
 	if err != nil {
@@ -1691,8 +1693,8 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 	}
 
 	var fp FilePath
-	if t.GetField(fieldFilePath).Data != nil {
-		if _, err = fp.Write(t.GetField(fieldFilePath).Data); err != nil {
+	if t.GetField(FieldFilePath).Data != nil {
+		if _, err = fp.Write(t.GetField(FieldFilePath).Data); err != nil {
 			return res, err
 		}
 	}
@@ -1716,14 +1718,14 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 // =================================
 //     Hotline private chat flow
 // =================================
-// 1. ClientA sends tranInviteNewChat to server with user ID to invite
+// 1. ClientA sends TranInviteNewChat to server with user ID to invite
 // 2. Server creates new ChatID
-// 3. Server sends tranInviteToChat to invitee
+// 3. Server sends TranInviteToChat to invitee
 // 4. Server replies to ClientA with new Chat ID
 //
 // A dialog box pops up in the invitee client with options to accept or decline the invitation.
 // If Accepted is clicked:
-// 1. ClientB sends tranJoinChat with fieldChatID
+// 1. ClientB sends TranJoinChat with FieldChatID
 
 // HandleInviteNewChat invites users to new private chat
 func HandleInviteNewChat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
@@ -1733,7 +1735,7 @@ func HandleInviteNewChat(cc *ClientConn, t *Transaction) (res []Transaction, err
 	}
 
 	// Client to Invite
-	targetID := t.GetField(fieldUserID).Data
+	targetID := t.GetField(FieldUserID).Data
 	newChatID := cc.Server.NewPrivateChat(cc)
 
 	// Check if target user has "Refuse private chat" flag
@@ -1744,33 +1746,33 @@ func HandleInviteNewChat(cc *ClientConn, t *Transaction) (res []Transaction, err
 	if flagBitmap.Bit(userFLagRefusePChat) == 1 {
 		res = append(res,
 			*NewTransaction(
-				tranServerMsg,
+				TranServerMsg,
 				cc.ID,
-				NewField(fieldData, []byte(string(targetClient.UserName)+" does not accept private chats.")),
-				NewField(fieldUserName, targetClient.UserName),
-				NewField(fieldUserID, *targetClient.ID),
-				NewField(fieldOptions, []byte{0, 2}),
+				NewField(FieldData, []byte(string(targetClient.UserName)+" does not accept private chats.")),
+				NewField(FieldUserName, targetClient.UserName),
+				NewField(FieldUserID, *targetClient.ID),
+				NewField(FieldOptions, []byte{0, 2}),
 			),
 		)
 	} else {
 		res = append(res,
 			*NewTransaction(
-				tranInviteToChat,
+				TranInviteToChat,
 				&targetID,
-				NewField(fieldChatID, newChatID),
-				NewField(fieldUserName, cc.UserName),
-				NewField(fieldUserID, *cc.ID),
+				NewField(FieldChatID, newChatID),
+				NewField(FieldUserName, cc.UserName),
+				NewField(FieldUserID, *cc.ID),
 			),
 		)
 	}
 
 	res = append(res,
 		cc.NewReply(t,
-			NewField(fieldChatID, newChatID),
-			NewField(fieldUserName, cc.UserName),
-			NewField(fieldUserID, *cc.ID),
-			NewField(fieldUserIconID, cc.Icon),
-			NewField(fieldUserFlags, cc.Flags),
+			NewField(FieldChatID, newChatID),
+			NewField(FieldUserName, cc.UserName),
+			NewField(FieldUserID, *cc.ID),
+			NewField(FieldUserIconID, cc.Icon),
+			NewField(FieldUserFlags, cc.Flags),
 		),
 	)
 
@@ -1784,26 +1786,26 @@ func HandleInviteToChat(cc *ClientConn, t *Transaction) (res []Transaction, err 
 	}
 
 	// Client to Invite
-	targetID := t.GetField(fieldUserID).Data
-	chatID := t.GetField(fieldChatID).Data
+	targetID := t.GetField(FieldUserID).Data
+	chatID := t.GetField(FieldChatID).Data
 
 	res = append(res,
 		*NewTransaction(
-			tranInviteToChat,
+			TranInviteToChat,
 			&targetID,
-			NewField(fieldChatID, chatID),
-			NewField(fieldUserName, cc.UserName),
-			NewField(fieldUserID, *cc.ID),
+			NewField(FieldChatID, chatID),
+			NewField(FieldUserName, cc.UserName),
+			NewField(FieldUserID, *cc.ID),
 		),
 	)
 	res = append(res,
 		cc.NewReply(
 			t,
-			NewField(fieldChatID, chatID),
-			NewField(fieldUserName, cc.UserName),
-			NewField(fieldUserID, *cc.ID),
-			NewField(fieldUserIconID, cc.Icon),
-			NewField(fieldUserFlags, cc.Flags),
+			NewField(FieldChatID, chatID),
+			NewField(FieldUserName, cc.UserName),
+			NewField(FieldUserID, *cc.ID),
+			NewField(FieldUserIconID, cc.Icon),
+			NewField(FieldUserFlags, cc.Flags),
 		),
 	)
 
@@ -1811,7 +1813,7 @@ func HandleInviteToChat(cc *ClientConn, t *Transaction) (res []Transaction, err 
 }
 
 func HandleRejectChatInvite(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	chatID := t.GetField(fieldChatID).Data
+	chatID := t.GetField(FieldChatID).Data
 	chatInt := binary.BigEndian.Uint32(chatID)
 
 	privChat := cc.Server.PrivateChats[chatInt]
@@ -1821,10 +1823,10 @@ func HandleRejectChatInvite(cc *ClientConn, t *Transaction) (res []Transaction, 
 	for _, c := range sortedClients(privChat.ClientConn) {
 		res = append(res,
 			*NewTransaction(
-				tranChatMsg,
+				TranChatMsg,
 				c.ID,
-				NewField(fieldChatID, chatID),
-				NewField(fieldData, resMsg),
+				NewField(FieldChatID, chatID),
+				NewField(FieldData, resMsg),
 			),
 		)
 	}
@@ -1838,29 +1840,29 @@ func HandleRejectChatInvite(cc *ClientConn, t *Transaction) (res []Transaction, 
 // * 300	User name with info (Optional)
 // * 300 	(more user names with info)
 func HandleJoinChat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	chatID := t.GetField(fieldChatID).Data
+	chatID := t.GetField(FieldChatID).Data
 	chatInt := binary.BigEndian.Uint32(chatID)
 
 	privChat := cc.Server.PrivateChats[chatInt]
 
-	// Send tranNotifyChatChangeUser to current members of the chat to inform of new user
+	// Send TranNotifyChatChangeUser to current members of the chat to inform of new user
 	for _, c := range sortedClients(privChat.ClientConn) {
 		res = append(res,
 			*NewTransaction(
-				tranNotifyChatChangeUser,
+				TranNotifyChatChangeUser,
 				c.ID,
-				NewField(fieldChatID, chatID),
-				NewField(fieldUserName, cc.UserName),
-				NewField(fieldUserID, *cc.ID),
-				NewField(fieldUserIconID, cc.Icon),
-				NewField(fieldUserFlags, cc.Flags),
+				NewField(FieldChatID, chatID),
+				NewField(FieldUserName, cc.UserName),
+				NewField(FieldUserID, *cc.ID),
+				NewField(FieldUserIconID, cc.Icon),
+				NewField(FieldUserFlags, cc.Flags),
 			),
 		)
 	}
 
 	privChat.ClientConn[cc.uint16ID()] = cc
 
-	replyFields := []Field{NewField(fieldChatSubject, []byte(privChat.Subject))}
+	replyFields := []Field{NewField(FieldChatSubject, []byte(privChat.Subject))}
 	for _, c := range sortedClients(privChat.ClientConn) {
 		user := User{
 			ID:    *c.ID,
@@ -1869,7 +1871,7 @@ func HandleJoinChat(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 			Name:  string(c.UserName),
 		}
 
-		replyFields = append(replyFields, NewField(fieldUsernameWithInfo, user.Payload()))
+		replyFields = append(replyFields, NewField(FieldUsernameWithInfo, user.Payload()))
 	}
 
 	res = append(res, cc.NewReply(t, replyFields...))
@@ -1878,11 +1880,11 @@ func HandleJoinChat(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 
 // HandleLeaveChat is sent from a v1.8+ Hotline client when the user exits a private chat
 // Fields used in the request:
-//   - 114	fieldChatID
+//   - 114	FieldChatID
 //
 // Reply is not expected.
 func HandleLeaveChat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	chatID := t.GetField(fieldChatID).Data
+	chatID := t.GetField(FieldChatID).Data
 	chatInt := binary.BigEndian.Uint32(chatID)
 
 	privChat, ok := cc.Server.PrivateChats[chatInt]
@@ -1896,10 +1898,10 @@ func HandleLeaveChat(cc *ClientConn, t *Transaction) (res []Transaction, err err
 	for _, c := range sortedClients(privChat.ClientConn) {
 		res = append(res,
 			*NewTransaction(
-				tranNotifyChatDeleteUser,
+				TranNotifyChatDeleteUser,
 				c.ID,
-				NewField(fieldChatID, chatID),
-				NewField(fieldUserID, *cc.ID),
+				NewField(FieldChatID, chatID),
+				NewField(FieldUserID, *cc.ID),
 			),
 		)
 	}
@@ -1913,19 +1915,19 @@ func HandleLeaveChat(cc *ClientConn, t *Transaction) (res []Transaction, err err
 // * 115	Chat subject
 // Reply is not expected.
 func HandleSetChatSubject(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	chatID := t.GetField(fieldChatID).Data
+	chatID := t.GetField(FieldChatID).Data
 	chatInt := binary.BigEndian.Uint32(chatID)
 
 	privChat := cc.Server.PrivateChats[chatInt]
-	privChat.Subject = string(t.GetField(fieldChatSubject).Data)
+	privChat.Subject = string(t.GetField(FieldChatSubject).Data)
 
 	for _, c := range sortedClients(privChat.ClientConn) {
 		res = append(res,
 			*NewTransaction(
-				tranNotifyChatSubject,
+				TranNotifyChatSubject,
 				c.ID,
-				NewField(fieldChatID, chatID),
-				NewField(fieldChatSubject, t.GetField(fieldChatSubject).Data),
+				NewField(FieldChatID, chatID),
+				NewField(FieldChatSubject, t.GetField(FieldChatSubject).Data),
 			),
 		)
 	}
@@ -1946,9 +1948,9 @@ func HandleMakeAlias(cc *ClientConn, t *Transaction) (res []Transaction, err err
 		res = append(res, cc.NewErrReply(t, "You are not allowed to make aliases."))
 		return res, err
 	}
-	fileName := t.GetField(fieldFileName).Data
-	filePath := t.GetField(fieldFilePath).Data
-	fileNewPath := t.GetField(fieldFileNewPath).Data
+	fileName := t.GetField(FieldFileName).Data
+	filePath := t.GetField(FieldFilePath).Data
+	fileNewPath := t.GetField(FieldFileNewPath).Data
 
 	fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
 	if err != nil {
@@ -1975,8 +1977,8 @@ func HandleMakeAlias(cc *ClientConn, t *Transaction) (res []Transaction, err err
 // Fields used in the request:
 // None
 // Fields used in the reply:
-// 107	fieldRefNum			Used later for transfer
-// 108	fieldTransferSize	Size of data to be downloaded
+// 107	FieldRefNum			Used later for transfer
+// 108	FieldTransferSize	Size of data to be downloaded
 func HandleDownloadBanner(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	fi, err := cc.Server.FS.Stat(filepath.Join(cc.Server.ConfigDir, cc.Server.Config.BannerFile))
 	if err != nil {
@@ -1988,8 +1990,8 @@ func HandleDownloadBanner(cc *ClientConn, t *Transaction) (res []Transaction, er
 	binary.BigEndian.PutUint32(ft.TransferSize, uint32(fi.Size()))
 
 	res = append(res, cc.NewReply(t,
-		NewField(fieldRefNum, ft.refNum[:]),
-		NewField(fieldTransferSize, ft.TransferSize),
+		NewField(FieldRefNum, ft.refNum[:]),
+		NewField(FieldTransferSize, ft.TransferSize),
 	))
 
 	return res, err
