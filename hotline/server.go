@@ -319,11 +319,11 @@ func (s *Server) keepaliveHandler() {
 				binary.BigEndian.PutUint16(c.Flags, uint16(flagBitmap.Int64()))
 
 				c.sendAll(
-					tranNotifyChangeUser,
-					NewField(fieldUserID, *c.ID),
-					NewField(fieldUserFlags, c.Flags),
-					NewField(fieldUserName, c.UserName),
-					NewField(fieldUserIconID, c.Icon),
+					TranNotifyChangeUser,
+					NewField(FieldUserID, *c.ID),
+					NewField(FieldUserFlags, c.Flags),
+					NewField(FieldUserName, c.UserName),
+					NewField(FieldUserIconID, c.Icon),
 				)
 			}
 		}
@@ -469,7 +469,7 @@ func (s *Server) connectedUsers() []Field {
 			Flags: c.Flags,
 			Name:  string(c.UserName),
 		}
-		connectedUsers = append(connectedUsers, NewField(fieldUsernameWithInfo, user.Payload()))
+		connectedUsers = append(connectedUsers, NewField(FieldUsernameWithInfo, user.Payload()))
 	}
 	return connectedUsers
 }
@@ -572,10 +572,10 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		// permaban
 		if banUntil == nil {
 			t := NewTransaction(
-				tranServerMsg,
+				TranServerMsg,
 				&[]byte{0, 0},
-				NewField(fieldData, []byte("You are permanently banned on this server")),
-				NewField(fieldChatOptions, []byte{0, 0}),
+				NewField(FieldData, []byte("You are permanently banned on this server")),
+				NewField(FieldChatOptions, []byte{0, 0}),
 			)
 
 			b, err := t.MarshalBinary()
@@ -595,10 +595,10 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		// temporary ban
 		if time.Now().Before(*banUntil) {
 			t := NewTransaction(
-				tranServerMsg,
+				TranServerMsg,
 				&[]byte{0, 0},
-				NewField(fieldData, []byte("You are temporarily banned on this server")),
-				NewField(fieldChatOptions, []byte{0, 0}),
+				NewField(FieldData, []byte("You are temporarily banned on this server")),
+				NewField(FieldChatOptions, []byte{0, 0}),
 			)
 			b, err := t.MarshalBinary()
 			if err != nil {
@@ -618,9 +618,9 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	c := s.NewClientConn(rwc, remoteAddr)
 	defer c.Disconnect()
 
-	encodedLogin := clientLogin.GetField(fieldUserLogin).Data
-	encodedPassword := clientLogin.GetField(fieldUserPassword).Data
-	c.Version = clientLogin.GetField(fieldVersion).Data
+	encodedLogin := clientLogin.GetField(FieldUserLogin).Data
+	encodedPassword := clientLogin.GetField(FieldUserPassword).Data
+	c.Version = clientLogin.GetField(FieldVersion).Data
 
 	var login string
 	for _, char := range encodedLogin {
@@ -648,15 +648,15 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		return nil
 	}
 
-	if clientLogin.GetField(fieldUserIconID).Data != nil {
-		c.Icon = clientLogin.GetField(fieldUserIconID).Data
+	if clientLogin.GetField(FieldUserIconID).Data != nil {
+		c.Icon = clientLogin.GetField(FieldUserIconID).Data
 	}
 
 	c.Account = c.Server.Accounts[login]
 
-	if clientLogin.GetField(fieldUserName).Data != nil {
+	if clientLogin.GetField(FieldUserName).Data != nil {
 		if c.Authorize(accessAnyName) {
-			c.UserName = clientLogin.GetField(fieldUserName).Data
+			c.UserName = clientLogin.GetField(FieldUserName).Data
 		} else {
 			c.UserName = []byte(c.Account.Name)
 		}
@@ -667,44 +667,44 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	}
 
 	s.outbox <- c.NewReply(&clientLogin,
-		NewField(fieldVersion, []byte{0x00, 0xbe}),
-		NewField(fieldCommunityBannerID, []byte{0, 0}),
-		NewField(fieldServerName, []byte(s.Config.Name)),
+		NewField(FieldVersion, []byte{0x00, 0xbe}),
+		NewField(FieldCommunityBannerID, []byte{0, 0}),
+		NewField(FieldServerName, []byte(s.Config.Name)),
 	)
 
 	// Send user access privs so client UI knows how to behave
-	c.Server.outbox <- *NewTransaction(tranUserAccess, c.ID, NewField(fieldUserAccess, c.Account.Access[:]))
+	c.Server.outbox <- *NewTransaction(TranUserAccess, c.ID, NewField(FieldUserAccess, c.Account.Access[:]))
 
 	// Accounts with accessNoAgreement do not receive the server agreement on login.  The behavior is different between
-	// client versions.  For 1.2.3 client, we do not send tranShowAgreement.  For other client versions, we send
-	// tranShowAgreement but with the NoServerAgreement field set to 1.
+	// client versions.  For 1.2.3 client, we do not send TranShowAgreement.  For other client versions, we send
+	// TranShowAgreement but with the NoServerAgreement field set to 1.
 	if c.Authorize(accessNoAgreement) {
 		// If client version is nil, then the client uses the 1.2.3 login behavior
 		if c.Version != nil {
-			c.Server.outbox <- *NewTransaction(tranShowAgreement, c.ID, NewField(fieldNoServerAgreement, []byte{1}))
+			c.Server.outbox <- *NewTransaction(TranShowAgreement, c.ID, NewField(FieldNoServerAgreement, []byte{1}))
 		}
 	} else {
-		c.Server.outbox <- *NewTransaction(tranShowAgreement, c.ID, NewField(fieldData, s.Agreement))
+		c.Server.outbox <- *NewTransaction(TranShowAgreement, c.ID, NewField(FieldData, s.Agreement))
 	}
 
 	// If the client has provided a username as part of the login, we can infer that it is using the 1.2.3 login
 	// flow and not the 1.5+ flow.
 	if len(c.UserName) != 0 {
 		// Add the client username to the logger.  For 1.5+ clients, we don't have this information yet as it comes as
-		// part of tranAgreed
+		// part of TranAgreed
 		c.logger = c.logger.With("name", string(c.UserName))
 
 		c.logger.Infow("Login successful", "clientVersion", "Not sent (probably 1.2.3)")
 
 		// Notify other clients on the server that the new user has logged in.  For 1.5+ clients we don't have this
-		// information yet, so we do it in tranAgreed instead
+		// information yet, so we do it in TranAgreed instead
 		for _, t := range c.notifyOthers(
 			*NewTransaction(
-				tranNotifyChangeUser, nil,
-				NewField(fieldUserName, c.UserName),
-				NewField(fieldUserID, *c.ID),
-				NewField(fieldUserIconID, c.Icon),
-				NewField(fieldUserFlags, c.Flags),
+				TranNotifyChangeUser, nil,
+				NewField(FieldUserName, c.UserName),
+				NewField(FieldUserID, *c.ID),
+				NewField(FieldUserIconID, c.Icon),
+				NewField(FieldUserFlags, c.Flags),
 			),
 		) {
 			c.Server.outbox <- t

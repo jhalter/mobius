@@ -131,7 +131,7 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 		if err != nil {
 			return nil, err
 		}
-		fields = append(fields, NewField(fieldFileNameWithInfo, b))
+		fields = append(fields, NewField(FieldFileNameWithInfo, b))
 	}
 
 	return fields, nil

@@ -22,10 +22,10 @@ func TestReadFields(t *testing.T) {
 			args: args{
 				paramCount: []byte{0x00, 0x02},
 				buf: []byte{
-					0x00, 0x65, // ID: fieldData
+					0x00, 0x65, // ID: FieldData
 					0x00, 0x04, // Size: 2 bytes
 					0x01, 0x02, 0x03, 0x04, // Data
-					0x00, 0x66, // ID: fieldUserName
+					0x00, 0x66, // ID: FieldUserName
 					0x00, 0x02, // Size: 2 bytes
 					0x00, 0x01, // Data
 				},
@@ -58,7 +58,7 @@ func TestReadFields(t *testing.T) {
 			args: args{
 				paramCount: []byte{0x00, 0x01},
 				buf: []byte{
-					0x00, 0x65, // ID: fieldData
+					0x00, 0x65, // ID: FieldData
 					0x00, 0x04, // Size: 4 bytes
 					0x01, 0x02, 0x03, // Data
 				},
@@ -71,10 +71,10 @@ func TestReadFields(t *testing.T) {
 			args: args{
 				paramCount: []byte{0x00, 0x01},
 				buf: []byte{
-					0x00, 0x65, // ID: fieldData
+					0x00, 0x65, // ID: FieldData
 					0x00, 0x02, // Size: 2 bytes
 					0x01, 0x02, // Data
-					0x00, 0x65, // ID: fieldData
+					0x00, 0x65, // ID: FieldData
 					0x00, 0x04, // Size: 4 bytes
 					0x01, 0x02, 0x03, // Data
 				},
@@ -87,7 +87,7 @@ func TestReadFields(t *testing.T) {
 			args: args{
 				paramCount: []byte{0x00, 0x01},
 				buf: []byte{
-					0x00, 0x65, // ID: fieldData
+					0x00, 0x65, // ID: FieldData
 					0x00, 0x02, // Size: 2 bytes
 					0x01, 0x02, 0x03, // Data
 				},
@@ -163,10 +163,10 @@ func Test_transactionScanner(t *testing.T) {
 					00, 00, 00, 0x10,
 					00, 00, 00, 0x10,
 					00, 02,
-					00, 0x6c, // 108 - fieldTransferSize
+					00, 0x6c, // 108 - FieldTransferSize
 					00, 02,
 					0x63, 0x3b,
-					00, 0x6b, // 107 = fieldRefNum
+					00, 0x6b, // 107 = FieldRefNum
 					00, 0x04,
 					00, 0x02, 0x93, 0x47,
 				},
@@ -182,10 +182,10 @@ func Test_transactionScanner(t *testing.T) {
 				00, 00, 00, 0x10,
 				00, 00, 00, 0x10,
 				00, 02,
-				00, 0x6c, // 108 - fieldTransferSize
+				00, 0x6c, // 108 - FieldTransferSize
 				00, 02,
 				0x63, 0x3b,
-				00, 0x6b, // 107 = fieldRefNum
+				00, 0x6b, // 107 = FieldRefNum
 				00, 0x04,
 				00, 0x02, 0x93, 0x47,
 			},
@@ -203,10 +203,10 @@ func Test_transactionScanner(t *testing.T) {
 					00, 00, 00, 0x10,
 					00, 00, 00, 0x10,
 					00, 02,
-					00, 0x6c, // 108 - fieldTransferSize
+					00, 0x6c, // 108 - FieldTransferSize
 					00, 02,
 					0x63, 0x3b,
-					00, 0x6b, // 107 = fieldRefNum
+					00, 0x6b, // 107 = FieldRefNum
 					00, 0x04,
 					00, 0x02, 0x93, 0x47,
 					1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
@@ -223,10 +223,10 @@ func Test_transactionScanner(t *testing.T) {
 				00, 00, 00, 0x10,
 				00, 00, 00, 0x10,
 				00, 02,
-				00, 0x6c, // 108 - fieldTransferSize
+				00, 0x6c, // 108 - FieldTransferSize
 				00, 02,
 				0x63, 0x3b,
-				00, 0x6b, // 107 = fieldRefNum
+				00, 0x6b, // 107 = FieldRefNum
 				00, 0x04,
 				00, 0x02, 0x93, 0x47,
 			},
@@ -244,10 +244,10 @@ func Test_transactionScanner(t *testing.T) {
 					00, 00, 00, 0x10,
 					00, 00, 00, 0x10,
 					00, 02,
-					00, 0x6c, // 108 - fieldTransferSize
+					00, 0x6c, // 108 - FieldTransferSize
 					00, 02,
 					0x63, 0x3b,
-					00, 0x6b, // 107 = fieldRefNum
+					00, 0x6b, // 107 = FieldRefNum
 					00, 0x04,
 					00, 0x02, 0x93, 0x47,
 					0,
@@ -258,10 +258,10 @@ func Test_transactionScanner(t *testing.T) {
 					00, 00, 00, 0x10,
 					00, 00, 00, 0x10,
 					00, 02,
-					00, 0x6c, // 108 - fieldTransferSize
+					00, 0x6c, // 108 - FieldTransferSize
 					00, 02,
 					0x63, 0x3b,
-					00, 0x6b, // 107 = fieldRefNum
+					00, 0x6b, // 107 = FieldRefNum
 					00, 0x04,
 					00, 0x02, 0x93, 0x47,
 				},
@@ -277,10 +277,10 @@ func Test_transactionScanner(t *testing.T) {
 				00, 00, 00, 0x10,
 				00, 00, 00, 0x10,
 				00, 02,
-				00, 0x6c, // 108 - fieldTransferSize
+				00, 0x6c, // 108 - FieldTransferSize
 				00, 02,
 				0x63, 0x3b,
-				00, 0x6b, // 107 = fieldRefNum
+				00, 0x6b, // 107 = FieldRefNum
 				00, 0x04,
 				00, 0x02, 0x93, 0x47,
 			},

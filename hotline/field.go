@@ -5,65 +5,65 @@ import (
 	"github.com/jhalter/mobius/concat"
 )
 
-const fieldError = 100
-const fieldData = 101
-const fieldUserName = 102
-const fieldUserID = 103
-const fieldUserIconID = 104
-const fieldUserLogin = 105
-const fieldUserPassword = 106
-const fieldRefNum = 107
-const fieldTransferSize = 108
-const fieldChatOptions = 109
-const fieldUserAccess = 110
-
-// const fieldUserAlias = 111 TODO: implement
-const fieldUserFlags = 112
-const fieldOptions = 113
-const fieldChatID = 114
-const fieldChatSubject = 115
-const fieldWaitingCount = 116
-const fieldBannerType = 152
-const fieldNoServerAgreement = 152
-const fieldVersion = 160
-const fieldCommunityBannerID = 161
-const fieldServerName = 162
-const fieldFileNameWithInfo = 200
-const fieldFileName = 201
-const fieldFilePath = 202
-const fieldFileResumeData = 203
-const fieldFileTransferOptions = 204
-const fieldFileTypeString = 205
-const fieldFileCreatorString = 206
-const fieldFileSize = 207
-const fieldFileCreateDate = 208
-const fieldFileModifyDate = 209
-const fieldFileComment = 210
-const fieldFileNewName = 211
-const fieldFileNewPath = 212
-const fieldFileType = 213
-const fieldQuotingMsg = 214
-const fieldAutomaticResponse = 215
-const fieldFolderItemCount = 220
-const fieldUsernameWithInfo = 300
-const fieldNewsArtListData = 321
-const fieldNewsCatName = 322
-const fieldNewsCatListData15 = 323
-const fieldNewsPath = 325
-const fieldNewsArtID = 326
-const fieldNewsArtDataFlav = 327
-const fieldNewsArtTitle = 328
-const fieldNewsArtPoster = 329
-const fieldNewsArtDate = 330
-const fieldNewsArtPrevArt = 331
-const fieldNewsArtNextArt = 332
-const fieldNewsArtData = 333
-
-// const fieldNewsArtFlags = 334
-const fieldNewsArtParentArt = 335
-const fieldNewsArt1stChildArt = 336
-
-// const fieldNewsArtRecurseDel = 337
+// List of Hotline protocol field types taken from the official 1.9 protocol document
+const (
+	FieldError               = 100
+	FieldData                = 101
+	FieldUserName            = 102
+	FieldUserID              = 103
+	FieldUserIconID          = 104
+	FieldUserLogin           = 105
+	FieldUserPassword        = 106
+	FieldRefNum              = 107
+	FieldTransferSize        = 108
+	FieldChatOptions         = 109
+	FieldUserAccess          = 110
+	FieldUserAlias           = 111 // TODO: implement
+	FieldUserFlags           = 112
+	FieldOptions             = 113
+	FieldChatID              = 114
+	FieldChatSubject         = 115
+	FieldWaitingCount        = 116
+	FieldBannerType          = 152
+	FieldNoServerAgreement   = 152
+	FieldVersion             = 160
+	FieldCommunityBannerID   = 161
+	FieldServerName          = 162
+	FieldFileNameWithInfo    = 200
+	FieldFileName            = 201
+	FieldFilePath            = 202
+	FieldFileResumeData      = 203
+	FieldFileTransferOptions = 204
+	FieldFileTypeString      = 205
+	FieldFileCreatorString   = 206
+	FieldFileSize            = 207
+	FieldFileCreateDate      = 208
+	FieldFileModifyDate      = 209
+	FieldFileComment         = 210
+	FieldFileNewName         = 211
+	FieldFileNewPath         = 212
+	FieldFileType            = 213
+	FieldQuotingMsg          = 214
+	FieldAutomaticResponse   = 215
+	FieldFolderItemCount     = 220
+	FieldUsernameWithInfo    = 300
+	FieldNewsArtListData     = 321
+	FieldNewsCatName         = 322
+	FieldNewsCatListData15   = 323
+	FieldNewsPath            = 325
+	FieldNewsArtID           = 326
+	FieldNewsArtDataFlav     = 327
+	FieldNewsArtTitle        = 328
+	FieldNewsArtPoster       = 329
+	FieldNewsArtDate         = 330
+	FieldNewsArtPrevArt      = 331
+	FieldNewsArtNextArt      = 332
+	FieldNewsArtData         = 333
+	FieldNewsArtFlags        = 334 // TODO: what is this used for?
+	FieldNewsArtParentArt    = 335
+	FieldNewsArt1stChildArt  = 336
+	FieldNewsArtRecurseDel   = 337 // TODO: implement news article recusive deletion
+)
 
 type Field struct {
 	ID        []byte // Type of field

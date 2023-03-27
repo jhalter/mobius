@@ -12,7 +12,7 @@ const (
 	userFLagRefusePChat = 3 // User refuses private chat
 )
 
-// fieldOptions flags are sent from v1.5+ clients as part of tranAgreed
+// FieldOptions flags are sent from v1.5+ clients as part of TranAgreed
 const (
 	refusePM     = 0 // User has "Refuse private messages" pref set
 	refuseChat   = 1 // User has "Refuse private chat" pref set

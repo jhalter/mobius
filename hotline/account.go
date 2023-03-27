@@ -18,13 +18,13 @@ type Account struct {
 // Read implements io.Reader interface for Account
 func (a *Account) Read(p []byte) (n int, err error) {
 	fields := []Field{
-		NewField(fieldUserName, []byte(a.Name)),
-		NewField(fieldUserLogin, negateString([]byte(a.Login))),
-		NewField(fieldUserAccess, a.Access[:]),
+		NewField(FieldUserName, []byte(a.Name)),
+		NewField(FieldUserLogin, negateString([]byte(a.Login))),
+		NewField(FieldUserAccess, a.Access[:]),
 	}
 
 	if bcrypt.CompareHashAndPassword([]byte(a.Password), []byte("")) != nil {
-		fields = append(fields, NewField(fieldUserPassword, []byte("x")))
+		fields = append(fields, NewField(FieldUserPassword, []byte("x")))
 	}
 
 	fieldCount := make([]byte, 2)

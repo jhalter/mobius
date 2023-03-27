@@ -71,7 +71,7 @@ func main() {
 		cancelRoot()
 	}()
 
-	client := hotline.NewClient(*configDir, logger)
+	client := hotline.NewUIClient(*configDir, logger)
 	client.DebugBuf = db
 	client.UI.Start()
 

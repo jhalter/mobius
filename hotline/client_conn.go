@@ -94,7 +94,7 @@ func (cc *ClientConn) handleTransaction(transaction Transaction) error {
 	cc.Server.mux.Lock()
 	defer cc.Server.mux.Unlock()
 
-	if requestNum != tranKeepAlive {
+	if requestNum != TranKeepAlive {
 		// reset the user idle timer
 		cc.IdleTime = 0
 
@@ -107,11 +107,11 @@ func (cc *ClientConn) handleTransaction(transaction Transaction) error {
 			cc.Idle = false
 
 			cc.sendAll(
-				tranNotifyChangeUser,
-				NewField(fieldUserID, *cc.ID),
-				NewField(fieldUserFlags, cc.Flags),
-				NewField(fieldUserName, cc.UserName),
-				NewField(fieldUserIconID, cc.Icon),
+				TranNotifyChangeUser,
+				NewField(FieldUserID, *cc.ID),
+				NewField(FieldUserFlags, cc.Flags),
+				NewField(FieldUserName, cc.UserName),
+				NewField(FieldUserIconID, cc.Icon),
 			)
 		}
 	}
@@ -144,7 +144,7 @@ func (cc *ClientConn) Disconnect() {
 
 	delete(cc.Server.Clients, binary.BigEndian.Uint16(*cc.ID))
 
-	for _, t := range cc.notifyOthers(*NewTransaction(tranNotifyDeleteUser, nil, NewField(fieldUserID, *cc.ID))) {
+	for _, t := range cc.notifyOthers(*NewTransaction(TranNotifyDeleteUser, nil, NewField(FieldUserID, *cc.ID))) {
 		cc.Server.outbox <- t
 	}
 
@@ -189,7 +189,7 @@ func (cc *ClientConn) NewErrReply(t *Transaction, errMsg string) Transaction {
 		ID:        t.ID,
 		ErrorCode: []byte{0, 0, 0, 1},
 		Fields: []Field{
-			NewField(fieldError, []byte(errMsg)),
+			NewField(FieldError, []byte(errMsg)),
 		},
 	}
 }

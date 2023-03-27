@@ -1,6 +1,7 @@
 package hotline
 
 import (
+	"bufio"
 	"bytes"
 	"embed"
 	"encoding/binary"
@@ -72,11 +73,6 @@ type Client struct {
 	cfgPath     string
 	DebugBuf    *DebugBuffer
 	Connection  net.Conn
-	Login       *[]byte
-	Password    *[]byte
-	Flags       *[]byte
-	ID          *[]byte
-	Version     []byte
 	UserAccess  []byte
 	filePath    []string
 	UserList    []User
@@ -84,16 +80,27 @@ type Client struct {
 	activeTasks map[uint32]*Transaction
 	serverName  string
 
-	pref *ClientPrefs
+	Pref *ClientPrefs
 
-	Handlers map[uint16]clientTHandler
+	Handlers map[uint16]ClientTHandler
 
 	UI *UI
 
 	Inbox chan *Transaction
 }
 
-func NewClient(cfgPath string, logger *zap.SugaredLogger) *Client {
+func NewClient(username string, logger *zap.SugaredLogger) *Client {
+	c := &Client{
+		Logger:      logger,
+		activeTasks: make(map[uint32]*Transaction),
+		Handlers:    make(map[uint16]ClientTHandler),
+	}
+	c.Pref = &ClientPrefs{Username: username}
+
+	return c
+}
+
+func NewUIClient(cfgPath string, logger *zap.SugaredLogger) *Client {
 	c := &Client{
 		cfgPath:     cfgPath,
 		Logger:      logger,
@@ -106,7 +113,7 @@ func NewClient(cfgPath string, logger *zap.SugaredLogger) *Client {
 	if err != nil {
 		logger.Fatal(fmt.Sprintf("unable to read config file %s\n", cfgPath))
 	}
-	c.pref = prefs
+	c.Pref = prefs
 
 	return c
 }
@@ -134,16 +141,16 @@ func randomBanner() string {
 	return fmt.Sprintf("\n\n\nWelcome to...\n\n[red::b]%s[-:-:-]\n\n", file)
 }
 
-type clientTransaction struct {
+type ClientTransaction struct {
 	Name    string
 	Handler func(*Client, *Transaction) ([]Transaction, error)
 }
 
-func (ch clientTransaction) Handle(cc *Client, t *Transaction) ([]Transaction, error) {
+func (ch ClientTransaction) Handle(cc *Client, t *Transaction) ([]Transaction, error) {
 	return ch.Handler(cc, t)
 }
 
-type clientTHandler interface {
+type ClientTHandler interface {
 	Handle(*Client, *Transaction) ([]Transaction, error)
 }
 
@@ -156,50 +163,50 @@ func (mh *mockClientHandler) Handle(cc *Client, t *Transaction) ([]Transaction, 
 	return args.Get(0).([]Transaction), args.Error(1)
 }
 
-var clientHandlers = map[uint16]clientTHandler{
+var clientHandlers = map[uint16]ClientTHandler{
 	// Server initiated
-	tranChatMsg: clientTransaction{
-		Name:    "tranChatMsg",
+	TranChatMsg: ClientTransaction{
+		Name:    "TranChatMsg",
 		Handler: handleClientChatMsg,
 	},
-	tranLogin: clientTransaction{
-		Name:    "tranLogin",
+	TranLogin: ClientTransaction{
+		Name:    "TranLogin",
 		Handler: handleClientTranLogin,
 	},
-	tranShowAgreement: clientTransaction{
-		Name:    "tranShowAgreement",
+	TranShowAgreement: ClientTransaction{
+		Name:    "TranShowAgreement",
 		Handler: handleClientTranShowAgreement,
 	},
-	tranUserAccess: clientTransaction{
-		Name:    "tranUserAccess",
+	TranUserAccess: ClientTransaction{
+		Name:    "TranUserAccess",
 		Handler: handleClientTranUserAccess,
 	},
-	tranGetUserNameList: clientTransaction{
-		Name:    "tranGetUserNameList",
+	TranGetUserNameList: ClientTransaction{
+		Name:    "TranGetUserNameList",
 		Handler: handleClientGetUserNameList,
 	},
-	tranNotifyChangeUser: clientTransaction{
-		Name:    "tranNotifyChangeUser",
+	TranNotifyChangeUser: ClientTransaction{
+		Name:    "TranNotifyChangeUser",
 		Handler: handleNotifyChangeUser,
 	},
-	tranNotifyDeleteUser: clientTransaction{
-		Name:    "tranNotifyDeleteUser",
+	TranNotifyDeleteUser: ClientTransaction{
+		Name:    "TranNotifyDeleteUser",
 		Handler: handleNotifyDeleteUser,
 	},
-	tranGetMsgs: clientTransaction{
-		Name:    "tranNotifyDeleteUser",
+	TranGetMsgs: ClientTransaction{
+		Name:    "TranNotifyDeleteUser",
 		Handler: handleGetMsgs,
 	},
-	tranGetFileNameList: clientTransaction{
-		Name:    "tranGetFileNameList",
+	TranGetFileNameList: ClientTransaction{
+		Name:    "TranGetFileNameList",
 		Handler: handleGetFileNameList,
 	},
-	tranServerMsg: clientTransaction{
-		Name:    "tranServerMsg",
+	TranServerMsg: ClientTransaction{
+		Name:    "TranServerMsg",
 		Handler: handleTranServerMsg,
 	},
-	tranKeepAlive: clientTransaction{
-		Name: "tranKeepAlive",
+	TranKeepAlive: ClientTransaction{
+		Name: "TranKeepAlive",
 		Handler: func(client *Client, transaction *Transaction) (t []Transaction, err error) {
 			return t, err
 		},
@@ -209,9 +216,9 @@ var clientHandlers = map[uint16]clientTHandler{
 func handleTranServerMsg(c *Client, t *Transaction) (res []Transaction, err error) {
 	time := time.Now().Format(time.RFC850)
 
-	msg := strings.ReplaceAll(string(t.GetField(fieldData).Data), "\r", "\n")
+	msg := strings.ReplaceAll(string(t.GetField(FieldData).Data), "\r", "\n")
 	msg += "\n\nAt " + time
-	title := fmt.Sprintf("| Private Message From: 	%s |", t.GetField(fieldUserName).Data)
+	title := fmt.Sprintf("| Private Message From: 	%s |", t.GetField(FieldUserName).Data)
 
 	msgBox := tview.NewTextView().SetScrollable(true)
 	msgBox.SetText(msg).SetBackgroundColor(tcell.ColorDarkSlateBlue)
@@ -268,8 +275,8 @@ func (c *Client) showErrMsg(msg string) {
 
 func handleGetFileNameList(c *Client, t *Transaction) (res []Transaction, err error) {
 	if t.IsError() {
-		c.showErrMsg(string(t.GetField(fieldError).Data))
-		c.Logger.Infof("Error: %s", t.GetField(fieldError).Data)
+		c.showErrMsg(string(t.GetField(FieldError).Data))
+		c.Logger.Infof("Error: %s", t.GetField(FieldError).Data)
 		return res, err
 	}
 
@@ -287,9 +294,9 @@ func handleGetFileNameList(c *Client, t *Transaction) (res []Transaction, err er
 
 			if selectedNode.GetText() == "<- Back" {
 				c.filePath = c.filePath[:len(c.filePath)-1]
-				f := NewField(fieldFilePath, EncodeFilePath(strings.Join(c.filePath, "/")))
+				f := NewField(FieldFilePath, EncodeFilePath(strings.Join(c.filePath, "/")))
 
-				if err := c.UI.HLClient.Send(*NewTransaction(tranGetFileNameList, nil, f)); err != nil {
+				if err := c.UI.HLClient.Send(*NewTransaction(TranGetFileNameList, nil, f)); err != nil {
 					c.UI.HLClient.Logger.Errorw("err", "err", err)
 				}
 				return event
@@ -301,9 +308,9 @@ func handleGetFileNameList(c *Client, t *Transaction) (res []Transaction, err er
 				c.Logger.Infow("get new directory listing", "name", string(entry.name))
 
 				c.filePath = append(c.filePath, string(entry.name))
-				f := NewField(fieldFilePath, EncodeFilePath(strings.Join(c.filePath, "/")))
+				f := NewField(FieldFilePath, EncodeFilePath(strings.Join(c.filePath, "/")))
 
-				if err := c.UI.HLClient.Send(*NewTransaction(tranGetFileNameList, nil, f)); err != nil {
+				if err := c.UI.HLClient.Send(*NewTransaction(TranGetFileNameList, nil, f)); err != nil {
 					c.UI.HLClient.Logger.Errorw("err", "err", err)
 				}
 			} else {
@@ -357,7 +364,7 @@ func handleGetFileNameList(c *Client, t *Transaction) (res []Transaction, err er
 }
 
 func handleGetMsgs(c *Client, t *Transaction) (res []Transaction, err error) {
-	newsText := string(t.GetField(fieldData).Data)
+	newsText := string(t.GetField(FieldData).Data)
 	newsText = strings.ReplaceAll(newsText, "\r", "\n")
 
 	newsTextView := tview.NewTextView().
@@ -378,10 +385,10 @@ func handleGetMsgs(c *Client, t *Transaction) (res []Transaction, err error) {
 
 func handleNotifyChangeUser(c *Client, t *Transaction) (res []Transaction, err error) {
 	newUser := User{
-		ID:    t.GetField(fieldUserID).Data,
-		Name:  string(t.GetField(fieldUserName).Data),
-		Icon:  t.GetField(fieldUserIconID).Data,
-		Flags: t.GetField(fieldUserFlags).Data,
+		ID:    t.GetField(FieldUserID).Data,
+		Name:  string(t.GetField(FieldUserName).Data),
+		Icon:  t.GetField(FieldUserIconID).Data,
+		Flags: t.GetField(FieldUserFlags).Data,
 	}
 
 	// Possible cases:
@@ -416,7 +423,7 @@ func handleNotifyChangeUser(c *Client, t *Transaction) (res []Transaction, err e
 }
 
 func handleNotifyDeleteUser(c *Client, t *Transaction) (res []Transaction, err error) {
-	exitUser := t.GetField(fieldUserID).Data
+	exitUser := t.GetField(FieldUserID).Data
 
 	var newUserList []User
 	for _, u := range c.UserList {
@@ -435,8 +442,8 @@ func handleNotifyDeleteUser(c *Client, t *Transaction) (res []Transaction, err e
 func handleClientGetUserNameList(c *Client, t *Transaction) (res []Transaction, err error) {
 	var users []User
 	for _, field := range t.Fields {
-		// The Hotline protocol docs say that ClientGetUserNameList should only return fieldUsernameWithInfo (300)
-		// fields, but shxd sneaks in fieldChatSubject (115) so it's important to filter explicitly for the expected
+		// The Hotline protocol docs say that ClientGetUserNameList should only return FieldUsernameWithInfo (300)
+		// fields, but shxd sneaks in FieldChatSubject (115) so it's important to filter explicitly for the expected
 		// field type.  Probably a good idea to do everywhere.
 		if bytes.Equal(field.ID, []byte{0x01, 0x2c}) {
 			u, err := ReadUser(field.Data)
@@ -467,23 +474,23 @@ func (c *Client) renderUserList() {
 }
 
 func handleClientChatMsg(c *Client, t *Transaction) (res []Transaction, err error) {
-	if c.pref.EnableBell {
+	if c.Pref.EnableBell {
 		fmt.Println("\a")
 	}
 
-	_, _ = fmt.Fprintf(c.UI.chatBox, "%s \n", t.GetField(fieldData).Data)
+	_, _ = fmt.Fprintf(c.UI.chatBox, "%s \n", t.GetField(FieldData).Data)
 
 	return res, err
 }
 
 func handleClientTranUserAccess(c *Client, t *Transaction) (res []Transaction, err error) {
-	c.UserAccess = t.GetField(fieldUserAccess).Data
+	c.UserAccess = t.GetField(FieldUserAccess).Data
 
 	return res, err
 }
 
 func handleClientTranShowAgreement(c *Client, t *Transaction) (res []Transaction, err error) {
-	agreement := string(t.GetField(fieldData).Data)
+	agreement := string(t.GetField(FieldData).Data)
 	agreement = strings.ReplaceAll(agreement, "\r", "\n")
 
 	agreeModal := tview.NewModal().
@@ -493,11 +500,11 @@ func handleClientTranShowAgreement(c *Client, t *Transaction) (res []Transaction
 			if buttonIndex == 0 {
 				res = append(res,
 					*NewTransaction(
-						tranAgreed, nil,
-						NewField(fieldUserName, []byte(c.pref.Username)),
-						NewField(fieldUserIconID, c.pref.IconBytes()),
-						NewField(fieldUserFlags, []byte{0x00, 0x00}),
-						NewField(fieldOptions, []byte{0x00, 0x00}),
+						TranAgreed, nil,
+						NewField(FieldUserName, []byte(c.Pref.Username)),
+						NewField(FieldUserIconID, c.Pref.IconBytes()),
+						NewField(FieldUserFlags, []byte{0x00, 0x00}),
+						NewField(FieldOptions, []byte{0x00, 0x00}),
 					),
 				)
 				c.UI.Pages.HidePage("agreement")
@@ -516,7 +523,7 @@ func handleClientTranShowAgreement(c *Client, t *Transaction) (res []Transaction
 
 func handleClientTranLogin(c *Client, t *Transaction) (res []Transaction, err error) {
 	if !bytes.Equal(t.ErrorCode, []byte{0, 0, 0, 0}) {
-		errMsg := string(t.GetField(fieldError).Data)
+		errMsg := string(t.GetField(FieldError).Data)
 		errModal := tview.NewModal()
 		errModal.SetText(errMsg)
 		errModal.AddButtons([]string{"Oh no"})
@@ -528,22 +535,23 @@ func handleClientTranLogin(c *Client, t *Transaction) (res []Transaction, err er
 
 		c.UI.App.Draw() // TODO: errModal doesn't render without this.  wtf?
 
-		c.Logger.Error(string(t.GetField(fieldError).Data))
-		return nil, errors.New("login error: " + string(t.GetField(fieldError).Data))
+		c.Logger.Error(string(t.GetField(FieldError).Data))
+		return nil, errors.New("login error: " + string(t.GetField(FieldError).Data))
 	}
 	c.UI.Pages.AddAndSwitchToPage(serverUIPage, c.UI.renderServerUI(), true)
 	c.UI.App.SetFocus(c.UI.chatInput)
 
-	if err := c.Send(*NewTransaction(tranGetUserNameList, nil)); err != nil {
+	if err := c.Send(*NewTransaction(TranGetUserNameList, nil)); err != nil {
 		c.Logger.Errorw("err", "err", err)
 	}
 	return res, err
 }
 
 // JoinServer connects to a Hotline server and completes the login flow
-func (c *Client) JoinServer(address, login, passwd string) error {
+func (c *Client) Connect(address, login, passwd string) (err error) {
 	// Establish TCP connection to server
-	if err := c.connect(address); err != nil {
+	c.Connection, err = net.DialTimeout("tcp", address, 5*time.Second)
+	if err != nil {
 		return err
 	}
 
@@ -552,7 +560,7 @@ func (c *Client) JoinServer(address, login, passwd string) error {
 		return err
 	}
 
-	// Authenticate (send tranLogin 107)
+	// Authenticate (send TranLogin 107)
 	if err := c.LogIn(login, passwd); err != nil {
 		return err
 	}
@@ -566,19 +574,9 @@ func (c *Client) JoinServer(address, login, passwd string) error {
 func (c *Client) keepalive() error {
 	for {
 		time.Sleep(300 * time.Second)
-		_ = c.Send(*NewTransaction(tranKeepAlive, nil))
+		_ = c.Send(*NewTransaction(TranKeepAlive, nil))
 		c.Logger.Infow("Sent keepalive ping")
 	}
-}
-
-// connect establishes a connection with a Server by sending handshake sequence
-func (c *Client) connect(address string) error {
-	var err error
-	c.Connection, err = net.DialTimeout("tcp", address, 5*time.Second)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 var ClientHandshake = []byte{
@@ -619,11 +617,11 @@ func (c *Client) Handshake() error {
 func (c *Client) LogIn(login string, password string) error {
 	return c.Send(
 		*NewTransaction(
-			tranLogin, nil,
-			NewField(fieldUserName, []byte(c.pref.Username)),
-			NewField(fieldUserIconID, c.pref.IconBytes()),
-			NewField(fieldUserLogin, negateString([]byte(login))),
-			NewField(fieldUserPassword, negateString([]byte(password))),
+			TranLogin, nil,
+			NewField(FieldUserName, []byte(c.Pref.Username)),
+			NewField(FieldUserIconID, c.Pref.IconBytes()),
+			NewField(FieldUserLogin, negateString([]byte(login))),
+			NewField(FieldUserPassword, negateString([]byte(password))),
 		),
 	)
 }
@@ -673,7 +671,7 @@ func (c *Client) HandleTransaction(t *Transaction) error {
 			c.Send(t)
 		}
 	} else {
-		c.Logger.Errorw(
+		c.Logger.Debugw(
 			"Unimplemented transaction type received",
 			"RequestID", requestNum,
 			"TransactionID", t.ID,
@@ -685,4 +683,32 @@ func (c *Client) HandleTransaction(t *Transaction) error {
 
 func (c *Client) Disconnect() error {
 	return c.Connection.Close()
+}
+
+func (c *Client) HandleTransactions() error {
+	// Create a new scanner for parsing incoming bytes into transaction tokens
+	scanner := bufio.NewScanner(c.Connection)
+	scanner.Split(transactionScanner)
+
+	// Scan for new transactions and handle them as they come in.
+	for scanner.Scan() {
+		// Make a new []byte slice and copy the scanner bytes to it.  This is critical to avoid a data race as the
+		// scanner re-uses the buffer for subsequent scans.
+		buf := make([]byte, len(scanner.Bytes()))
+		copy(buf, scanner.Bytes())
+
+		var t Transaction
+		_, err := t.Write(buf)
+		if err != nil {
+			break
+		}
+		if err := c.HandleTransaction(&t); err != nil {
+			c.Logger.Errorw("Error handling transaction", "err", err)
+		}
+	}
+
+	if scanner.Err() == nil {
+		return scanner.Err()
+	}
+	return nil
 }
