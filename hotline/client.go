@@ -82,18 +82,24 @@ type Client struct {
 
 	Pref *ClientPrefs
 
-	Handlers map[uint16]ClientTHandler
+	Handlers map[uint16]ClientHandler
 
 	UI *UI
 
 	Inbox chan *Transaction
 }
 
+type ClientHandler func(*Client, *Transaction) ([]Transaction, error)
+
+func (c *Client) HandleFunc(transactionID uint16, handler ClientHandler) {
+	c.Handlers[transactionID] = handler
+}
+
 func NewClient(username string, logger *zap.SugaredLogger) *Client {
 	c := &Client{
 		Logger:      logger,
 		activeTasks: make(map[uint32]*Transaction),
-		Handlers:    make(map[uint16]ClientTHandler),
+		Handlers:    make(map[uint16]ClientHandler),
 	}
 	c.Pref = &ClientPrefs{Username: username}
 
@@ -163,53 +169,19 @@ func (mh *mockClientHandler) Handle(cc *Client, t *Transaction) ([]Transaction, 
 	return args.Get(0).([]Transaction), args.Error(1)
 }
 
-var clientHandlers = map[uint16]ClientTHandler{
-	// Server initiated
-	TranChatMsg: ClientTransaction{
-		Name:    "TranChatMsg",
-		Handler: handleClientChatMsg,
-	},
-	TranLogin: ClientTransaction{
-		Name:    "TranLogin",
-		Handler: handleClientTranLogin,
-	},
-	TranShowAgreement: ClientTransaction{
-		Name:    "TranShowAgreement",
-		Handler: handleClientTranShowAgreement,
-	},
-	TranUserAccess: ClientTransaction{
-		Name:    "TranUserAccess",
-		Handler: handleClientTranUserAccess,
-	},
-	TranGetUserNameList: ClientTransaction{
-		Name:    "TranGetUserNameList",
-		Handler: handleClientGetUserNameList,
-	},
-	TranNotifyChangeUser: ClientTransaction{
-		Name:    "TranNotifyChangeUser",
-		Handler: handleNotifyChangeUser,
-	},
-	TranNotifyDeleteUser: ClientTransaction{
-		Name:    "TranNotifyDeleteUser",
-		Handler: handleNotifyDeleteUser,
-	},
-	TranGetMsgs: ClientTransaction{
-		Name:    "TranNotifyDeleteUser",
-		Handler: handleGetMsgs,
-	},
-	TranGetFileNameList: ClientTransaction{
-		Name:    "TranGetFileNameList",
-		Handler: handleGetFileNameList,
-	},
-	TranServerMsg: ClientTransaction{
-		Name:    "TranServerMsg",
-		Handler: handleTranServerMsg,
-	},
-	TranKeepAlive: ClientTransaction{
-		Name: "TranKeepAlive",
-		Handler: func(client *Client, transaction *Transaction) (t []Transaction, err error) {
-			return t, err
-		},
+var clientHandlers = map[uint16]ClientHandler{
+	TranChatMsg:          handleClientChatMsg,
+	TranLogin:            handleClientTranLogin,
+	TranShowAgreement:    handleClientTranShowAgreement,
+	TranUserAccess:       handleClientTranUserAccess,
+	TranGetUserNameList:  handleClientGetUserNameList,
+	TranNotifyChangeUser: handleNotifyChangeUser,
+	TranNotifyDeleteUser: handleNotifyDeleteUser,
+	TranGetMsgs:          handleGetMsgs,
+	TranGetFileNameList:  handleGetFileNameList,
+	TranServerMsg:        handleTranServerMsg,
+	TranKeepAlive: func(client *Client, transaction *Transaction) (t []Transaction, err error) {
+		return t, err
 	},
 }
 
@@ -666,7 +638,7 @@ func (c *Client) HandleTransaction(t *Transaction) error {
 	c.Logger.Debugw("Received Transaction", "RequestType", requestNum)
 
 	if handler, ok := c.Handlers[requestNum]; ok {
-		outT, _ := handler.Handle(c, t)
+		outT, _ := handler(c, t)
 		for _, t := range outT {
 			c.Send(t)
 		}
