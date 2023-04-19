@@ -549,7 +549,7 @@ func (c *Client) keepalive() error {
 	for {
 		time.Sleep(keepaliveInterval)
 		_ = c.Send(*NewTransaction(TranKeepAlive, nil))
-		c.Logger.Infow("Sent keepalive ping")
+		c.Logger.Debugw("Sent keepalive ping")
 	}
 }
 
