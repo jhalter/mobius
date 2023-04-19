@@ -543,9 +543,11 @@ func (c *Client) Connect(address, login, passwd string) (err error) {
 	return nil
 }
 
+const keepaliveInterval = 300 * time.Second
+
 func (c *Client) keepalive() error {
 	for {
-		time.Sleep(300 * time.Second)
+		time.Sleep(keepaliveInterval)
 		_ = c.Send(*NewTransaction(TranKeepAlive, nil))
 		c.Logger.Infow("Sent keepalive ping")
 	}
