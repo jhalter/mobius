@@ -2980,7 +2980,7 @@ func TestHandleGetClientInfoText(t *testing.T) {
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
 						NewField(FieldData, []byte(
-							strings.Replace(`Nickname:   Testy McTest
+							strings.ReplaceAll(`Nickname:   Testy McTest
 Name:       test
 Account:    test
 Address:    1.2.3.4:12345
@@ -3005,7 +3005,7 @@ None.
 
 None.
 
-`, "\n", "\r", -1)),
+`, "\n", "\r")),
 						),
 						NewField(FieldUserName, []byte("Testy McTest")),
 					},

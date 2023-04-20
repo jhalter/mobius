@@ -1015,7 +1015,7 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 	}
 
 	newsPost := fmt.Sprintf(newsTemplate+"\r", cc.UserName, time.Now().Format(newsDateTemplate), t.GetField(FieldData).Data)
-	newsPost = strings.Replace(newsPost, "\n", "\r", -1)
+	newsPost = strings.ReplaceAll(newsPost, "\n", "\r")
 
 	// update news in memory
 	cc.Server.FlatNews = append([]byte(newsPost), cc.Server.FlatNews...)

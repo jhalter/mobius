@@ -117,7 +117,7 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 			copy(fnwi.Creator[:], hlFile.ffo.FlatFileInformationFork.CreatorSignature)
 		}
 
-		strippedName := strings.Replace(file.Name(), ".incomplete", "", -1)
+		strippedName := strings.ReplaceAll(file.Name(), ".incomplete", "")
 
 		nameSize := make([]byte, 2)
 		binary.BigEndian.PutUint16(nameSize, uint16(len(strippedName)))

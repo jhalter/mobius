@@ -254,5 +254,5 @@ func (cc *ClientConn) String() string {
 		"None.\n",
 	)
 
-	return strings.Replace(template, "\n", "\r", -1)
+	return strings.ReplaceAll(template, "\n", "\r")
 }
