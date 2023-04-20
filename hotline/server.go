@@ -209,7 +209,7 @@ const (
 )
 
 // NewServer constructs a new Server from a config dir
-func NewServer(configDir string, netPort int, logger *zap.SugaredLogger, FS FileStore) (*Server, error) {
+func NewServer(configDir string, netPort int, logger *zap.SugaredLogger, fs FileStore) (*Server, error) {
 	server := Server{
 		Port:          netPort,
 		Accounts:      make(map[string]*Account),
@@ -223,7 +223,7 @@ func NewServer(configDir string, netPort int, logger *zap.SugaredLogger, FS File
 		outbox:        make(chan Transaction),
 		Stats:         &Stats{Since: time.Now()},
 		ThreadedNews:  &ThreadedNews{},
-		FS:            FS,
+		FS:            fs,
 		banList:       make(map[string]*time.Time),
 	}
 
