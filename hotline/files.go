@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -66,7 +65,7 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 			}
 
 			if rFile.IsDir() {
-				dir, err := ioutil.ReadDir(filepath.Join(path, file.Name()))
+				dir, err := os.ReadDir(filepath.Join(path, file.Name()))
 				if err != nil {
 					return fields, err
 				}
@@ -88,7 +87,7 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 			}
 
 		} else if file.IsDir() {
-			dir, err := ioutil.ReadDir(filepath.Join(path, file.Name()))
+			dir, err := os.ReadDir(filepath.Join(path, file.Name()))
 			if err != nil {
 				return fields, err
 			}
