@@ -12,12 +12,10 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
-	"time"
 )
 
 //go:embed mobius/config
@@ -28,8 +26,6 @@ const (
 )
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// TODO: implement graceful shutdown by closing context
