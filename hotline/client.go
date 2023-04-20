@@ -601,21 +601,18 @@ func (c *Client) LogIn(login string, password string) error {
 
 func (c *Client) Send(t Transaction) error {
 	requestNum := binary.BigEndian.Uint16(t.Type)
-	tID := binary.BigEndian.Uint32(t.ID)
-
-	// handler := TransactionHandlers[requestNum]
 
 	// if transaction is NOT reply, add it to the list to transactions we're expecting a response for
 	if t.IsReply == 0 {
-		c.activeTasks[tID] = &t
+		c.activeTasks[binary.BigEndian.Uint32(t.ID)] = &t
 	}
 
-	var n int
-	var err error
 	b, err := t.MarshalBinary()
 	if err != nil {
 		return err
 	}
+
+	var n int
 	if n, err = c.Connection.Write(b); err != nil {
 		return err
 	}
@@ -635,18 +632,17 @@ func (c *Client) HandleTransaction(t *Transaction) error {
 		t.Type = origT.Type
 	}
 
-	requestNum := binary.BigEndian.Uint16(t.Type)
-	c.Logger.Debugw("Received Transaction", "RequestType", requestNum)
-
-	if handler, ok := c.Handlers[requestNum]; ok {
+	if handler, ok := c.Handlers[binary.BigEndian.Uint16(t.Type)]; ok {
 		outT, _ := handler(c, t)
 		for _, t := range outT {
-			c.Send(t)
+			if err := c.Send(t); err != nil {
+				return err
+			}
 		}
 	} else {
 		c.Logger.Debugw(
 			"Unimplemented transaction type received",
-			"RequestID", requestNum,
+			"RequestID", t.Type,
 			"TransactionID", t.ID,
 		)
 	}
