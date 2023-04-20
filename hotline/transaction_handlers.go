@@ -808,7 +808,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			}
 
 			newAccess := accessBitmap{}
-			copy(newAccess[:], getField(FieldUserAccess, &subFields).Data[:])
+			copy(newAccess[:], getField(FieldUserAccess, &subFields).Data)
 
 			// Prevent account from creating new account with greater permission
 			for i := 0; i < 64; i++ {
@@ -846,7 +846,7 @@ func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 	}
 
 	newAccess := accessBitmap{}
-	copy(newAccess[:], t.GetField(FieldUserAccess).Data[:])
+	copy(newAccess[:], t.GetField(FieldUserAccess).Data)
 
 	// Prevent account from creating new account with greater permission
 	for i := 0; i < 64; i++ {
@@ -1605,7 +1605,6 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	// client has requested to resume a partially transferred file
 	if transferOptions != nil {
-
 		fileInfo, err := cc.Server.FS.Stat(fullFilePath + incompleteFileSuffix)
 		if err != nil {
 			return res, err

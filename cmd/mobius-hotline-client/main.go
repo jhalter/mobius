@@ -74,7 +74,6 @@ func main() {
 	client := hotline.NewUIClient(*configDir, logger)
 	client.DebugBuf = db
 	client.UI.Start()
-
 }
 
 func newZapCore(level zapcore.Level, syncer zapcore.WriteSyncer) zapcore.Core {

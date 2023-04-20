@@ -78,14 +78,13 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 				}
 
 				binary.BigEndian.PutUint32(fnwi.FileSize[:], c)
-				copy(fnwi.Type[:], []byte("fldr")[:])
-				copy(fnwi.Creator[:], fileCreator[:])
+				copy(fnwi.Type[:], []byte("fldr"))
+				copy(fnwi.Creator[:], fileCreator)
 			} else {
 				binary.BigEndian.PutUint32(fnwi.FileSize[:], uint32(rFile.Size()))
-				copy(fnwi.Type[:], []byte(fileTypeFromFilename(rFile.Name()).TypeCode)[:])
-				copy(fnwi.Creator[:], []byte(fileTypeFromFilename(rFile.Name()).CreatorCode)[:])
+				copy(fnwi.Type[:], []byte(fileTypeFromFilename(rFile.Name()).TypeCode))
+				copy(fnwi.Creator[:], []byte(fileTypeFromFilename(rFile.Name()).CreatorCode))
 			}
-
 		} else if file.IsDir() {
 			dir, err := os.ReadDir(filepath.Join(path, file.Name()))
 			if err != nil {
@@ -100,8 +99,8 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 			}
 
 			binary.BigEndian.PutUint32(fnwi.FileSize[:], c)
-			copy(fnwi.Type[:], []byte("fldr")[:])
-			copy(fnwi.Creator[:], fileCreator[:])
+			copy(fnwi.Type[:], []byte("fldr"))
+			copy(fnwi.Creator[:], fileCreator)
 		} else {
 			// the Hotline protocol does not support fileWrapper sizes > 4GiB due to the 4 byte field size, so skip them
 			if fileInfo.Size() > 4294967296 {
@@ -113,16 +112,16 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 				return nil, err
 			}
 
-			copy(fnwi.FileSize[:], hlFile.totalSize()[:])
-			copy(fnwi.Type[:], hlFile.ffo.FlatFileInformationFork.TypeSignature[:])
-			copy(fnwi.Creator[:], hlFile.ffo.FlatFileInformationFork.CreatorSignature[:])
+			copy(fnwi.FileSize[:], hlFile.totalSize())
+			copy(fnwi.Type[:], hlFile.ffo.FlatFileInformationFork.TypeSignature)
+			copy(fnwi.Creator[:], hlFile.ffo.FlatFileInformationFork.CreatorSignature)
 		}
 
 		strippedName := strings.Replace(file.Name(), ".incomplete", "", -1)
 
 		nameSize := make([]byte, 2)
 		binary.BigEndian.PutUint16(nameSize, uint16(len(strippedName)))
-		copy(fnwi.NameSize[:], nameSize[:])
+		copy(fnwi.NameSize[:], nameSize)
 
 		fnwi.name = []byte(strippedName)
 

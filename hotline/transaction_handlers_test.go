@@ -1056,7 +1056,6 @@ func TestHandleNewFolder(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			gotRes, err := HandleNewFolder(tt.args.cc, tt.args.t)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("HandleNewFolder() error = %v, wantErr %v", err, tt.wantErr)
@@ -1175,7 +1174,6 @@ func TestHandleUploadFile(t *testing.T) {
 			}
 
 			tranAssertEqual(t, tt.wantRes, gotRes)
-
 		})
 	}
 }
@@ -3781,7 +3779,6 @@ func TestHandleGetNewsArtNameList(t *testing.T) {
 				return
 			}
 			tranAssertEqual(t, tt.wantRes, gotRes)
-
 		})
 	}
 }
@@ -3942,7 +3939,7 @@ func TestHandleNewNewsFldr(t *testing.T) {
 		//		},
 		//	},
 		//	wantErr: assert.Error,
-		//},
+		// },
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

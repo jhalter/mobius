@@ -105,7 +105,6 @@ func (s *Server) ListenAndServe(ctx context.Context, cancelRoot context.CancelFu
 		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", "", s.Port+1))
 		if err != nil {
 			s.Logger.Fatal(err)
-
 		}
 
 		s.Logger.Fatal(s.ServeFileTransfers(ctx, ln))
@@ -740,7 +739,7 @@ func (s *Server) NewPrivateChat(cc *ClientConn) []byte {
 
 	randID := make([]byte, 4)
 	rand.Read(randID)
-	data := binary.BigEndian.Uint32(randID[:])
+	data := binary.BigEndian.Uint32(randID)
 
 	s.PrivateChats[data] = &PrivateChat{
 		ClientConn: make(map[uint16]*ClientConn),

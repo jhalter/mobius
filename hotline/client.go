@@ -317,7 +317,6 @@ func handleGetFileNameList(c *Client, t *Transaction) (res []Transaction, err er
 			node.SetReference(&fn)
 			root.AddChild(node)
 		}
-
 	}
 
 	centerFlex := tview.NewFlex().

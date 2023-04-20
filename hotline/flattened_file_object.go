@@ -110,7 +110,7 @@ func (ffo *flattenedFileObject) TransferSize(offset int64) []byte {
 	resForkSize := binary.BigEndian.Uint32(ffo.FlatFileResForkHeader.DataSize[:])
 
 	size := make([]byte, 4)
-	binary.BigEndian.PutUint32(size[:], dataSize+resForkSize+uint32(payloadSize)-uint32(offset))
+	binary.BigEndian.PutUint32(size, dataSize+resForkSize+uint32(payloadSize)-uint32(offset))
 
 	return size
 }

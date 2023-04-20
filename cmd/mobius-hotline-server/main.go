@@ -87,7 +87,6 @@ func main() {
 				logger.Fatal(err)
 			}
 			logger.Infow("Config dir initialized at " + *configDir)
-
 		} else {
 			logger.Infow("Existing config dir found.  Skipping initialization.")
 		}
@@ -232,7 +231,6 @@ func copyDir(src, dst string) error {
 			}
 			f.Close()
 		}
-
 	}
 
 	return nil

@@ -350,7 +350,6 @@ func (ui *UI) renderServerUI() *tview.Flex {
 
 		// Post news
 		if event.Key() == tcell.KeyCtrlP {
-
 			newsFlex := tview.NewFlex()
 			newsFlex.SetBorderPadding(0, 0, 1, 1)
 			newsPostTextArea := tview.NewTextView()
