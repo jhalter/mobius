@@ -11,7 +11,6 @@ import (
 	"gopkg.in/yaml.v3"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"net"
@@ -339,7 +338,7 @@ func (s *Server) writeBanList() error {
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(
+	err = os.WriteFile(
 		filepath.Join(s.ConfigDir, "Banlist.yaml"),
 		out,
 		0666,
@@ -1210,7 +1209,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 						return err
 					}
 
-					if err := receiveFile(rwc, file, ioutil.Discard, ioutil.Discard, fileTransfer.bytesSentCounter); err != nil {
+					if err := receiveFile(rwc, file, io.Discard, io.Discard, fileTransfer.bytesSentCounter); err != nil {
 						s.Logger.Error(err)
 					}
 

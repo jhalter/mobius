@@ -5,7 +5,6 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"gopkg.in/yaml.v3"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
@@ -161,7 +160,7 @@ func (ui *UI) renderSettingsForm() *tview.Flex {
 			// TODO: handle err
 		}
 		// TODO: handle err
-		err = ioutil.WriteFile(ui.HLClient.cfgPath, out, 0666)
+		err = os.WriteFile(ui.HLClient.cfgPath, out, 0666)
 		if err != nil {
 			println(ui.HLClient.cfgPath)
 			panic(err)
@@ -236,7 +235,7 @@ func (ui *UI) renderJoinServerForm(name, server, login, password, backPage strin
 				panic(err)
 			}
 
-			err = ioutil.WriteFile(ui.HLClient.cfgPath, out, 0666)
+			err = os.WriteFile(ui.HLClient.cfgPath, out, 0666)
 			if err != nil {
 				panic(err)
 			}
