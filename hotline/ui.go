@@ -219,17 +219,17 @@ func (ui *UI) joinServer(addr, login, password string) error {
 func (ui *UI) renderJoinServerForm(name, server, login, password, backPage string, save, defaultConnect bool) *tview.Flex {
 	joinServerForm := tview.NewForm()
 	joinServerForm.
-		//	AddInputField("Name", server, 0, func(textToCheck string, lastChar rune) bool {
-		//	return false
-		// }, nil).
 		AddInputField("Server", server, 0, nil, nil).
 		AddInputField("Login", login, 0, nil, nil).
 		AddPasswordField("Password", password, 0, '*', nil).
 		AddCheckbox("Save", save, func(checked bool) {
-			ui.HLClient.Logger.Infow("saving bookmark")
-			// TODO: Implement bookmark saving
+			ui.HLClient.Pref.AddBookmark(
+				joinServerForm.GetFormItem(0).(*tview.InputField).GetText(),
+				joinServerForm.GetFormItem(0).(*tview.InputField).GetText(),
+				joinServerForm.GetFormItem(1).(*tview.InputField).GetText(),
+				joinServerForm.GetFormItem(2).(*tview.InputField).GetText(),
+			)
 
-			ui.HLClient.Pref.AddBookmark(joinServerForm.GetFormItem(0).(*tview.InputField).GetText(), joinServerForm.GetFormItem(0).(*tview.InputField).GetText(), joinServerForm.GetFormItem(1).(*tview.InputField).GetText(), joinServerForm.GetFormItem(2).(*tview.InputField).GetText())
 			out, err := yaml.Marshal(ui.HLClient.Pref)
 			if err != nil {
 				panic(err)
@@ -239,7 +239,6 @@ func (ui *UI) renderJoinServerForm(name, server, login, password, backPage strin
 			if err != nil {
 				panic(err)
 			}
-			// 		Pref := ui.HLClient.Pref
 		}).
 		AddButton("Cancel", func() {
 			ui.Pages.SwitchToPage(backPage)

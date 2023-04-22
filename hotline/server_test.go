@@ -41,8 +41,6 @@ func TestServer_handleFileTransfer(t *testing.T) {
 		TrackerPassID [4]byte
 		Stats         *Stats
 		FS            FileStore
-		mux           sync.Mutex
-		flatNewsMux   sync.Mutex
 		FlatNews      []byte
 	}
 	type args struct {

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 	"math/big"
@@ -49,10 +48,8 @@ func (cp *ClientPrefs) IconBytes() []byte {
 	return iconBytes
 }
 
-func (cp *ClientPrefs) AddBookmark(name, addr, login, pass string) error {
+func (cp *ClientPrefs) AddBookmark(name, addr, login, pass string) {
 	cp.Bookmarks = append(cp.Bookmarks, Bookmark{Addr: addr, Login: login, Password: pass})
-
-	return nil
 }
 
 func readConfig(cfgPath string) (*ClientPrefs, error) {
@@ -160,15 +157,6 @@ type ClientTHandler interface {
 	Handle(*Client, *Transaction) ([]Transaction, error)
 }
 
-type mockClientHandler struct {
-	mock.Mock
-}
-
-func (mh *mockClientHandler) Handle(cc *Client, t *Transaction) ([]Transaction, error) {
-	args := mh.Called(cc, t)
-	return args.Get(0).([]Transaction), args.Error(1)
-}
-
 var clientHandlers = map[uint16]ClientHandler{
 	TranChatMsg:          handleClientChatMsg,
 	TranLogin:            handleClientTranLogin,
@@ -186,10 +174,10 @@ var clientHandlers = map[uint16]ClientHandler{
 }
 
 func handleTranServerMsg(c *Client, t *Transaction) (res []Transaction, err error) {
-	time := time.Now().Format(time.RFC850)
+	now := time.Now().Format(time.RFC850)
 
 	msg := strings.ReplaceAll(string(t.GetField(FieldData).Data), "\r", "\n")
-	msg += "\n\nAt " + time
+	msg += "\n\nAt " + now
 	title := fmt.Sprintf("| Private Message From: 	%s |", t.GetField(FieldUserName).Data)
 
 	msgBox := tview.NewTextView().SetScrollable(true)
@@ -198,7 +186,7 @@ func handleTranServerMsg(c *Client, t *Transaction) (res []Transaction, err erro
 	msgBox.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEscape:
-			c.UI.Pages.RemovePage("serverMsgModal" + time)
+			c.UI.Pages.RemovePage("serverMsgModal" + now)
 		}
 		return event
 	})
@@ -211,14 +199,14 @@ func handleTranServerMsg(c *Client, t *Transaction) (res []Transaction, err erro
 			AddItem(nil, 0, 1, false), 0, 2, true).
 		AddItem(nil, 0, 1, false)
 
-	c.UI.Pages.AddPage("serverMsgModal"+time, centeredFlex, true, true)
+	c.UI.Pages.AddPage("serverMsgModal"+now, centeredFlex, true, true)
 	c.UI.App.Draw() // TODO: errModal doesn't render without this.  wtf?
 
 	return res, err
 }
 
 func (c *Client) showErrMsg(msg string) {
-	time := time.Now().Format(time.RFC850)
+	t := time.Now().Format(time.RFC850)
 
 	title := "| Error |"
 
@@ -228,7 +216,7 @@ func (c *Client) showErrMsg(msg string) {
 	msgBox.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEscape:
-			c.UI.Pages.RemovePage("serverMsgModal" + time)
+			c.UI.Pages.RemovePage("serverMsgModal" + t)
 		}
 		return event
 	})
@@ -241,7 +229,7 @@ func (c *Client) showErrMsg(msg string) {
 			AddItem(nil, 0, 1, false), 0, 2, true).
 		AddItem(nil, 0, 1, false)
 
-	c.UI.Pages.AddPage("serverMsgModal"+time, centeredFlex, true, true)
+	c.UI.Pages.AddPage("serverMsgModal"+t, centeredFlex, true, true)
 	c.UI.App.Draw() // TODO: errModal doesn't render without this.  wtf?
 }
 
