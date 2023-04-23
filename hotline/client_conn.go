@@ -102,7 +102,7 @@ func (cc *ClientConn) handleTransaction(transaction Transaction) error {
 		// the user is no longer away
 		if cc.Idle {
 			flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(cc.Flags)))
-			flagBitmap.SetBit(flagBitmap, userFlagAway, 0)
+			flagBitmap.SetBit(flagBitmap, UserFlagAway, 0)
 			binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
 			cc.Idle = false
 

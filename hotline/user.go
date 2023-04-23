@@ -4,12 +4,12 @@ import (
 	"encoding/binary"
 )
 
-// User flags are stored as a 2 byte bitmap with the following values:
+// User flags are stored as a 2 byte bitmap and represent various user states
 const (
-	userFlagAway        = 0 // User is away
-	userFlagAdmin       = 1 // User is admin
-	userFlagRefusePM    = 2 // User refuses private messages
-	userFLagRefusePChat = 3 // User refuses private chat
+	UserFlagAway        = 0 // User is away
+	UserFlagAdmin       = 1 // User is admin
+	UserFlagRefusePM    = 2 // User refuses private messages
+	UserFlagRefusePChat = 3 // User refuses private chat
 )
 
 // FieldOptions flags are sent from v1.5+ clients as part of TranAgreed

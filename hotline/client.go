@@ -423,7 +423,7 @@ func (c *Client) renderUserList() {
 	c.UI.userList.Clear()
 	for _, u := range c.UserList {
 		flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(u.Flags)))
-		if flagBitmap.Bit(userFlagAdmin) == 1 {
+		if flagBitmap.Bit(UserFlagAdmin) == 1 {
 			_, _ = fmt.Fprintf(c.UI.userList, "[red::b]%s[-:-:-]\n", u.Name)
 		} else {
 			_, _ = fmt.Fprintf(c.UI.userList, "%s\n", u.Name)

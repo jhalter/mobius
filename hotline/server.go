@@ -313,7 +313,7 @@ func (s *Server) keepaliveHandler() {
 				c.Idle = true
 
 				flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(c.Flags)))
-				flagBitmap.SetBit(flagBitmap, userFlagAway, 1)
+				flagBitmap.SetBit(flagBitmap, UserFlagAway, 1)
 				binary.BigEndian.PutUint16(c.Flags, uint16(flagBitmap.Int64()))
 
 				c.sendAll(

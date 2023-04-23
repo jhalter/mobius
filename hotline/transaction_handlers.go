@@ -334,7 +334,7 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 
 	// Check if target user has "Refuse private messages" flag
 	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(otherClient.Flags)))
-	if flagBitmap.Bit(userFLagRefusePChat) == 1 {
+	if flagBitmap.Bit(UserFlagRefusePChat) == 1 {
 		res = append(res,
 			*NewTransaction(
 				TranServerMsg,
@@ -671,9 +671,9 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 
 			flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(c.Flags)))
 			if c.Authorize(accessDisconUser) {
-				flagBitmap.SetBit(flagBitmap, userFlagAdmin, 1)
+				flagBitmap.SetBit(flagBitmap, UserFlagAdmin, 1)
 			} else {
-				flagBitmap.SetBit(flagBitmap, userFlagAdmin, 0)
+				flagBitmap.SetBit(flagBitmap, UserFlagAdmin, 0)
 			}
 			binary.BigEndian.PutUint16(c.Flags, uint16(flagBitmap.Int64()))
 
@@ -955,13 +955,13 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	// Check refuse private PM option
 	if optBitmap.Bit(refusePM) == 1 {
-		flagBitmap.SetBit(flagBitmap, userFlagRefusePM, 1)
+		flagBitmap.SetBit(flagBitmap, UserFlagRefusePM, 1)
 		binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
 	}
 
 	// Check refuse private chat option
 	if optBitmap.Bit(refuseChat) == 1 {
-		flagBitmap.SetBit(flagBitmap, userFLagRefusePChat, 1)
+		flagBitmap.SetBit(flagBitmap, UserFlagRefusePChat, 1)
 		binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
 	}
 
@@ -1066,7 +1066,6 @@ func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, er
 
 			banUntil := time.Now().Add(tempBanDuration)
 			cc.Server.banList[strings.Split(clientConn.RemoteAddr, ":")[0]] = &banUntil
-			cc.Server.writeBanList()
 		case 2:
 			// send message: "You are permanently banned on this server"
 			cc.logger.Infow("Disconnect & ban " + string(clientConn.UserName))
@@ -1079,7 +1078,11 @@ func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, er
 			))
 
 			cc.Server.banList[strings.Split(clientConn.RemoteAddr, ":")[0]] = nil
-			cc.Server.writeBanList()
+		}
+
+		err := cc.Server.writeBanList()
+		if err != nil {
+			return res, err
 		}
 	}
 
@@ -1644,10 +1647,10 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction,
 		optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
 		flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(cc.Flags)))
 
-		flagBitmap.SetBit(flagBitmap, userFlagRefusePM, optBitmap.Bit(refusePM))
+		flagBitmap.SetBit(flagBitmap, UserFlagRefusePM, optBitmap.Bit(refusePM))
 		binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
 
-		flagBitmap.SetBit(flagBitmap, userFLagRefusePChat, optBitmap.Bit(refuseChat))
+		flagBitmap.SetBit(flagBitmap, UserFlagRefusePChat, optBitmap.Bit(refuseChat))
 		binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
 
 		// Check auto response
@@ -1742,7 +1745,7 @@ func HandleInviteNewChat(cc *ClientConn, t *Transaction) (res []Transaction, err
 	targetClient := cc.Server.Clients[binary.BigEndian.Uint16(targetID)]
 
 	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(targetClient.Flags)))
-	if flagBitmap.Bit(userFLagRefusePChat) == 1 {
+	if flagBitmap.Bit(UserFlagRefusePChat) == 1 {
 		res = append(res,
 			*NewTransaction(
 				TranServerMsg,
