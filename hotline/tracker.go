@@ -125,7 +125,10 @@ func GetListing(addr string) ([]ServerRecord, error) {
 	for {
 		scanner.Scan()
 		var srv ServerRecord
-		_, _ = srv.Read(scanner.Bytes())
+		_, err = srv.Read(scanner.Bytes())
+		if err != nil {
+			return nil, err
+		}
 
 		servers = append(servers, srv)
 		if len(servers) == totalSrv {
@@ -146,16 +149,28 @@ func GetListing(addr string) ([]ServerRecord, error) {
 // 00000050  4f 54 4c 2e 63 6f 6d 3a  35 35 30 30 2d 4f 3a b2  |OTL.com:5500-O:.|
 // 00000060  15 7c 00 00 00 00 08 53  65 6e 65 63 74 75 73 20  |.|.....Senectus |
 func serverScanner(data []byte, _ bool) (advance int, token []byte, err error) {
+	// The name length field is the 11th byte of the server record.  If we don't have that many bytes,
+	// return nil token so the Scanner reads more data and continues scanning.
 	if len(data) < 10 {
 		return 0, nil, nil
 	}
 
 	// A server entry has two variable length fields: the name and description.
-	// To get the token length, we first need the name length from the 10th byte:
+	// To get the token length, we first need the name length from the 10th byte
 	nameLen := int(data[10])
+
+	// The description length field is at the 12th + nameLen byte of the server record.
+	// If we don't have that many bytes, return nil token so the Scanner reads more data and continues scanning.
+	if len(data) < 11+nameLen {
+		return 0, nil, nil
+	}
 
 	// Next we need the description length from the 11+nameLen byte:
 	descLen := int(data[11+nameLen])
+
+	if len(data) < 12+nameLen+descLen {
+		return 0, nil, nil
+	}
 
 	return 12 + nameLen + descLen, data[0 : 12+nameLen+descLen], nil
 }

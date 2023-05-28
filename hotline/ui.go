@@ -102,12 +102,7 @@ func (ui *UI) showBookmarks() *tview.List {
 	return list
 }
 
-func (ui *UI) getTrackerList() *tview.List {
-	listing, err := GetListing(ui.HLClient.Pref.Tracker)
-	if err != nil {
-		// TODO
-	}
-
+func (ui *UI) getTrackerList(servers []ServerRecord) *tview.List {
 	list := tview.NewList()
 	list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEsc {
@@ -117,14 +112,12 @@ func (ui *UI) getTrackerList() *tview.List {
 	})
 	list.Box.SetBorder(true).SetTitle("| Servers |")
 
-	shortcut := 97 // rune for "a"
-	for i, srv := range listing {
-		addr := srv.Addr()
-		srvName := srv.Name
+	const shortcut = 97 // rune for "a"
+	for i, srv := range servers {
 		list.AddItem(string(srv.Name), string(srv.Description), rune(shortcut+i), func() {
 			ui.Pages.RemovePage("joinServer")
 
-			newJS := ui.renderJoinServerForm(string(srvName), addr, GuestAccount, "", trackerListPage, false, true)
+			newJS := ui.renderJoinServerForm(string(srv.Name), srv.Addr(), GuestAccount, "", trackerListPage, false, true)
 
 			ui.Pages.AddPage("joinServer", newJS, true, true)
 			ui.Pages.ShowPage("joinServer")
@@ -411,7 +404,7 @@ func (ui *UI) renderServerUI() *tview.Flex {
 							newsPostTextArea.SetText(curTxt)
 						}
 					default:
-						_, _ = fmt.Fprintf(newsPostTextArea, string(event.Rune()))
+						_, _ = fmt.Fprint(newsPostTextArea, string(event.Rune()))
 					}
 				}
 
@@ -468,7 +461,20 @@ func (ui *UI) Start() {
 			ui.Pages.AddAndSwitchToPage("bookmarks", ui.showBookmarks(), true)
 		}).
 		AddItem("Browse Tracker", "", 't', func() {
-			ui.trackerList = ui.getTrackerList()
+			listing, err := GetListing(ui.HLClient.Pref.Tracker)
+			if err != nil {
+				errMsg := fmt.Sprintf("Error fetching tracker results:\n%v", err)
+				errModal := tview.NewModal()
+				errModal.SetText(errMsg)
+				errModal.AddButtons([]string{"Cancel"})
+				errModal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+					ui.Pages.RemovePage("errModal")
+				})
+				ui.Pages.RemovePage("joinServer")
+				ui.Pages.AddPage("errModal", errModal, false, true)
+				return
+			}
+			ui.trackerList = ui.getTrackerList(listing)
 			ui.Pages.AddAndSwitchToPage("trackerList", ui.trackerList, true)
 		}).
 		AddItem("Settings", "", 's', func() {
