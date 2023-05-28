@@ -48,6 +48,7 @@ type FilePath struct {
 	Items     []FilePathItem
 }
 
+// Write implements io.Writer interface for FilePath
 func (fp *FilePath) Write(b []byte) (n int, err error) {
 	reader := bytes.NewReader(b)
 	err = binary.Read(reader, binary.BigEndian, &fp.ItemCount)
