@@ -34,6 +34,9 @@ func fileItemScanner(data []byte, _ bool) (advance int, token []byte, err error)
 
 // Write implements the io.Writer interface for FilePathItem
 func (fpi *FilePathItem) Write(b []byte) (n int, err error) {
+	if len(b) < 3 {
+		return n, errors.New("buflen too small")
+	}
 	fpi.Len = b[2]
 	fpi.Name = b[fileItemMinLen : fpi.Len+fileItemMinLen]
 
@@ -61,7 +64,13 @@ func (fp *FilePath) Write(b []byte) (n int, err error) {
 	for i := 0; i < int(binary.BigEndian.Uint16(fp.ItemCount[:])); i++ {
 		var fpi FilePathItem
 		scanner.Scan()
-		if _, err := fpi.Write(scanner.Bytes()); err != nil {
+
+		// Make a new []byte slice and copy the scanner bytes to it.  This is critical to avoid a data race as the
+		// scanner re-uses the buffer for subsequent scans.
+		buf := make([]byte, len(scanner.Bytes()))
+		copy(buf, scanner.Bytes())
+
+		if _, err := fpi.Write(buf); err != nil {
 			return n, err
 		}
 		fp.Items = append(fp.Items, fpi)
