@@ -74,7 +74,6 @@ type Field struct {
 type requiredField struct {
 	ID     int
 	minLen int
-	maxLen int
 }
 
 func NewField(id uint16, data []byte) Field {

@@ -26,7 +26,6 @@ type fileWrapper struct {
 	rsrcPath       string // path to the file resource fork
 	infoPath       string // path to the file information fork
 	incompletePath string // path to partially transferred temp file
-	infoFork       *FlatFileInformationFork
 	ffo            *flattenedFileObject
 }
 
@@ -150,26 +149,31 @@ func (f *fileWrapper) dataFile() (os.FileInfo, error) {
 	return nil, errors.New("file or directory not found")
 }
 
-// move a fileWrapper and its associated metadata files to newPath
+// move a fileWrapper and its associated meta files to newPath.
+// Meta files include:
+// * Partially uploaded file ending with .incomplete
+// * Resource fork starting with .rsrc_
+// * Info fork starting with .info
+// During move of the meta files, os.ErrNotExist is ignored as these files may legitimately not exist.
 func (f *fileWrapper) move(newPath string) error {
 	err := f.fs.Rename(f.dataPath, filepath.Join(newPath, f.name))
 	if err != nil {
-		// TODO
+		return err
 	}
 
 	err = f.fs.Rename(f.incompletePath, filepath.Join(newPath, f.incompleteDataName()))
-	if err != nil {
-		// TODO
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
 
 	err = f.fs.Rename(f.rsrcPath, filepath.Join(newPath, f.rsrcForkName()))
-	if err != nil {
-		// TODO
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
 
 	err = f.fs.Rename(f.infoPath, filepath.Join(newPath, f.infoForkName()))
-	if err != nil {
-		// TODO
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
 
 	return nil
@@ -179,22 +183,22 @@ func (f *fileWrapper) move(newPath string) error {
 func (f *fileWrapper) delete() error {
 	err := f.fs.RemoveAll(f.dataPath)
 	if err != nil {
-		// TODO
+		return err
 	}
 
 	err = f.fs.Remove(f.incompletePath)
-	if err != nil {
-		// TODO
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
 
 	err = f.fs.Remove(f.rsrcPath)
-	if err != nil {
-		// TODO
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
 
 	err = f.fs.Remove(f.infoPath)
-	if err != nil {
-		// TODO
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
 
 	return nil

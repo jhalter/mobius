@@ -27,8 +27,6 @@ var contextKeyReq = contextKey("req")
 
 type requestCtx struct {
 	remoteAddr string
-	login      string
-	name       string
 }
 
 type Server struct {
