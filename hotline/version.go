@@ -1,3 +1,3 @@
 package hotline
 
-const VERSION = "0.10.21"
+const VERSION = "0.10.22"
