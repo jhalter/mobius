@@ -139,6 +139,44 @@ func Test_serverScanner(t *testing.T) {
 			wantToken:   []byte(nil),
 			wantErr:     assert.NoError,
 		},
+		{
+			name: "when nameLen exceeds provided data",
+			args: args{
+				data: []byte{
+					0x18, 0x05, 0x30, 0x63, // IP Addr
+					0x15, 0x7c, // Port
+					0x00, 0x02, // UserCount
+					0x00, 0x00, // ??
+					0xff,             // Name Len
+					0x54, 0x68, 0x65, // Name
+					0x03,             // Desc Len
+					0x54, 0x54, 0x54, // Description
+				},
+				atEOF: false,
+			},
+			wantAdvance: 0,
+			wantToken:   []byte(nil),
+			wantErr:     assert.NoError,
+		},
+		{
+			name: "when description len exceeds provided data",
+			args: args{
+				data: []byte{
+					0x18, 0x05, 0x30, 0x63, // IP Addr
+					0x15, 0x7c, // Port
+					0x00, 0x02, // UserCount
+					0x00, 0x00, // ??
+					0x03,             // Name Len
+					0x54, 0x68, 0x65, // Name
+					0xff,             // Desc Len
+					0x54, 0x54, 0x54, // Description
+				},
+				atEOF: false,
+			},
+			wantAdvance: 0,
+			wantToken:   []byte(nil),
+			wantErr:     assert.NoError,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
