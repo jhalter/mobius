@@ -18,7 +18,7 @@ The goal of the Mobius client is to make it fun and easy to connect to multiple 
 
 If you run Docker, you can quickly try out the Mobius server with the official image from Docker hub:
 
-    docker run --rm -p 5500:5500 -p 5501:5501 jhalter/mobius-hotline-server:latest
+    docker run --pull=always --rm -p 5500:5500 -p 5501:5501 jhalter/mobius-hotline-server:latest
 
 This will start the Mobius server with the Hotline ports 5500 and 5501 exposed on localhost using a default configuration from the image.
 
