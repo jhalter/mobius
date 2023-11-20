@@ -3,14 +3,15 @@ package hotline
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"embed"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
+	"log/slog"
 	"math/big"
 	"math/rand"
 	"net"
@@ -73,7 +74,7 @@ type Client struct {
 	UserAccess  []byte
 	filePath    []string
 	UserList    []User
-	Logger      *zap.SugaredLogger
+	Logger      *slog.Logger
 	activeTasks map[uint32]*Transaction
 	serverName  string
 
@@ -86,13 +87,13 @@ type Client struct {
 	Inbox chan *Transaction
 }
 
-type ClientHandler func(*Client, *Transaction) ([]Transaction, error)
+type ClientHandler func(context.Context, *Client, *Transaction) ([]Transaction, error)
 
 func (c *Client) HandleFunc(transactionID uint16, handler ClientHandler) {
 	c.Handlers[transactionID] = handler
 }
 
-func NewClient(username string, logger *zap.SugaredLogger) *Client {
+func NewClient(username string, logger *slog.Logger) *Client {
 	c := &Client{
 		Logger:      logger,
 		activeTasks: make(map[uint32]*Transaction),
@@ -103,7 +104,7 @@ func NewClient(username string, logger *zap.SugaredLogger) *Client {
 	return c
 }
 
-func NewUIClient(cfgPath string, logger *zap.SugaredLogger) *Client {
+func NewUIClient(cfgPath string, logger *slog.Logger) *Client {
 	c := &Client{
 		cfgPath:     cfgPath,
 		Logger:      logger,
@@ -114,7 +115,8 @@ func NewUIClient(cfgPath string, logger *zap.SugaredLogger) *Client {
 
 	prefs, err := readConfig(cfgPath)
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("unable to read config file %s\n", cfgPath))
+		logger.Error(fmt.Sprintf("unable to read config file %s\n", cfgPath))
+		os.Exit(1)
 	}
 	c.Pref = prefs
 
@@ -168,12 +170,12 @@ var clientHandlers = map[uint16]ClientHandler{
 	TranGetMsgs:          handleGetMsgs,
 	TranGetFileNameList:  handleGetFileNameList,
 	TranServerMsg:        handleTranServerMsg,
-	TranKeepAlive: func(client *Client, transaction *Transaction) (t []Transaction, err error) {
+	TranKeepAlive: func(ctx context.Context, client *Client, transaction *Transaction) (t []Transaction, err error) {
 		return t, err
 	},
 }
 
-func handleTranServerMsg(c *Client, t *Transaction) (res []Transaction, err error) {
+func handleTranServerMsg(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
 	now := time.Now().Format(time.RFC850)
 
 	msg := strings.ReplaceAll(string(t.GetField(FieldData).Data), "\r", "\n")
@@ -233,10 +235,9 @@ func (c *Client) showErrMsg(msg string) {
 	c.UI.App.Draw() // TODO: errModal doesn't render without this.  wtf?
 }
 
-func handleGetFileNameList(c *Client, t *Transaction) (res []Transaction, err error) {
+func handleGetFileNameList(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
 	if t.IsError() {
 		c.showErrMsg(string(t.GetField(FieldError).Data))
-		c.Logger.Infof("Error: %s", t.GetField(FieldError).Data)
 		return res, err
 	}
 
@@ -257,7 +258,7 @@ func handleGetFileNameList(c *Client, t *Transaction) (res []Transaction, err er
 				f := NewField(FieldFilePath, EncodeFilePath(strings.Join(c.filePath, "/")))
 
 				if err := c.UI.HLClient.Send(*NewTransaction(TranGetFileNameList, nil, f)); err != nil {
-					c.UI.HLClient.Logger.Errorw("err", "err", err)
+					c.UI.HLClient.Logger.Error("err", "err", err)
 				}
 				return event
 			}
@@ -265,17 +266,17 @@ func handleGetFileNameList(c *Client, t *Transaction) (res []Transaction, err er
 			entry := selectedNode.GetReference().(*FileNameWithInfo)
 
 			if bytes.Equal(entry.Type[:], []byte("fldr")) {
-				c.Logger.Infow("get new directory listing", "name", string(entry.name))
+				c.Logger.Info("get new directory listing", "name", string(entry.name))
 
 				c.filePath = append(c.filePath, string(entry.name))
 				f := NewField(FieldFilePath, EncodeFilePath(strings.Join(c.filePath, "/")))
 
 				if err := c.UI.HLClient.Send(*NewTransaction(TranGetFileNameList, nil, f)); err != nil {
-					c.UI.HLClient.Logger.Errorw("err", "err", err)
+					c.UI.HLClient.Logger.Error("err", "err", err)
 				}
 			} else {
 				// TODO: initiate file download
-				c.Logger.Infow("download file", "name", string(entry.name))
+				c.Logger.Info("download file", "name", string(entry.name))
 			}
 		}
 
@@ -322,7 +323,7 @@ func handleGetFileNameList(c *Client, t *Transaction) (res []Transaction, err er
 	return res, err
 }
 
-func handleGetMsgs(c *Client, t *Transaction) (res []Transaction, err error) {
+func handleGetMsgs(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
 	newsText := string(t.GetField(FieldData).Data)
 	newsText = strings.ReplaceAll(newsText, "\r", "\n")
 
@@ -342,7 +343,7 @@ func handleGetMsgs(c *Client, t *Transaction) (res []Transaction, err error) {
 	return res, err
 }
 
-func handleNotifyChangeUser(c *Client, t *Transaction) (res []Transaction, err error) {
+func handleNotifyChangeUser(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
 	newUser := User{
 		ID:    t.GetField(FieldUserID).Data,
 		Name:  string(t.GetField(FieldUserName).Data),
@@ -358,7 +359,6 @@ func handleNotifyChangeUser(c *Client, t *Transaction) (res []Transaction, err e
 	var newUserList []User
 	updatedUser := false
 	for _, u := range c.UserList {
-		c.Logger.Debugw("Comparing Users", "userToUpdate", newUser.ID, "myID", u.ID, "userToUpdateName", newUser.Name, "myname", u.Name)
 		if bytes.Equal(newUser.ID, u.ID) {
 			oldName = u.Name
 			u.Name = newUser.Name
@@ -381,7 +381,7 @@ func handleNotifyChangeUser(c *Client, t *Transaction) (res []Transaction, err e
 	return res, err
 }
 
-func handleNotifyDeleteUser(c *Client, t *Transaction) (res []Transaction, err error) {
+func handleNotifyDeleteUser(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
 	exitUser := t.GetField(FieldUserID).Data
 
 	var newUserList []User
@@ -398,7 +398,7 @@ func handleNotifyDeleteUser(c *Client, t *Transaction) (res []Transaction, err e
 	return res, err
 }
 
-func handleClientGetUserNameList(c *Client, t *Transaction) (res []Transaction, err error) {
+func handleClientGetUserNameList(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
 	var users []User
 	for _, field := range t.Fields {
 		// The Hotline protocol docs say that ClientGetUserNameList should only return FieldUsernameWithInfo (300)
@@ -432,7 +432,7 @@ func (c *Client) renderUserList() {
 	}
 }
 
-func handleClientChatMsg(c *Client, t *Transaction) (res []Transaction, err error) {
+func handleClientChatMsg(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
 	if c.Pref.EnableBell {
 		fmt.Println("\a")
 	}
@@ -442,13 +442,13 @@ func handleClientChatMsg(c *Client, t *Transaction) (res []Transaction, err erro
 	return res, err
 }
 
-func handleClientTranUserAccess(c *Client, t *Transaction) (res []Transaction, err error) {
+func handleClientTranUserAccess(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
 	c.UserAccess = t.GetField(FieldUserAccess).Data
 
 	return res, err
 }
 
-func handleClientTranShowAgreement(c *Client, t *Transaction) (res []Transaction, err error) {
+func handleClientTranShowAgreement(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
 	agreement := string(t.GetField(FieldData).Data)
 	agreement = strings.ReplaceAll(agreement, "\r", "\n")
 
@@ -480,7 +480,7 @@ func handleClientTranShowAgreement(c *Client, t *Transaction) (res []Transaction
 	return res, err
 }
 
-func handleClientTranLogin(c *Client, t *Transaction) (res []Transaction, err error) {
+func handleClientTranLogin(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
 	if !bytes.Equal(t.ErrorCode, []byte{0, 0, 0, 0}) {
 		errMsg := string(t.GetField(FieldError).Data)
 		errModal := tview.NewModal()
@@ -501,7 +501,7 @@ func handleClientTranLogin(c *Client, t *Transaction) (res []Transaction, err er
 	c.UI.App.SetFocus(c.UI.chatInput)
 
 	if err := c.Send(*NewTransaction(TranGetUserNameList, nil)); err != nil {
-		c.Logger.Errorw("err", "err", err)
+		c.Logger.Error("err", "err", err)
 	}
 	return res, err
 }
@@ -536,7 +536,6 @@ func (c *Client) keepalive() error {
 	for {
 		time.Sleep(keepaliveInterval)
 		_ = c.Send(*NewTransaction(TranKeepAlive, nil))
-		c.Logger.Debugw("Sent keepalive ping")
 	}
 }
 
@@ -604,7 +603,7 @@ func (c *Client) Send(t Transaction) error {
 	if n, err = c.Connection.Write(b); err != nil {
 		return err
 	}
-	c.Logger.Debugw("Sent Transaction",
+	c.Logger.Debug("Sent Transaction",
 		"IsReply", t.IsReply,
 		"type", requestNum,
 		"sentBytes", n,
@@ -612,7 +611,7 @@ func (c *Client) Send(t Transaction) error {
 	return nil
 }
 
-func (c *Client) HandleTransaction(t *Transaction) error {
+func (c *Client) HandleTransaction(ctx context.Context, t *Transaction) error {
 	var origT Transaction
 	if t.IsReply == 1 {
 		requestID := binary.BigEndian.Uint32(t.ID)
@@ -621,17 +620,22 @@ func (c *Client) HandleTransaction(t *Transaction) error {
 	}
 
 	if handler, ok := c.Handlers[binary.BigEndian.Uint16(t.Type)]; ok {
-		outT, _ := handler(c, t)
+		c.Logger.Debug(
+			"Received transaction",
+			"IsReply", t.IsReply,
+			"type", binary.BigEndian.Uint16(t.Type),
+		)
+		outT, _ := handler(ctx, c, t)
 		for _, t := range outT {
 			if err := c.Send(t); err != nil {
 				return err
 			}
 		}
 	} else {
-		c.Logger.Debugw(
-			"Unimplemented transaction type received",
-			"RequestID", t.Type,
-			"TransactionID", t.ID,
+		c.Logger.Debug(
+			"Unimplemented transaction type",
+			"IsReply", t.IsReply,
+			"type", binary.BigEndian.Uint16(t.Type),
 		)
 	}
 
@@ -642,7 +646,8 @@ func (c *Client) Disconnect() error {
 	return c.Connection.Close()
 }
 
-func (c *Client) HandleTransactions() error {
+
+func (c *Client) HandleTransactions(ctx context.Context) error {
 	// Create a new scanner for parsing incoming bytes into transaction tokens
 	scanner := bufio.NewScanner(c.Connection)
 	scanner.Split(transactionScanner)
@@ -659,8 +664,9 @@ func (c *Client) HandleTransactions() error {
 		if err != nil {
 			break
 		}
-		if err := c.HandleTransaction(&t); err != nil {
-			c.Logger.Errorw("Error handling transaction", "err", err)
+
+		if err := c.HandleTransaction(ctx, &t); err != nil {
+			c.Logger.Error("Error handling transaction", "err", err)
 		}
 	}
 
