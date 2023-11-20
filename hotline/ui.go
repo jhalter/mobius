@@ -113,7 +113,8 @@ func (ui *UI) getTrackerList(servers []ServerRecord) *tview.List {
 	list.Box.SetBorder(true).SetTitle("| Servers |")
 
 	const shortcut = 97 // rune for "a"
-	for i, srv := range servers {
+	for i, _ := range servers {
+		srv := servers[i]
 		list.AddItem(string(srv.Name), string(srv.Description), rune(shortcut+i), func() {
 			ui.Pages.RemovePage("joinServer")
 
