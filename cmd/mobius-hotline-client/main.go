@@ -6,14 +6,19 @@ import (
 	"fmt"
 	"github.com/jhalter/mobius/hotline"
 	"github.com/rivo/tview"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"runtime"
 	"syscall"
 )
+
+var logLevels = map[string]slog.Level{
+	"debug": slog.LevelDebug,
+	"info":  slog.LevelInfo,
+	"warn":  slog.LevelWarn,
+	"error": slog.LevelError,
+}
 
 func main() {
 	_, cancelRoot := context.WithCancel(context.Background())
@@ -33,66 +38,33 @@ func main() {
 		os.Exit(0)
 	}
 
-	zapLvl, ok := zapLogLevel[*logLevel]
-	if !ok {
-		fmt.Printf("Invalid log level %s.  Must be debug, info, warn, or error.\n", *logLevel)
-		os.Exit(0)
-	}
-
 	// init DebugBuffer
 	db := &hotline.DebugBuffer{
 		TextView: tview.NewTextView(),
 	}
 
-	cores := []zapcore.Core{newZapCore(zapLvl, db)}
-
 	// Add file logger if optional log-file flag was passed
 	if *logFile != "" {
 		f, err := os.OpenFile(*logFile,
 			os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			log.Println(err)
-		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		if err != nil {
 			panic(err)
 		}
-		cores = append(cores, newZapCore(zapLvl, f))
 	}
 
-	l := zap.New(zapcore.NewTee(cores...))
-	defer func() { _ = l.Sync() }()
-	logger := l.Sugar()
-	logger.Infow("Started Mobius client", "Version", hotline.VERSION)
+	logger := slog.New(slog.NewTextHandler(db, &slog.HandlerOptions{Level: logLevels[*logLevel]}))
+	logger.Info("Started Mobius client", "Version", hotline.VERSION)
 
 	go func() {
 		sig := <-sigChan
-		logger.Infow("Stopping client", "signal", sig.String())
+		logger.Info("Stopping client", "signal", sig.String())
 		cancelRoot()
 	}()
 
 	client := hotline.NewUIClient(*configDir, logger)
 	client.DebugBuf = db
 	client.UI.Start()
-}
-
-func newZapCore(level zapcore.Level, syncer zapcore.WriteSyncer) zapcore.Core {
-	encoderCfg := zap.NewProductionEncoderConfig()
-	encoderCfg.TimeKey = "timestamp"
-	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
-
-	return zapcore.NewCore(
-		zapcore.NewConsoleEncoder(encoderCfg),
-		zapcore.Lock(syncer),
-		level,
-	)
-}
-
-var zapLogLevel = map[string]zapcore.Level{
-	"debug": zap.DebugLevel,
-	"info":  zap.InfoLevel,
-	"warn":  zap.WarnLevel,
-	"error": zap.ErrorLevel,
 }
 
 func defaultConfigPath() (cfgPath string) {

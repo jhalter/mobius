@@ -1,6 +1,7 @@
 package hotline
 
 import (
+	"context"
 	"fmt"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -191,7 +192,7 @@ func (ui *UI) joinServer(addr, login, password string) error {
 	}
 
 	go func() {
-		if err := ui.HLClient.HandleTransactions(); err != nil {
+		if err := ui.HLClient.HandleTransactions(context.TODO()); err != nil {
 			ui.Pages.SwitchToPage("home")
 		}
 
@@ -251,7 +252,7 @@ func (ui *UI) renderJoinServerForm(name, server, login, password, backPage strin
 			ui.HLClient.serverName = name
 
 			if err != nil {
-				ui.HLClient.Logger.Errorw("login error", "err", err)
+				ui.HLClient.Logger.Error("login error", "err", err)
 				loginErrModal := tview.NewModal().
 					AddButtons([]string{"Oh no"}).
 					SetText(err.Error()).
@@ -330,14 +331,14 @@ func (ui *UI) renderServerUI() *tview.Flex {
 		// List files
 		if event.Key() == tcell.KeyCtrlF {
 			if err := ui.HLClient.Send(*NewTransaction(TranGetFileNameList, nil)); err != nil {
-				ui.HLClient.Logger.Errorw("err", "err", err)
+				ui.HLClient.Logger.Error("err", "err", err)
 			}
 		}
 
 		// Show News
 		if event.Key() == tcell.KeyCtrlN {
 			if err := ui.HLClient.Send(*NewTransaction(TranGetMsgs, nil)); err != nil {
-				ui.HLClient.Logger.Errorw("err", "err", err)
+				ui.HLClient.Logger.Error("err", "err", err)
 			}
 		}
 
@@ -372,7 +373,7 @@ func (ui *UI) renderServerUI() *tview.Flex {
 						),
 					)
 					if err != nil {
-						ui.HLClient.Logger.Errorw("Error posting news", "err", err)
+						ui.HLClient.Logger.Error("Error posting news", "err", err)
 						// TODO: display errModal to user
 					}
 					ui.Pages.RemovePage("newsInput")
@@ -490,7 +491,7 @@ func (ui *UI) Start() {
 	// App level input capture
 	ui.App.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyCtrlC {
-			ui.HLClient.Logger.Infow("Exiting")
+			ui.HLClient.Logger.Info("Exiting")
 			ui.App.Stop()
 			os.Exit(0)
 		}
