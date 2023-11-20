@@ -27,7 +27,7 @@ jobs:
 
   deploy:
     docker:
-      - image: cimg/go:1.19.1
+      - image: cimg/go:1.21.4
 #    working_directory: /go/src/github.com/jhalter/mobius
     steps:
       - checkout
