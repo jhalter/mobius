@@ -625,7 +625,10 @@ func (c *Client) HandleTransaction(ctx context.Context, t *Transaction) error {
 			"IsReply", t.IsReply,
 			"type", binary.BigEndian.Uint16(t.Type),
 		)
-		outT, _ := handler(ctx, c, t)
+		outT, err := handler(ctx, c, t)
+		if err != nil {
+			c.Logger.Error("error handling transaction", "err", err)
+		}
 		for _, t := range outT {
 			if err := c.Send(t); err != nil {
 				return err
