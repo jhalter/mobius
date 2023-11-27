@@ -305,7 +305,7 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	if !cc.Authorize(accessSendPrivMsg) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to send private messages."))
-		return res, err
+		return res, errors.New("user is not allowed to send private messages")
 	}
 
 	msg := t.GetField(FieldData)
@@ -326,7 +326,10 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 		reply.Fields = append(reply.Fields, NewField(FieldQuotingMsg, t.GetField(FieldQuotingMsg).Data))
 	}
 
-	id, _ := byteToInt(ID.Data)
+	id, err := byteToInt(ID.Data)
+	if err != nil {
+		return res, errors.New("invalid client ID")
+	}
 	otherClient, ok := cc.Server.Clients[uint16(id)]
 	if !ok {
 		return res, errors.New("invalid client ID")
