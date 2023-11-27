@@ -2438,7 +2438,7 @@ func TestHandleSendInstantMsg(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
+			wantErr: assert.Error,
 		},
 		{
 			name: "when client 1 sends a message to client 2",
