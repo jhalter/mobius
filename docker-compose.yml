@@ -1,0 +1,11 @@
+services:
+  mobius-hotline-server:
+    build: .
+    ports:
+      - "5500:5500"
+      - "5501:5501"
+    # If you intend to bind mount the config directory run
+    # cp -r cmd/mobius-hotline-server/mobius/config ./config
+    # first.
+    # volumes:
+    #   - ./config:/usr/local/var/mobius/config

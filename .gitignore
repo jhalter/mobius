@@ -24,3 +24,6 @@ build
 dist/*
 
 *log
+
+# Ignore the bind mounted config directory
+config/*
