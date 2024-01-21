@@ -6,6 +6,6 @@ services:
       - "5501:5501"
     # If you intend to bind mount the config directory run
     # cp -r cmd/mobius-hotline-server/mobius/config ./config
-    # first.
-    # volumes:
-    #   - ./config:/usr/local/var/mobius/config
+    # first. Otherwise, comment the line below to use the default settings.
+    volumes:
+      - ./config:/usr/local/var/mobius/config
