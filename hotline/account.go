@@ -19,7 +19,7 @@ type Account struct {
 func (a *Account) Read(p []byte) (n int, err error) {
 	fields := []Field{
 		NewField(FieldUserName, []byte(a.Name)),
-		NewField(FieldUserLogin, negateString([]byte(a.Login))),
+		NewField(FieldUserLogin, encodeString([]byte(a.Login))),
 		NewField(FieldUserAccess, a.Access[:]),
 	}
 

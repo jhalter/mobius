@@ -580,8 +580,8 @@ func (c *Client) LogIn(login string, password string) error {
 			TranLogin, nil,
 			NewField(FieldUserName, []byte(c.Pref.Username)),
 			NewField(FieldUserIconID, c.Pref.IconBytes()),
-			NewField(FieldUserLogin, negateString([]byte(login))),
-			NewField(FieldUserPassword, negateString([]byte(password))),
+			NewField(FieldUserLogin, encodeString([]byte(login))),
+			NewField(FieldUserPassword, encodeString([]byte(password))),
 		),
 	)
 }

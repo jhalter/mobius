@@ -56,19 +56,19 @@ func ReadUser(b []byte) (*User, error) {
 	return u, nil
 }
 
-// DecodeUserString decodes an obfuscated user string from a client
+// decodeString decodes an obfuscated user string from a client
 // e.g. 98 8a 9a 8c 8b => "guest"
-func DecodeUserString(obfuText []byte) (clearText string) {
+func decodeString(obfuText []byte) (clearText string) {
 	for _, char := range obfuText {
 		clearText += string(rune(255 - uint(char)))
 	}
 	return clearText
 }
 
-// negateString takes []byte s containing cleartext and rotates by 255 into obfuscated cleartext.
+// encodeString takes []byte s containing cleartext and rotates by 255 into obfuscated cleartext.
 // The Hotline protocol uses this format for sending passwords over network.
 // Not secure, but hey, it was the 90s!
-func negateString(clearText []byte) []byte {
+func encodeString(clearText []byte) []byte {
 	obfuText := make([]byte, len(clearText))
 	for i := 0; i < len(clearText); i++ {
 		obfuText[i] = 255 - clearText[i]

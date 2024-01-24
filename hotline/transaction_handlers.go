@@ -639,7 +639,7 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 		return res, err
 	}
 
-	login := DecodeUserString(t.GetField(FieldUserLogin).Data)
+	login := decodeString(t.GetField(FieldUserLogin).Data)
 	userName := string(t.GetField(FieldUserName).Data)
 
 	newAccessLvl := t.GetField(FieldUserAccess).Data
@@ -710,7 +710,7 @@ func HandleGetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 
 	res = append(res, cc.NewReply(t,
 		NewField(FieldUserName, []byte(account.Name)),
-		NewField(FieldUserLogin, negateString(t.GetField(FieldUserLogin).Data)),
+		NewField(FieldUserLogin, encodeString(t.GetField(FieldUserLogin).Data)),
 		NewField(FieldUserPassword, []byte(account.Password)),
 		NewField(FieldUserAccess, account.Access[:]),
 	))
@@ -755,7 +755,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		}
 
 		if len(subFields) == 1 {
-			login := DecodeUserString(getField(FieldData, &subFields).Data)
+			login := decodeString(getField(FieldData, &subFields).Data)
 			cc.logger.Infow("DeleteUser", "login", login)
 
 			if !cc.Authorize(accessDeleteUser) {
@@ -769,7 +769,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			continue
 		}
 
-		login := DecodeUserString(getField(FieldUserLogin, &subFields).Data)
+		login := decodeString(getField(FieldUserLogin, &subFields).Data)
 
 		// check if the login dataFile; if so, we know we are updating an existing user
 		if acc, ok := cc.Server.Accounts[login]; ok {
@@ -793,8 +793,8 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			}
 
 			err = cc.Server.UpdateUser(
-				DecodeUserString(getField(FieldData, &subFields).Data),
-				DecodeUserString(getField(FieldUserLogin, &subFields).Data),
+				decodeString(getField(FieldData, &subFields).Data),
+				decodeString(getField(FieldUserLogin, &subFields).Data),
 				string(getField(FieldUserName, &subFields).Data),
 				acc.Password,
 				acc.Access,
@@ -840,7 +840,7 @@ func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 		return res, err
 	}
 
-	login := DecodeUserString(t.GetField(FieldUserLogin).Data)
+	login := decodeString(t.GetField(FieldUserLogin).Data)
 
 	// If the account already dataFile, reply with an error
 	if _, ok := cc.Server.Accounts[login]; ok {
@@ -876,7 +876,7 @@ func HandleDeleteUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	}
 
 	// TODO: Handle case where account doesn't exist; e.g. delete race condition
-	login := DecodeUserString(t.GetField(FieldUserLogin).Data)
+	login := decodeString(t.GetField(FieldUserLogin).Data)
 
 	if err := cc.Server.DeleteUser(login); err != nil {
 		return res, err

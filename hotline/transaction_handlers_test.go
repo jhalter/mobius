@@ -1405,7 +1405,7 @@ func TestHandleGetUser(t *testing.T) {
 					ErrorCode: []byte{0, 0, 0, 0},
 					Fields: []Field{
 						NewField(FieldUserName, []byte("Guest")),
-						NewField(FieldUserLogin, negateString([]byte("guest"))),
+						NewField(FieldUserLogin, encodeString([]byte("guest"))),
 						NewField(FieldUserPassword, []byte("password")),
 						NewField(FieldUserAccess, []byte{0, 0, 0, 0, 0, 0, 0, 0}),
 					},
@@ -1533,7 +1533,7 @@ func TestHandleDeleteUser(t *testing.T) {
 				},
 				t: NewTransaction(
 					TranDeleteUser, &[]byte{0, 1},
-					NewField(FieldUserLogin, negateString([]byte("testuser"))),
+					NewField(FieldUserLogin, encodeString([]byte("testuser"))),
 				),
 			},
 			wantRes: []Transaction{
@@ -1564,7 +1564,7 @@ func TestHandleDeleteUser(t *testing.T) {
 				},
 				t: NewTransaction(
 					TranDeleteUser, &[]byte{0, 1},
-					NewField(FieldUserLogin, negateString([]byte("testuser"))),
+					NewField(FieldUserLogin, encodeString([]byte("testuser"))),
 				),
 			},
 			wantRes: []Transaction{

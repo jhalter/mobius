@@ -77,8 +77,8 @@ func TestDecodeUserString(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if gotDecodedString := DecodeUserString(tt.args.encodedString); gotDecodedString != tt.wantDecodedString {
-				t.Errorf("DecodeUserString() = %v, want %v", gotDecodedString, tt.wantDecodedString)
+			if gotDecodedString := decodeString(tt.args.encodedString); gotDecodedString != tt.wantDecodedString {
+				t.Errorf("decodeString() = %v, want %v", gotDecodedString, tt.wantDecodedString)
 			}
 		})
 	}
@@ -110,7 +110,7 @@ func TestNegatedUserString(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := negateString(tt.args.encodedString); !bytes.Equal(got, tt.want) {
+			if got := encodeString(tt.args.encodedString); !bytes.Equal(got, tt.want) {
 				t.Errorf("NegatedUserString() = %x, want %x", got, tt.want)
 			}
 		})
