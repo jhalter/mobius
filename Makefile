@@ -35,6 +35,24 @@ package-linux-amd64-server: build-linux-amd64-server
 	cp -r cmd/mobius-hotline-server/mobius/config $(linux_server_amd64_target)
 	tar -zcvf $(linux_server_amd64_target).tar.gz $(linux_server_amd64_target)
 
+darwin_server_arm64_target=dist/mobius_server_darwin_arm64
+build-darwin-arm64-server:
+	mkdir $(darwin_server_arm64_target) ; true
+	GOOS=darwin GOARCH=arm64 go build -o $(darwin_server_arm64_target)/mobius-hotline-server  cmd/mobius-hotline-server/main.go
+
+package-darwin-arm64-server: build-darwin-arm64-server
+	cp -r cmd/mobius-hotline-server/mobius/config $(darwin_server_arm64_target)
+	tar -zcvf dist/mobius_server_darwin_arm64.tar.gz $(darwin_server_arm64_target)
+
+darwin_client_arm64_target=dist/mobius_client_darwin_arm64
+build-darwin-arm64-client:
+	mkdir $(darwin_client_arm64_target) ; true
+	GOOS=darwin GOARCH=arm64 go build -o $(darwin_client_arm64_target)/mobius-hotline-client  cmd/mobius-hotline-client/main.go
+
+package-darwin-arm64-client: build-darwin-arm64-client
+	cp cmd/mobius-hotline-client/mobius-client-config.yaml $(darwin_client_arm64_target)
+	tar -zcvf dist/mobius_client_darwin_arm64.tar.gz $(darwin_client_arm64_target)
+
 darwin_server_amd64_target=dist/mobius_server_darwin_amd64
 build-darwin-amd64-server:
 	mkdir $(darwin_server_amd64_target) ; true
@@ -76,6 +94,8 @@ all: clean \
 	package-win-amd64-client \
  	package-darwin-amd64-client \
  	package-darwin-amd64-server \
+ 	package-darwin-arm64-client \
+    package-darwin-arm64-server \
  	package-linux-arm-server \
  	package-linux-amd64-server \
  	package-linux-arm-client \
