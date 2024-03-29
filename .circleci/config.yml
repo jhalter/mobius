@@ -4,7 +4,7 @@ jobs:
   build:
     working_directory: ~/repo
     docker:
-      - image: cimg/go:1.21.4
+      - image: cimg/go:1.22.1
     steps:
       - checkout
 #      - restore_cache:
@@ -27,7 +27,7 @@ jobs:
 
   deploy:
     docker:
-      - image: cimg/go:1.21.4
+      - image: cimg/go:1.22.1
 #    working_directory: /go/src/github.com/jhalter/mobius
     steps:
       - checkout
