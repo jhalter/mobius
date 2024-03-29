@@ -30,6 +30,7 @@ type requestCtx struct {
 }
 
 type Server struct {
+	NetInterface  string
 	Port          int
 	Accounts      map[string]*Account
 	Agreement     []byte
@@ -82,15 +83,15 @@ type PrivateChat struct {
 func (s *Server) ListenAndServe(ctx context.Context, cancelRoot context.CancelFunc) error {
 	s.Logger.Infow("Hotline server started",
 		"version", VERSION,
-		"API port", fmt.Sprintf(":%v", s.Port),
-		"Transfer port", fmt.Sprintf(":%v", s.Port+1),
+		"API port", fmt.Sprintf("%s:%v", s.NetInterface, s.Port),
+		"Transfer port", fmt.Sprintf("%s:%v", s.NetInterface, s.Port+1),
 	)
 
 	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
-		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", "", s.Port))
+		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", s.NetInterface, s.Port))
 		if err != nil {
 			s.Logger.Fatal(err)
 		}
@@ -100,7 +101,7 @@ func (s *Server) ListenAndServe(ctx context.Context, cancelRoot context.CancelFu
 
 	wg.Add(1)
 	go func() {
-		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", "", s.Port+1))
+		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", s.NetInterface, s.Port+1))
 		if err != nil {
 			s.Logger.Fatal(err)
 		}
@@ -206,8 +207,9 @@ const (
 )
 
 // NewServer constructs a new Server from a config dir
-func NewServer(configDir string, netPort int, logger *zap.SugaredLogger, fs FileStore) (*Server, error) {
+func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredLogger, fs FileStore) (*Server, error) {
 	server := Server{
+		NetInterface:  netInterface,
 		Port:          netPort,
 		Accounts:      make(map[string]*Account),
 		Config:        new(Config),
