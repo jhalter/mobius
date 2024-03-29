@@ -43,7 +43,8 @@ func main() {
 	// 	}
 	// }()
 
-	basePort := flag.Int("bind", defaultPort, "Bind address and port")
+	netInterface := flag.String("interface", "", "IP addr of interface to listen on.  Defaults to all interfaces.")
+	basePort := flag.Int("bind", defaultPort, "Base Hotline server port.  File transfer port is base port + 1.")
 	statsPort := flag.String("stats-port", "", "Enable stats HTTP endpoint on address and port")
 	configDir := flag.String("config", defaultConfigPath(), "Path to config root")
 	version := flag.Bool("version", false, "print version and exit")
@@ -96,7 +97,7 @@ func main() {
 		logger.Fatalw("Configuration directory not found.  Correct the path or re-run with -init to generate initial config.", "path", configDir)
 	}
 
-	srv, err := hotline.NewServer(*configDir, *basePort, logger, &hotline.OSFileStore{})
+	srv, err := hotline.NewServer(*configDir, *netInterface, *basePort, logger, &hotline.OSFileStore{})
 	if err != nil {
 		logger.Fatal(err)
 	}
