@@ -257,7 +257,10 @@ func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredL
 		return nil, err
 	}
 
-	server.Config.FileRoot = filepath.Join(configDir, "Files")
+	// If the FileRoot is an absolute path, use it, otherwise treat as a relative path to the config dir.
+	if !filepath.IsAbs(server.Config.FileRoot) {
+		server.Config.FileRoot = filepath.Join(configDir, server.Config.FileRoot)
+	}
 
 	*server.NextGuestID = 1
 
