@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/go-playground/validator/v10"
 	"go.uber.org/zap"
+	"golang.org/x/text/encoding/charmap"
 	"gopkg.in/yaml.v3"
 	"io"
 	"io/fs"
@@ -28,6 +29,12 @@ var contextKeyReq = contextKey("req")
 type requestCtx struct {
 	remoteAddr string
 }
+
+// Converts bytes from Mac Roman encoding to UTF-8
+var txtDecoder = charmap.Macintosh.NewDecoder()
+
+// Converts bytes from UTF-8 to Mac Roman encoding
+var txtEncoder = charmap.Macintosh.NewEncoder()
 
 type Server struct {
 	NetInterface  string

@@ -385,8 +385,13 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		return res, err
 	}
 
+	encodedName, err := txtEncoder.String(fw.name)
+	if err != nil {
+		return res, fmt.Errorf("invalid filepath encoding: %w", err)
+	}
+
 	res = append(res, cc.NewReply(t,
-		NewField(FieldFileName, []byte(fw.name)),
+		NewField(FieldFileName, []byte(encodedName)),
 		NewField(FieldFileTypeString, fw.ffo.FlatFileInformationFork.friendlyType()),
 		NewField(FieldFileCreatorString, fw.ffo.FlatFileInformationFork.friendlyCreator()),
 		NewField(FieldFileComment, fw.ffo.FlatFileInformationFork.Comment),
@@ -478,7 +483,11 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 			if err != nil {
 				return nil, err
 			}
-			hlFile.name = string(fileNewName)
+			hlFile.name, err = txtDecoder.String(string(fileNewName))
+			if err != nil {
+				return res, fmt.Errorf("invalid filepath encoding: %w", err)
+			}
+
 			err = hlFile.move(fileDir)
 			if os.IsNotExist(err) {
 				res = append(res, cc.NewErrReply(t, "Cannot rename file "+string(fileName)+" because it does not exist or cannot be found."))
@@ -566,9 +575,6 @@ func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 		res = append(res, cc.NewErrReply(t, "Cannot delete file "+fileName+" because it does not exist or cannot be found."))
 		return res, err
 	}
-	if err != nil {
-		return res, err
-	}
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
 		if !cc.Authorize(accessMoveFolder) {
@@ -614,6 +620,10 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err err
 		}
 	}
 	newFolderPath := path.Join(cc.Server.Config.FileRoot, subPath, folderName)
+	newFolderPath, err = txtDecoder.String(newFolderPath)
+	if err != nil {
+		return res, fmt.Errorf("invalid filepath encoding: %w", err)
+	}
 
 	// TODO: check path and folder name lengths
 
@@ -621,8 +631,6 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err err
 		msg := fmt.Sprintf("Cannot create folder \"%s\" because there is already a file or folder with that name.", folderName)
 		return []Transaction{cc.NewErrReply(t, msg)}, nil
 	}
-
-	// TODO: check for disallowed characters to maintain compatibility for original client
 
 	if err := cc.Server.FS.Mkdir(newFolderPath, 0777); err != nil {
 		msg := fmt.Sprintf("Cannot create folder \"%s\" because an error occurred.", folderName)
