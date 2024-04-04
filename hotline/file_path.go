@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -119,6 +120,9 @@ func readPath(fileRoot string, filePath, fileName []byte) (fullPath string, err 
 		subPath,
 		filepath.Join("/", string(fileName)),
 	)
-
+	fullPath, err = txtDecoder.String(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("invalid filepath encoding: %w", err)
+	}
 	return fullPath, nil
 }

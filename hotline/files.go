@@ -118,6 +118,10 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 		}
 
 		strippedName := strings.ReplaceAll(file.Name(), ".incomplete", "")
+		strippedName, err = txtEncoder.String(strippedName)
+		if err != nil {
+			return nil, err
+		}
 
 		nameSize := make([]byte, 2)
 		binary.BigEndian.PutUint16(nameSize, uint16(len(strippedName)))
