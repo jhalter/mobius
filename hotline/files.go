@@ -50,13 +50,14 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 			return fields, err
 		}
 
+		// Check if path is a symlink.  If so, follow it.
 		if fileInfo.Mode()&os.ModeSymlink != 0 {
 			resolvedPath, err := os.Readlink(filepath.Join(path, file.Name()))
 			if err != nil {
 				return fields, err
 			}
 
-			rFile, err := os.Stat(filepath.Join(path, resolvedPath))
+			rFile, err := os.Stat(resolvedPath)
 			if errors.Is(err, os.ErrNotExist) {
 				continue
 			}
