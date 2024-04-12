@@ -30,6 +30,8 @@ func fileTypeFromInfo(info fs.FileInfo) (ft fileType, err error) {
 	return ft, nil
 }
 
+const maxFileSize = 4294967296
+
 func getFileNameList(path string, ignoreList []string) (fields []Field, err error) {
 	files, err := os.ReadDir(path)
 	if err != nil {
@@ -79,12 +81,12 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 				}
 
 				binary.BigEndian.PutUint32(fnwi.FileSize[:], c)
-				copy(fnwi.Type[:], []byte("fldr"))
+				copy(fnwi.Type[:], "fldr")
 				copy(fnwi.Creator[:], fileCreator)
 			} else {
 				binary.BigEndian.PutUint32(fnwi.FileSize[:], uint32(rFile.Size()))
-				copy(fnwi.Type[:], []byte(fileTypeFromFilename(rFile.Name()).TypeCode))
-				copy(fnwi.Creator[:], []byte(fileTypeFromFilename(rFile.Name()).CreatorCode))
+				copy(fnwi.Type[:], fileTypeFromFilename(rFile.Name()).TypeCode)
+				copy(fnwi.Creator[:], fileTypeFromFilename(rFile.Name()).CreatorCode)
 			}
 		} else if file.IsDir() {
 			dir, err := os.ReadDir(filepath.Join(path, file.Name()))
@@ -100,11 +102,11 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 			}
 
 			binary.BigEndian.PutUint32(fnwi.FileSize[:], c)
-			copy(fnwi.Type[:], []byte("fldr"))
+			copy(fnwi.Type[:], "fldr")
 			copy(fnwi.Creator[:], fileCreator)
 		} else {
-			// the Hotline protocol does not support fileWrapper sizes > 4GiB due to the 4 byte field size, so skip them
-			if fileInfo.Size() > 4294967296 {
+			// the Hotline protocol does not support file sizes > 4GiB due to the 4 byte field size, so skip them
+			if fileInfo.Size() > maxFileSize {
 				continue
 			}
 
