@@ -390,16 +390,26 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		return res, fmt.Errorf("invalid filepath encoding: %w", err)
 	}
 
-	res = append(res, cc.NewReply(t,
+	fields := []Field{
 		NewField(FieldFileName, []byte(encodedName)),
 		NewField(FieldFileTypeString, fw.ffo.FlatFileInformationFork.friendlyType()),
 		NewField(FieldFileCreatorString, fw.ffo.FlatFileInformationFork.friendlyCreator()),
-		NewField(FieldFileComment, fw.ffo.FlatFileInformationFork.Comment),
 		NewField(FieldFileType, fw.ffo.FlatFileInformationFork.TypeSignature),
 		NewField(FieldFileCreateDate, fw.ffo.FlatFileInformationFork.CreateDate),
 		NewField(FieldFileModifyDate, fw.ffo.FlatFileInformationFork.ModifyDate),
-		NewField(FieldFileSize, fw.totalSize()),
-	))
+	}
+
+	// Include the optional FileComment field if there is a comment.
+	if len(fw.ffo.FlatFileInformationFork.Comment) != 0 {
+		fields = append(fields, NewField(FieldFileComment, fw.ffo.FlatFileInformationFork.Comment))
+	}
+
+	// Include the FileSize field for files.
+	if !bytes.Equal(fw.ffo.FlatFileInformationFork.TypeSignature, []byte{0x66, 0x6c, 0x64, 0x72}) {
+		fields = append(fields, NewField(FieldFileSize, fw.totalSize()))
+	}
+
+	res = append(res, cc.NewReply(t, fields...))
 	return res, err
 }
 
