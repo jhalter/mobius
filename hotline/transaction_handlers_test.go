@@ -768,7 +768,6 @@ func TestHandleGetFileInfo(t *testing.T) {
 						NewField(FieldFileName, []byte("testfile.txt")),
 						NewField(FieldFileTypeString, []byte("Text File")),
 						NewField(FieldFileCreatorString, []byte("ttxt")),
-						NewField(FieldFileComment, []byte{}),
 						NewField(FieldFileType, []byte("TEXT")),
 						NewField(FieldFileCreateDate, make([]byte, 8)),
 						NewField(FieldFileModifyDate, make([]byte, 8)),
@@ -791,8 +790,8 @@ func TestHandleGetFileInfo(t *testing.T) {
 
 			// Clear the fileWrapper timestamp fields to work around problems running the tests in multiple timezones
 			// TODO: revisit how to test this by mocking the stat calls
+			gotRes[0].Fields[4].Data = make([]byte, 8)
 			gotRes[0].Fields[5].Data = make([]byte, 8)
-			gotRes[0].Fields[6].Data = make([]byte, 8)
 			if !assert.Equal(t, tt.wantRes, gotRes) {
 				t.Errorf("HandleGetFileInfo() gotRes = %v, want %v", gotRes, tt.wantRes)
 			}
