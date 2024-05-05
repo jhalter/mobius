@@ -337,7 +337,7 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 
 	// Check if target user has "Refuse private messages" flag
 	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(otherClient.Flags)))
-	if flagBitmap.Bit(UserFlagRefusePChat) == 1 {
+	if flagBitmap.Bit(UserFlagRefusePM) == 1 {
 		res = append(res,
 			*NewTransaction(
 				TranServerMsg,
