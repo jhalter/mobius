@@ -793,15 +793,24 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		if acc, ok := cc.Server.Accounts[login]; ok {
 			cc.logger.Infow("UpdateUser", "login", login)
 
-			// account dataFile, so this is an update action
+			// account exists, so this is an update action
 			if !cc.Authorize(accessModifyUser) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to modify accounts."))
 				return res, err
 			}
 
+			// This part is a bit tricky. There are three possibilities:
+			// 1) The transaction is intended to update the password.
+			//	  In this case, FieldUserPassword is sent with the new password.
+			// 2) The transaction is intended to remove the password.
+			//    In this case, FieldUserPassword is not sent.
+			// 3) The transaction updates the users access bits, but not the password.
+			//    In this case, FieldUserPassword is sent with zero as the only byte..
 			if getField(FieldUserPassword, &subFields) != nil {
 				newPass := getField(FieldUserPassword, &subFields).Data
-				acc.Password = hashAndSalt(newPass)
+				if !bytes.Equal([]byte{0}, newPass) {
+					acc.Password = hashAndSalt(newPass)
+				}
 			} else {
 				acc.Password = hashAndSalt([]byte(""))
 			}
