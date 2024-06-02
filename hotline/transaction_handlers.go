@@ -663,6 +663,9 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 	newAccessLvl := t.GetField(FieldUserAccess).Data
 
 	account := cc.Server.Accounts[login]
+	if account == nil {
+		return append(res, cc.NewErrReply(t, "Account not found.")), nil
+	}
 	account.Name = userName
 	copy(account.Access[:], newAccessLvl)
 
@@ -671,7 +674,8 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 	if t.GetField(FieldUserPassword).Data == nil {
 		account.Password = hashAndSalt([]byte(""))
 	}
-	if len(t.GetField(FieldUserPassword).Data) > 1 {
+
+	if !bytes.Equal([]byte{0}, t.GetField(FieldUserPassword).Data) {
 		account.Password = hashAndSalt(t.GetField(FieldUserPassword).Data)
 	}
 
@@ -796,7 +800,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			// account exists, so this is an update action
 			if !cc.Authorize(accessModifyUser) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to modify accounts."))
-				return res, err
+				return res, nil
 			}
 
 			// This part is a bit tricky. There are three possibilities:
@@ -805,7 +809,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			// 2) The transaction is intended to remove the password.
 			//    In this case, FieldUserPassword is not sent.
 			// 3) The transaction updates the users access bits, but not the password.
-			//    In this case, FieldUserPassword is sent with zero as the only byte..
+			//    In this case, FieldUserPassword is sent with zero as the only byte.
 			if getField(FieldUserPassword, &subFields) != nil {
 				newPass := getField(FieldUserPassword, &subFields).Data
 				if !bytes.Equal([]byte{0}, newPass) {
@@ -834,7 +838,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 			if !cc.Authorize(accessCreateUser) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to create new accounts."))
-				return res, err
+				return res, nil
 			}
 
 			newAccess := accessBitmap{}
@@ -844,14 +848,14 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			for i := 0; i < 64; i++ {
 				if newAccess.IsSet(i) {
 					if !cc.Authorize(i) {
-						return append(res, cc.NewErrReply(t, "Cannot create account with more access than yourself.")), err
+						return append(res, cc.NewErrReply(t, "Cannot create account with more access than yourself.")), nil
 					}
 				}
 			}
 
-			err := cc.Server.NewUser(login, string(getField(FieldUserName, &subFields).Data), string(getField(FieldUserPassword, &subFields).Data), newAccess)
+			err = cc.Server.NewUser(login, string(getField(FieldUserName, &subFields).Data), string(getField(FieldUserPassword, &subFields).Data), newAccess)
 			if err != nil {
-				return []Transaction{}, err
+				return append(res, cc.NewErrReply(t, "Cannot create account because there is already an account with that login.")), nil
 			}
 		}
 	}
@@ -889,7 +893,8 @@ func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 	}
 
 	if err := cc.Server.NewUser(login, string(t.GetField(FieldUserName).Data), string(t.GetField(FieldUserPassword).Data), newAccess); err != nil {
-		return []Transaction{}, err
+		res = append(res, cc.NewErrReply(t, "Cannot create account because there is already an account with that login."))
+		return res, err
 	}
 
 	res = append(res, cc.NewReply(t))
@@ -899,10 +904,9 @@ func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 func HandleDeleteUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	if !cc.Authorize(accessDeleteUser) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to delete accounts."))
-		return res, err
+		return res, nil
 	}
 
-	// TODO: Handle case where account doesn't exist; e.g. delete race condition
 	login := decodeString(t.GetField(FieldUserLogin).Data)
 
 	if err := cc.Server.DeleteUser(login); err != nil {

@@ -16,6 +16,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -384,15 +385,14 @@ func (s *Server) NewClientConn(conn io.ReadWriteCloser, remoteAddr string) *Clie
 		Server:     s,
 		Version:    []byte{},
 		AutoReply:  []byte{},
-		transfers:  map[int]map[[4]byte]*FileTransfer{},
 		RemoteAddr: remoteAddr,
-	}
-	clientConn.transfers = map[int]map[[4]byte]*FileTransfer{
-		FileDownload:   {},
-		FileUpload:     {},
-		FolderDownload: {},
-		FolderUpload:   {},
-		bannerDownload: {},
+		transfers: map[int]map[[4]byte]*FileTransfer{
+			FileDownload:   {},
+			FileUpload:     {},
+			FolderDownload: {},
+			FolderUpload:   {},
+			bannerDownload: {},
+		},
 	}
 
 	*s.NextGuestID++
@@ -419,9 +419,26 @@ func (s *Server) NewUser(login, name, password string, access accessBitmap) erro
 	if err != nil {
 		return err
 	}
+
+	// Create account file, returning an error if one already exists.
+	file, err := os.OpenFile(
+		filepath.Join(s.ConfigDir, "Users", path.Join("/", login)+".yaml"),
+		os.O_CREATE|os.O_EXCL|os.O_WRONLY,
+		0644,
+	)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.Write(out)
+	if err != nil {
+		return fmt.Errorf("error writing account file: %w", err)
+	}
+
 	s.Accounts[login] = &account
 
-	return s.FS.WriteFile(filepath.Join(s.ConfigDir, "Users", login+".yaml"), out, 0666)
+	return nil
 }
 
 func (s *Server) UpdateUser(login, newLogin, name, password string, access accessBitmap) error {
@@ -460,9 +477,14 @@ func (s *Server) DeleteUser(login string) error {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
+	err := s.FS.Remove(filepath.Join(s.ConfigDir, "Users", path.Join("/", login)+".yaml"))
+	if err != nil {
+		return err
+	}
+
 	delete(s.Accounts, login)
 
-	return s.FS.Remove(filepath.Join(s.ConfigDir, "Users", login+".yaml"))
+	return nil
 }
 
 func (s *Server) connectedUsers() []Field {
@@ -522,8 +544,8 @@ func (s *Server) loadAccounts(userDir string) error {
 
 		account := Account{}
 		decoder := yaml.NewDecoder(fh)
-		if err := decoder.Decode(&account); err != nil {
-			return err
+		if err = decoder.Decode(&account); err != nil {
+			return fmt.Errorf("error loading account %s: %w", file, err)
 		}
 
 		s.Accounts[account.Login] = &account
