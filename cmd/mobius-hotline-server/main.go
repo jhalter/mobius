@@ -182,7 +182,7 @@ func defaultConfigPath() (cfgPath string) {
 	case "linux":
 		cfgPath = "/usr/local/var/mobius/config/"
 	default:
-		fmt.Printf("unsupported OS")
+		cfgPath = "./config/"
 	}
 
 	return cfgPath
