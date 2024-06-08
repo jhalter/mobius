@@ -776,14 +776,15 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			return res, err
 		}
 
+		// If there's only one subfield, that indicates this is a delete operation for the login in FieldData
 		if len(subFields) == 1 {
-			login := decodeString(getField(FieldData, &subFields).Data)
-			cc.logger.Infow("DeleteUser", "login", login)
-
 			if !cc.Authorize(accessDeleteUser) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to delete accounts."))
 				return res, err
 			}
+
+			login := decodeString(getField(FieldData, &subFields).Data)
+			cc.logger.Infow("DeleteUser", "login", login)
 
 			if err := cc.Server.DeleteUser(login); err != nil {
 				return res, err
@@ -791,11 +792,28 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			continue
 		}
 
-		login := decodeString(getField(FieldUserLogin, &subFields).Data)
+		// login of the account to update
+		var accountToUpdate, loginToRename string
 
-		// check if the login dataFile; if so, we know we are updating an existing user
-		if acc, ok := cc.Server.Accounts[login]; ok {
-			cc.logger.Infow("UpdateUser", "login", login)
+		// If FieldData is included, this is a rename operation where FieldData contains the login of the existing
+		// account and FieldUserLogin contains the new login.
+		if getField(FieldData, &subFields) != nil {
+			loginToRename = decodeString(getField(FieldData, &subFields).Data)
+		}
+		userLogin := decodeString(getField(FieldUserLogin, &subFields).Data)
+		if loginToRename != "" {
+			accountToUpdate = loginToRename
+		} else {
+			accountToUpdate = userLogin
+		}
+
+		// Check if accountToUpdate has an existing account.  If so, we know we are updating an existing user.
+		if acc, ok := cc.Server.Accounts[accountToUpdate]; ok {
+			if loginToRename != "" {
+				cc.logger.Infow("RenameUser", "prevLogin", accountToUpdate, "newLogin", userLogin)
+			} else {
+				cc.logger.Infow("UpdateUser", "login", accountToUpdate)
+			}
 
 			// account exists, so this is an update action
 			if !cc.Authorize(accessModifyUser) {
@@ -834,12 +852,12 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 				return res, err
 			}
 		} else {
-			cc.logger.Infow("CreateUser", "login", login)
-
 			if !cc.Authorize(accessCreateUser) {
 				res = append(res, cc.NewErrReply(t, "You are not allowed to create new accounts."))
 				return res, nil
 			}
+
+			cc.logger.Infow("CreateUser", "login", userLogin)
 
 			newAccess := accessBitmap{}
 			copy(newAccess[:], getField(FieldUserAccess, &subFields).Data)
@@ -853,7 +871,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 				}
 			}
 
-			err = cc.Server.NewUser(login, string(getField(FieldUserName, &subFields).Data), string(getField(FieldUserPassword, &subFields).Data), newAccess)
+			err = cc.Server.NewUser(userLogin, string(getField(FieldUserName, &subFields).Data), string(getField(FieldUserPassword, &subFields).Data), newAccess)
 			if err != nil {
 				return append(res, cc.NewErrReply(t, "Cannot create account because there is already an account with that login.")), nil
 			}

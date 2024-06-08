@@ -447,11 +447,12 @@ func (s *Server) UpdateUser(login, newLogin, name, password string, access acces
 
 	// update renames the user login
 	if login != newLogin {
-		err := os.Rename(filepath.Join(s.ConfigDir, "Users", login+".yaml"), filepath.Join(s.ConfigDir, "Users", newLogin+".yaml"))
+		err := os.Rename(filepath.Join(s.ConfigDir, "Users", path.Join("/", login)+".yaml"), filepath.Join(s.ConfigDir, "Users", path.Join("/", newLogin)+".yaml"))
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to rename account: %w", err)
 		}
 		s.Accounts[newLogin] = s.Accounts[login]
+		s.Accounts[newLogin].Login = newLogin
 		delete(s.Accounts, login)
 	}
 
