@@ -123,7 +123,7 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 		strippedName := strings.ReplaceAll(file.Name(), ".incomplete", "")
 		strippedName, err = txtEncoder.String(strippedName)
 		if err != nil {
-			return nil, err
+			continue
 		}
 
 		nameSize := make([]byte, 2)
