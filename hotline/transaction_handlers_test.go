@@ -3191,7 +3191,7 @@ func TestHandleDelNewsItem(t *testing.T) {
 					Server: &Server{
 						ThreadedNews: &ThreadedNews{Categories: map[string]NewsCategoryListData15{
 							"test": {
-								Type:     []byte{0, 3},
+								Type:     [2]byte{0, 3},
 								Count:    nil,
 								NameSize: 0,
 								Name:     "zz",
@@ -3237,7 +3237,7 @@ func TestHandleDelNewsItem(t *testing.T) {
 					Server: &Server{
 						ThreadedNews: &ThreadedNews{Categories: map[string]NewsCategoryListData15{
 							"testcat": {
-								Type:     []byte{0, 2},
+								Type:     [2]byte{0, 2},
 								Count:    nil,
 								NameSize: 0,
 								Name:     "test",
@@ -3293,7 +3293,7 @@ func TestHandleDelNewsItem(t *testing.T) {
 						}(),
 						ThreadedNews: &ThreadedNews{Categories: map[string]NewsCategoryListData15{
 							"testcat": {
-								Type:     []byte{0, 2},
+								Type:     [2]byte{0, 2},
 								Count:    nil,
 								NameSize: 0,
 								Name:     "test",
@@ -3847,7 +3847,7 @@ func TestHandleNewNewsFldr(t *testing.T) {
 						}(),
 						ThreadedNews: &ThreadedNews{Categories: map[string]NewsCategoryListData15{
 							"test": {
-								Type:     []byte{0, 2},
+								Type:     [2]byte{0, 2},
 								Count:    nil,
 								NameSize: 0,
 								Name:     "test",

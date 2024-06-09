@@ -405,11 +405,12 @@ func handleClientGetUserNameList(ctx context.Context, c *Client, t *Transaction)
 		// fields, but shxd sneaks in FieldChatSubject (115) so it's important to filter explicitly for the expected
 		// field type.  Probably a good idea to do everywhere.
 		if bytes.Equal(field.ID, []byte{0x01, 0x2c}) {
-			u, err := ReadUser(field.Data)
-			if err != nil {
-				return res, err
+			var user User
+			if _, err := user.Write(field.Data); err != nil {
+				return res, fmt.Errorf("unable to read user data: %w", err)
 			}
-			users = append(users, *u)
+
+			users = append(users, user)
 		}
 	}
 	c.UserList = users

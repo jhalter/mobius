@@ -460,7 +460,7 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		if err != nil {
 			return res, err
 		}
-		_, err = w.Write(hlFile.ffo.FlatFileInformationFork.MarshalBinary())
+		_, err = io.Copy(w, &hlFile.ffo.FlatFileInformationFork)
 		if err != nil {
 			return res, err
 		}
@@ -1194,7 +1194,7 @@ func HandleNewNewsCat(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	cats := cc.Server.GetNewsCatByPath(pathStrs)
 	cats[name] = NewsCategoryListData15{
 		Name:     name,
-		Type:     []byte{0, 3},
+		Type:     [2]byte{0, 3},
 		Articles: map[uint32]*NewsArtData{},
 		SubCats:  make(map[string]NewsCategoryListData15),
 	}
@@ -1223,7 +1223,7 @@ func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	cats := cc.Server.GetNewsCatByPath(pathStrs)
 	cats[name] = NewsCategoryListData15{
 		Name:     name,
-		Type:     []byte{0, 2},
+		Type:     [2]byte{0, 2},
 		Articles: map[uint32]*NewsArtData{},
 		SubCats:  make(map[string]NewsCategoryListData15),
 	}
@@ -1258,7 +1258,12 @@ func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction
 
 	nald := cat.GetNewsArtListData()
 
-	res = append(res, cc.NewReply(t, NewField(FieldNewsArtListData, nald.Payload())))
+	b, err := io.ReadAll(&nald)
+	if err != nil {
+
+	}
+
+	res = append(res, cc.NewReply(t, NewField(FieldNewsArtListData, b)))
 	return res, err
 }
 
@@ -1337,7 +1342,7 @@ func HandleDelNewsItem(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		}
 	}
 
-	if bytes.Equal(cats[delName].Type, []byte{0, 3}) {
+	if cats[delName].Type == [2]byte{0, 3} {
 		if !cc.Authorize(accessNewsDeleteCat) {
 			return append(res, cc.NewErrReply(t, "You are not allowed to delete news categories.")), nil
 		}
@@ -1918,14 +1923,17 @@ func HandleJoinChat(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 
 	replyFields := []Field{NewField(FieldChatSubject, []byte(privChat.Subject))}
 	for _, c := range sortedClients(privChat.ClientConn) {
-		user := User{
+
+		b, err := io.ReadAll(&User{
 			ID:    *c.ID,
 			Icon:  c.Icon,
 			Flags: c.Flags,
 			Name:  string(c.UserName),
+		})
+		if err != nil {
+			return res, nil
 		}
-
-		replyFields = append(replyFields, NewField(FieldUsernameWithInfo, user.Payload()))
+		replyFields = append(replyFields, NewField(FieldUsernameWithInfo, b))
 	}
 
 	res = append(res, cc.NewReply(t, replyFields...))

@@ -1,6 +1,7 @@
 package hotline
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -243,9 +244,11 @@ func (f *fileWrapper) flattenedFileObject() (*flattenedFileObject, error) {
 
 		f.ffo.FlatFileHeader.ForkCount[1] = 3
 
-		if err := f.ffo.FlatFileInformationFork.UnmarshalBinary(b); err != nil {
+		_, err = io.Copy(&f.ffo.FlatFileInformationFork, bytes.NewReader(b))
+		if err != nil {
 			return nil, err
 		}
+
 	} else {
 		f.ffo.FlatFileInformationFork = FlatFileInformationFork{
 			Platform:         []byte("AMAC"), // TODO: Remove hardcode to support "AWIN" Platform (maybe?)

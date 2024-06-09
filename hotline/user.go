@@ -2,6 +2,8 @@ package hotline
 
 import (
 	"encoding/binary"
+	"io"
+	"slices"
 )
 
 // User flags are stored as a 2 byte bitmap and represent various user states
@@ -26,7 +28,7 @@ type User struct {
 	Name  string // Variable length user name
 }
 
-func (u User) Payload() []byte {
+func (u *User) Read(p []byte) (int, error) {
 	nameLen := make([]byte, 2)
 	binary.BigEndian.PutUint16(nameLen, uint16(len(u.Name)))
 
@@ -43,17 +45,23 @@ func (u User) Payload() []byte {
 	out = append(out, nameLen...)
 	out = append(out, u.Name...)
 
-	return out
+	return copy(p, slices.Concat(
+		u.ID,
+		u.Icon,
+		u.Flags,
+		nameLen,
+		[]byte(u.Name),
+	)), io.EOF
 }
 
-func ReadUser(b []byte) (*User, error) {
-	u := &User{
-		ID:    b[0:2],
-		Icon:  b[2:4],
-		Flags: b[4:6],
-		Name:  string(b[8:]),
-	}
-	return u, nil
+func (u *User) Write(p []byte) (int, error) {
+	namelen := int(binary.BigEndian.Uint16(p[6:8]))
+	u.ID = p[0:2]
+	u.Icon = p[2:4]
+	u.Flags = p[4:6]
+	u.Name = string(p[8 : 8+namelen])
+
+	return 8 + namelen, nil
 }
 
 // decodeString decodes an obfuscated user string from a client

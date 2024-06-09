@@ -1,6 +1,7 @@
 package hotline
 
 import (
+	"io"
 	"reflect"
 	"testing"
 )
@@ -22,8 +23,8 @@ func TestNewFileHeader(t *testing.T) {
 				isDir:    false,
 			},
 			want: FileHeader{
-				Size:     []byte{0x00, 0x0a},
-				Type:     []byte{0x00, 0x00},
+				Size:     [2]byte{0x00, 0x0a},
+				Type:     [2]byte{0x00, 0x00},
 				FilePath: EncodeFilePath("foo"),
 			},
 		},
@@ -34,8 +35,8 @@ func TestNewFileHeader(t *testing.T) {
 				isDir:    true,
 			},
 			want: FileHeader{
-				Size:     []byte{0x00, 0x0a},
-				Type:     []byte{0x00, 0x01},
+				Size:     [2]byte{0x00, 0x0a},
+				Type:     [2]byte{0x00, 0x01},
 				FilePath: EncodeFilePath("foo"),
 			},
 		},
@@ -51,8 +52,8 @@ func TestNewFileHeader(t *testing.T) {
 
 func TestFileHeader_Payload(t *testing.T) {
 	type fields struct {
-		Size     []byte
-		Type     []byte
+		Size     [2]byte
+		Type     [2]byte
 		FilePath []byte
 	}
 	tests := []struct {
@@ -63,8 +64,8 @@ func TestFileHeader_Payload(t *testing.T) {
 		{
 			name: "has expected payload bytes",
 			fields: fields{
-				Size:     []byte{0x00, 0x0a},
-				Type:     []byte{0x00, 0x00},
+				Size:     [2]byte{0x00, 0x0a},
+				Type:     [2]byte{0x00, 0x00},
 				FilePath: EncodeFilePath("foo"),
 			},
 			want: []byte{
@@ -84,7 +85,8 @@ func TestFileHeader_Payload(t *testing.T) {
 				Type:     tt.fields.Type,
 				FilePath: tt.fields.FilePath,
 			}
-			if got := fh.Payload(); !reflect.DeepEqual(got, tt.want) {
+			got, _ := io.ReadAll(fh)
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Read() = %v, want %v", got, tt.want)
 			}
 		})

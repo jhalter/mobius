@@ -135,7 +135,7 @@ func Test_receiveFile(t *testing.T) {
 						},
 					}
 					fakeFileData := []byte{1, 2, 3}
-					b := testFile.BinaryMarshal()
+					b, _ := io.ReadAll(&testFile)
 					b = append(b, fakeFileData...)
 					return bytes.NewReader(b)
 				}(),

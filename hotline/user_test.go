@@ -44,13 +44,14 @@ func TestReadUser(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ReadUser(tt.args.b)
+			var user User
+			_, err := user.Write(tt.args.b)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ReadUser() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !assert.Equal(t, tt.want, got) {
-				t.Errorf("ReadUser() got = %v, want %v", got, tt.want)
+			if !assert.Equal(t, tt.want, &user) {
+				t.Errorf("ReadUser() got = %v, want %v", user, tt.want)
 			}
 		})
 	}
