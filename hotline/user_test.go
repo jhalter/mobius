@@ -57,34 +57,6 @@ func TestReadUser(t *testing.T) {
 	}
 }
 
-func TestDecodeUserString(t *testing.T) {
-	type args struct {
-		encodedString []byte
-	}
-	tests := []struct {
-		name              string
-		args              args
-		wantDecodedString string
-	}{
-		{
-			name: "decodes bytes to guest",
-			args: args{
-				encodedString: []byte{
-					0x98, 0x8a, 0x9a, 0x8c, 0x8b,
-				},
-			},
-			wantDecodedString: "guest",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if gotDecodedString := decodeString(tt.args.encodedString); gotDecodedString != tt.wantDecodedString {
-				t.Errorf("decodeString() = %v, want %v", gotDecodedString, tt.wantDecodedString)
-			}
-		})
-	}
-}
-
 func TestNegatedUserString(t *testing.T) {
 	type args struct {
 		encodedString []byte
