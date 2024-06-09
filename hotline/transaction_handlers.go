@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"gopkg.in/yaml.v3"
+	"io"
 	"math/big"
 	"os"
 	"path"
@@ -747,13 +748,12 @@ func HandleListUsers(cc *ClientConn, t *Transaction) (res []Transaction, err err
 
 	var userFields []Field
 	for _, acc := range cc.Server.Accounts {
-		b := make([]byte, 0, 100)
-		n, err := acc.Read(b)
+		b, err := io.ReadAll(acc)
 		if err != nil {
 			return res, err
 		}
 
-		userFields = append(userFields, NewField(FieldData, b[:n]))
+		userFields = append(userFields, NewField(FieldData, b))
 	}
 
 	res = append(res, cc.NewReply(t, userFields...))

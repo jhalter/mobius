@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"io"
 	"io/fs"
 	"math/rand"
 	"os"
@@ -2859,7 +2860,7 @@ func TestHandleGetFileNameList(t *testing.T) {
 									},
 									name: []byte("testfile-1k"),
 								}
-								b, _ := fnwi.MarshalBinary()
+								b, _ := io.ReadAll(&fnwi)
 								return b
 							}(),
 						),

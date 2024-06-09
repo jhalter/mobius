@@ -3,6 +3,8 @@ package hotline
 import (
 	"bytes"
 	"encoding/binary"
+	"io"
+	"slices"
 )
 
 type FileNameWithInfo struct {
@@ -24,28 +26,28 @@ func (f *fileNameWithInfoHeader) nameLen() int {
 	return int(binary.BigEndian.Uint16(f.NameSize[:]))
 }
 
-func (f *FileNameWithInfo) MarshalBinary() (data []byte, err error) {
-	var buf bytes.Buffer
-	err = binary.Write(&buf, binary.LittleEndian, f.fileNameWithInfoHeader)
-	if err != nil {
-		return data, err
-	}
-
-	_, err = buf.Write(f.name)
-	if err != nil {
-		return data, err
-	}
-
-	return buf.Bytes(), err
+// Read implements io.Reader for FileNameWithInfo
+func (f *FileNameWithInfo) Read(b []byte) (int, error) {
+	return copy(b,
+		slices.Concat(
+			f.Type[:],
+			f.Creator[:],
+			f.FileSize[:],
+			f.RSVD[:],
+			f.NameScript[:],
+			f.NameSize[:],
+			f.name,
+		),
+	), io.EOF
 }
 
-func (f *FileNameWithInfo) UnmarshalBinary(data []byte) error {
-	err := binary.Read(bytes.NewReader(data), binary.BigEndian, &f.fileNameWithInfoHeader)
+func (f *FileNameWithInfo) Write(p []byte) (int, error) {
+	err := binary.Read(bytes.NewReader(p), binary.BigEndian, &f.fileNameWithInfoHeader)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	headerLen := binary.Size(f.fileNameWithInfoHeader)
-	f.name = data[headerLen : headerLen+f.nameLen()]
+	f.name = p[headerLen : headerLen+f.nameLen()]
 
-	return err
+	return len(p), nil
 }
