@@ -283,7 +283,7 @@ func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredL
 			for {
 				tr := &TrackerRegistration{
 					UserCount:   server.userCount(),
-					PassID:      server.TrackerPassID[:],
+					PassID:      server.TrackerPassID,
 					Name:        server.Config.Name,
 					Description: server.Config.Description,
 				}

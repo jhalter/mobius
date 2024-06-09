@@ -2,7 +2,7 @@ package hotline
 
 import (
 	"encoding/binary"
-	"github.com/jhalter/mobius/concat"
+	"slices"
 )
 
 // List of Hotline protocol field types taken from the official 1.9 protocol document
@@ -91,7 +91,7 @@ func NewField(id uint16, data []byte) Field {
 }
 
 func (f Field) Payload() []byte {
-	return concat.Slices(f.ID, f.FieldSize, f.Data)
+	return slices.Concat(f.ID, f.FieldSize, f.Data)
 }
 
 func getField(id int, fields *[]Field) *Field {

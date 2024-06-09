@@ -2,7 +2,7 @@ package hotline
 
 import (
 	"encoding/binary"
-	"github.com/jhalter/mobius/concat"
+	"slices"
 )
 
 type FileHeader struct {
@@ -28,7 +28,7 @@ func NewFileHeader(fileName string, isDir bool) FileHeader {
 }
 
 func (fh *FileHeader) Payload() []byte {
-	return concat.Slices(
+	return slices.Concat(
 		fh.Size,
 		fh.Type,
 		fh.FilePath,
