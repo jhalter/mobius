@@ -658,7 +658,7 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 		return res, err
 	}
 
-	login := decodeString(t.GetField(FieldUserLogin).Data)
+	login := string(encodeString(t.GetField(FieldUserLogin).Data))
 	userName := string(t.GetField(FieldUserName).Data)
 
 	newAccessLvl := t.GetField(FieldUserAccess).Data
@@ -783,7 +783,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 				return res, err
 			}
 
-			login := decodeString(getField(FieldData, &subFields).Data)
+			login := string(encodeString(getField(FieldData, &subFields).Data))
 			cc.logger.Infow("DeleteUser", "login", login)
 
 			if err := cc.Server.DeleteUser(login); err != nil {
@@ -798,9 +798,9 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		// If FieldData is included, this is a rename operation where FieldData contains the login of the existing
 		// account and FieldUserLogin contains the new login.
 		if getField(FieldData, &subFields) != nil {
-			loginToRename = decodeString(getField(FieldData, &subFields).Data)
+			loginToRename = string(encodeString(getField(FieldData, &subFields).Data))
 		}
-		userLogin := decodeString(getField(FieldUserLogin, &subFields).Data)
+		userLogin := string(encodeString(getField(FieldUserLogin, &subFields).Data))
 		if loginToRename != "" {
 			accountToUpdate = loginToRename
 		} else {
@@ -842,8 +842,8 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			}
 
 			err = cc.Server.UpdateUser(
-				decodeString(getField(FieldData, &subFields).Data),
-				decodeString(getField(FieldUserLogin, &subFields).Data),
+				string(encodeString(getField(FieldData, &subFields).Data)),
+				string(encodeString(getField(FieldUserLogin, &subFields).Data)),
 				string(getField(FieldUserName, &subFields).Data),
 				acc.Password,
 				acc.Access,
@@ -889,7 +889,7 @@ func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 		return res, err
 	}
 
-	login := decodeString(t.GetField(FieldUserLogin).Data)
+	login := string(encodeString(t.GetField(FieldUserLogin).Data))
 
 	// If the account already dataFile, reply with an error
 	if _, ok := cc.Server.Accounts[login]; ok {
@@ -925,7 +925,7 @@ func HandleDeleteUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		return res, nil
 	}
 
-	login := decodeString(t.GetField(FieldUserLogin).Data)
+	login := string(encodeString(t.GetField(FieldUserLogin).Data))
 
 	if err := cc.Server.DeleteUser(login); err != nil {
 		return res, err
