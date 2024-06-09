@@ -37,7 +37,7 @@ func receiveFile(r io.Reader, targetFile, resForkFile, infoFork, counterWriter i
 	}
 
 	// Write the information fork
-	_, err := infoFork.Write(ffo.FlatFileInformationFork.MarshalBinary())
+	_, err := io.Copy(infoFork, &ffo.FlatFileInformationFork)
 	if err != nil {
 		return err
 	}
@@ -58,6 +58,7 @@ func receiveFile(r io.Reader, targetFile, resForkFile, infoFork, counterWriter i
 	return nil
 }
 
+// TODO: read the banner once on startup instead of once per banner fetch
 func (s *Server) bannerDownload(w io.Writer) error {
 	bannerBytes, err := os.ReadFile(filepath.Join(s.ConfigDir, s.Config.BannerFile))
 	if err != nil {

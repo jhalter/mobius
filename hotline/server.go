@@ -494,13 +494,16 @@ func (s *Server) connectedUsers() []Field {
 
 	var connectedUsers []Field
 	for _, c := range sortedClients(s.Clients) {
-		user := User{
+		b, err := io.ReadAll(&User{
 			ID:    *c.ID,
 			Icon:  c.Icon,
 			Flags: c.Flags,
 			Name:  string(c.UserName),
+		})
+		if err != nil {
+			return nil
 		}
-		connectedUsers = append(connectedUsers, NewField(FieldUsernameWithInfo, user.Payload()))
+		connectedUsers = append(connectedUsers, NewField(FieldUsernameWithInfo, b))
 	}
 	return connectedUsers
 }
@@ -861,8 +864,8 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 
 		// if file transfer options are included, that means this is a "quick preview" request from a 1.5+ client
 		if fileTransfer.options == nil {
-			// Start by sending flat file object to client
-			if _, err := rwc.Write(fw.ffo.BinaryMarshal()); err != nil {
+			_, err = io.Copy(rwc, fw.ffo)
+			if err != nil {
 				return err
 			}
 		}
@@ -1027,11 +1030,8 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 			}
 
 			fileHeader := NewFileHeader(subPath, info.IsDir())
-
-			// Send the fileWrapper header to client
-			if _, err := rwc.Write(fileHeader.Payload()); err != nil {
-				s.Logger.Errorf("error sending file header: %v", err)
-				return err
+			if _, err := io.Copy(rwc, &fileHeader); err != nil {
+				return fmt.Errorf("error sending file header: %w", err)
 			}
 
 			// Read the client's Next Action request
@@ -1083,8 +1083,8 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 			}
 
 			// Send ffo bytes to client
-			if _, err := rwc.Write(hlFile.ffo.BinaryMarshal()); err != nil {
-				s.Logger.Error(err)
+			_, err = io.Copy(rwc, hlFile.ffo)
+			if err != nil {
 				return err
 			}
 

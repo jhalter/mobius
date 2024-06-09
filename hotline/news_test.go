@@ -1,14 +1,13 @@
 package hotline
 
 import (
-	"bytes"
 	"reflect"
 	"testing"
 )
 
 func TestNewsCategoryListData15_MarshalBinary(t *testing.T) {
 	type fields struct {
-		Type     []byte
+		Type     [2]byte
 		Name     string
 		Articles map[uint32]*NewsArtData
 		SubCats  map[string]NewsCategoryListData15
@@ -26,7 +25,7 @@ func TestNewsCategoryListData15_MarshalBinary(t *testing.T) {
 		{
 			name: "returns expected bytes when type is a bundle",
 			fields: fields{
-				Type: []byte{0x00, 0x02},
+				Type: [2]byte{0x00, 0x02},
 				Articles: map[uint32]*NewsArtData{
 					uint32(1): {
 						Title:  "",
@@ -47,7 +46,7 @@ func TestNewsCategoryListData15_MarshalBinary(t *testing.T) {
 		{
 			name: "returns expected bytes when type is a category",
 			fields: fields{
-				Type: []byte{0x00, 0x03},
+				Type: [2]byte{0x00, 0x03},
 				Articles: map[uint32]*NewsArtData{
 					uint32(1): {
 						Title:  "",
@@ -82,7 +81,7 @@ func TestNewsCategoryListData15_MarshalBinary(t *testing.T) {
 				GUID:     tt.fields.GUID,
 			}
 			gotData, err := newscat.MarshalBinary()
-			if bytes.Equal(newscat.Type, []byte{0, 3}) {
+			if newscat.Type == [2]byte{0, 3} {
 				// zero out the random GUID before comparison
 				for i := 4; i < 20; i++ {
 					gotData[i] = 0

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
+	"io"
+	"slices"
 	"sort"
 )
 
@@ -20,8 +22,8 @@ type ThreadedNews struct {
 }
 
 type NewsCategoryListData15 struct {
-	Type     []byte `yaml:"Type"` // Size 2 ; Bundle (2) or category (3)
-	Count    []byte // Article or SubCategory count Size 2
+	Type     [2]byte `yaml:"Type"` // Size 2 ; Bundle (2) or category (3)
+	Count    []byte  // Article or SubCategory count Size 2
 	NameSize byte
 	Name     string                            `yaml:"Name"`     //
 	Articles map[uint32]*NewsArtData           `yaml:"Articles"` // Optional, if Type is Category
@@ -36,11 +38,11 @@ func (newscat *NewsCategoryListData15) GetNewsArtListData() NewsArtListData {
 	var newsArtsPayload []byte
 
 	for i, art := range newscat.Articles {
-		ID := make([]byte, 4)
-		binary.BigEndian.PutUint32(ID, i)
+		id := make([]byte, 4)
+		binary.BigEndian.PutUint32(id, i)
 
 		newArt := NewsArtList{
-			ID:          ID,
+			ID:          id,
 			TimeStamp:   art.Date,
 			ParentID:    art.ParentArt,
 			Flags:       []byte{0, 0, 0, 0},
@@ -59,7 +61,7 @@ func (newscat *NewsCategoryListData15) GetNewsArtListData() NewsArtListData {
 	}
 
 	nald := NewsArtListData{
-		ID:          []byte{0, 0, 0, 0},
+		ID:          [4]byte{0, 0, 0, 0},
 		Count:       len(newsArts),
 		Name:        []byte{},
 		Description: []byte{},
@@ -90,25 +92,30 @@ func (art *NewsArtData) DataSize() []byte {
 }
 
 type NewsArtListData struct {
-	ID          []byte `yaml:"ID"` // Size 4
-	Name        []byte `yaml:"Name"`
-	Description []byte `yaml:"Description"` // not used?
-	NewsArtList []byte // List of articles			Optional (if article count > 0)
+	ID          [4]byte `yaml:"ID"` // Size 4
+	Name        []byte  `yaml:"Name"`
+	Description []byte  `yaml:"Description"` // not used?
+	NewsArtList []byte  // List of articles			Optional (if article count > 0)
 	Count       int
 }
 
-func (nald *NewsArtListData) Payload() []byte {
+func (nald *NewsArtListData) Read(p []byte) (int, error) {
 	count := make([]byte, 4)
 	binary.BigEndian.PutUint32(count, uint32(nald.Count))
 
-	out := append(nald.ID, count...)
-	out = append(out, []byte{uint8(len(nald.Name))}...)
-	out = append(out, nald.Name...)
-	out = append(out, []byte{uint8(len(nald.Description))}...)
-	out = append(out, nald.Description...)
-	out = append(out, nald.NewsArtList...)
-
-	return out
+	return copy(
+			p,
+			slices.Concat(
+				nald.ID[:],
+				count,
+				[]byte{uint8(len(nald.Name))},
+				nald.Name,
+				[]byte{uint8(len(nald.Description))},
+				nald.Description,
+				nald.NewsArtList,
+			),
+		),
+		io.EOF
 }
 
 // NewsArtList is a summarized version of a NewArtData record for display in list view
@@ -167,9 +174,9 @@ func (newscat *NewsCategoryListData15) MarshalBinary() (data []byte, err error) 
 	count := make([]byte, 2)
 	binary.BigEndian.PutUint16(count, uint16(len(newscat.Articles)+len(newscat.SubCats)))
 
-	out := append(newscat.Type, count...)
+	out := append(newscat.Type[:], count...)
 
-	if bytes.Equal(newscat.Type, []byte{0, 3}) {
+	if bytes.Equal(newscat.Type[:], []byte{0, 3}) {
 		// Generate a random GUID // TODO: does this need to be random?
 		b := make([]byte, 16)
 		_, err := rand.Read(b)
@@ -186,26 +193,6 @@ func (newscat *NewsCategoryListData15) MarshalBinary() (data []byte, err error) 
 	out = append(out, []byte(newscat.Name)...)
 
 	return out, err
-}
-
-// ReadNewsCategoryListData parses a byte slice into a NewsCategoryListData15 struct
-// For use on the client side
-func ReadNewsCategoryListData(payload []byte) NewsCategoryListData15 {
-	ncld := NewsCategoryListData15{
-		Type:  payload[0:2],
-		Count: payload[2:4],
-	}
-
-	if bytes.Equal(ncld.Type, []byte{0, 3}) {
-		ncld.GUID = payload[4:20]
-		ncld.AddSN = payload[20:24]
-		ncld.AddSN = payload[24:28]
-		ncld.Name = string(payload[29:])
-	} else {
-		ncld.Name = string(payload[5:])
-	}
-
-	return ncld
 }
 
 func (newscat *NewsCategoryListData15) nameLen() []byte {
