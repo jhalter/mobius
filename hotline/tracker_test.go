@@ -3,6 +3,7 @@ package hotline
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"io"
 	"reflect"
 	"testing"
 )
@@ -11,7 +12,7 @@ func TestTrackerRegistration_Payload(t *testing.T) {
 	type fields struct {
 		Port        [2]byte
 		UserCount   int
-		PassID      []byte
+		PassID      [4]byte
 		Name        string
 		Description string
 	}
@@ -25,7 +26,7 @@ func TestTrackerRegistration_Payload(t *testing.T) {
 			fields: fields{
 				Port:        [2]byte{0x00, 0x10},
 				UserCount:   2,
-				PassID:      []byte{0x00, 0x00, 0x00, 0x01},
+				PassID:      [4]byte{0x00, 0x00, 0x00, 0x01},
 				Name:        "Test Serv",
 				Description: "Fooz",
 			},
@@ -51,7 +52,8 @@ func TestTrackerRegistration_Payload(t *testing.T) {
 				Name:        tt.fields.Name,
 				Description: tt.fields.Description,
 			}
-			if got := tr.Read(); !reflect.DeepEqual(got, tt.want) {
+
+			if got, _ := io.ReadAll(tr); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Read() = %v, want %v", got, tt.want)
 			}
 		})
