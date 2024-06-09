@@ -3,6 +3,7 @@ package hotline
 import (
 	"encoding/binary"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -132,7 +133,7 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 
 		fnwi.name = []byte(strippedName)
 
-		b, err := fnwi.MarshalBinary()
+		b, err := io.ReadAll(&fnwi)
 		if err != nil {
 			return nil, err
 		}

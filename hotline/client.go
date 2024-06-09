@@ -290,7 +290,7 @@ func handleGetFileNameList(ctx context.Context, c *Client, t *Transaction) (res 
 
 	for _, f := range t.Fields {
 		var fn FileNameWithInfo
-		err = fn.UnmarshalBinary(f.Data)
+		_, err = fn.Write(f.Data)
 		if err != nil {
 			return nil, nil
 		}
@@ -648,7 +648,6 @@ func (c *Client) HandleTransaction(ctx context.Context, t *Transaction) error {
 func (c *Client) Disconnect() error {
 	return c.Connection.Close()
 }
-
 
 func (c *Client) HandleTransactions(ctx context.Context) error {
 	// Create a new scanner for parsing incoming bytes into transaction tokens

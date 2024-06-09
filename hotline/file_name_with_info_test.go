@@ -2,6 +2,7 @@ package hotline
 
 import (
 	"github.com/stretchr/testify/assert"
+	"io"
 	"reflect"
 	"testing"
 )
@@ -48,7 +49,7 @@ func TestFileNameWithInfo_MarshalBinary(t *testing.T) {
 				fileNameWithInfoHeader: tt.fields.fileNameWithInfoHeader,
 				name:                   tt.fields.name,
 			}
-			gotData, err := f.MarshalBinary()
+			gotData, err := io.ReadAll(f)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MarshalBinary() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -108,7 +109,7 @@ func TestFileNameWithInfo_UnmarshalBinary(t *testing.T) {
 				fileNameWithInfoHeader: tt.fields.fileNameWithInfoHeader,
 				name:                   tt.fields.name,
 			}
-			if err := f.UnmarshalBinary(tt.args.data); (err != nil) != tt.wantErr {
+			if _, err := f.Write(tt.args.data); (err != nil) != tt.wantErr {
 				t.Errorf("Write() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if !assert.Equal(t, tt.want, f) {

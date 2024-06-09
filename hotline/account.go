@@ -3,7 +3,9 @@ package hotline
 import (
 	"encoding/binary"
 	"golang.org/x/crypto/bcrypt"
+	"io"
 	"log"
+	"slices"
 )
 
 const GuestAccount = "guest" // default account used when no login is provided for a connection
@@ -30,13 +32,12 @@ func (a *Account) Read(p []byte) (n int, err error) {
 	fieldCount := make([]byte, 2)
 	binary.BigEndian.PutUint16(fieldCount, uint16(len(fields)))
 
-	p = append(p, fieldCount...)
-
+	var fieldBytes []byte
 	for _, field := range fields {
-		p = append(p, field.Payload()...)
+		fieldBytes = append(fieldBytes, field.Payload()...)
 	}
 
-	return len(p), nil
+	return copy(p, slices.Concat(fieldCount, fieldBytes)), io.EOF
 }
 
 // hashAndSalt generates a password hash from a users obfuscated plaintext password
