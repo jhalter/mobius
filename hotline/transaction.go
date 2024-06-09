@@ -5,8 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/jhalter/mobius/concat"
 	"math/rand"
+	"slices"
 )
 
 const (
@@ -203,7 +203,7 @@ func (t *Transaction) MarshalBinary() (data []byte, err error) {
 		fieldPayload = append(fieldPayload, field.Payload()...)
 	}
 
-	return concat.Slices(
+	return slices.Concat(
 		[]byte{t.Flags, t.IsReply},
 		t.Type,
 		t.ID,
