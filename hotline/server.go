@@ -2,6 +2,7 @@ package hotline
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -48,6 +49,7 @@ type Server struct {
 	Config    *Config
 	ConfigDir string
 	Logger    *zap.SugaredLogger
+	banner    []byte
 
 	PrivateChatsMu sync.Mutex
 	PrivateChats   map[uint32]*PrivateChat
@@ -268,6 +270,11 @@ func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredL
 	// If the FileRoot is an absolute path, use it, otherwise treat as a relative path to the config dir.
 	if !filepath.IsAbs(server.Config.FileRoot) {
 		server.Config.FileRoot = filepath.Join(configDir, server.Config.FileRoot)
+	}
+
+	server.banner, err = os.ReadFile(filepath.Join(server.ConfigDir, server.Config.BannerFile))
+	if err != nil {
+		return nil, fmt.Errorf("error opening banner: %w", err)
 	}
 
 	*server.NextGuestID = 1
@@ -840,8 +847,8 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 
 	switch fileTransfer.Type {
 	case bannerDownload:
-		if err := s.bannerDownload(rwc); err != nil {
-			return err
+		if _, err := io.Copy(rwc, bytes.NewBuffer(s.banner)); err != nil {
+			return fmt.Errorf("error sending banner: %w", err)
 		}
 	case FileDownload:
 		s.Stats.DownloadCounter += 1

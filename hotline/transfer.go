@@ -5,8 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"os"
-	"path/filepath"
 )
 
 type transfer struct {
@@ -56,15 +54,4 @@ func receiveFile(r io.Reader, targetFile, resForkFile, infoFork, counterWriter i
 		}
 	}
 	return nil
-}
-
-// TODO: read the banner once on startup instead of once per banner fetch
-func (s *Server) bannerDownload(w io.Writer) error {
-	bannerBytes, err := os.ReadFile(filepath.Join(s.ConfigDir, s.Config.BannerFile))
-	if err != nil {
-		return err
-	}
-	_, err = w.Write(bannerBytes)
-
-	return err
 }
