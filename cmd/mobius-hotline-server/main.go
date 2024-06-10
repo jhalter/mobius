@@ -7,11 +7,10 @@ import (
 	"flag"
 	"fmt"
 	"github.com/jhalter/mobius/hotline"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,9 +20,13 @@ import (
 //go:embed mobius/config
 var cfgTemplate embed.FS
 
-const (
-	defaultPort = 5500
-)
+const defaultPort = 5500
+
+var logLevels = map[string]slog.Level{
+	"debug": slog.LevelDebug,
+	"info":  slog.LevelInfo,
+	"error": slog.LevelError,
+}
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -60,46 +63,44 @@ func main() {
 		os.Exit(0)
 	}
 
-	zapLvl, ok := zapLogLevel[*logLevel]
-	if !ok {
-		fmt.Printf("Invalid log level %s.  Must be debug, info, warn, or error.\n", *logLevel)
-		os.Exit(0)
-	}
-
-	cores := []zapcore.Core{
-		newStdoutCore(zapLvl),
-	}
-
-	if *logFile != "" {
-		cores = append(cores, newLogFileCore(*logFile, zapLvl))
-	}
-
-	l := zap.New(zapcore.NewTee(cores...))
-	defer func() { _ = l.Sync() }()
-	logger := l.Sugar()
+	slogger := slog.New(
+		slog.NewTextHandler(
+			io.MultiWriter(os.Stdout, &lumberjack.Logger{
+				Filename:   *logFile,
+				MaxSize:    100, // MB
+				MaxBackups: 3,
+				MaxAge:     365, // days
+			}),
+			&slog.HandlerOptions{Level: logLevels[*logLevel]},
+		),
+	)
 
 	if *init {
 		if _, err := os.Stat(filepath.Join(*configDir, "/config.yaml")); os.IsNotExist(err) {
 			if err := os.MkdirAll(*configDir, 0750); err != nil {
-				logger.Fatal(err)
+				slogger.Error(fmt.Sprintf("error creating config dir: %s", err))
+				os.Exit(1)
 			}
 
 			if err := copyDir("mobius/config", *configDir); err != nil {
-				logger.Fatal(err)
+				slogger.Error(fmt.Sprintf("error copying config dir: %s", err))
+				os.Exit(1)
 			}
-			logger.Infow("Config dir initialized at " + *configDir)
+			slogger.Info("Config dir initialized at " + *configDir)
 		} else {
-			logger.Infow("Existing config dir found.  Skipping initialization.")
+			slogger.Info("Existing config dir found.  Skipping initialization.")
 		}
 	}
 
 	if _, err := os.Stat(*configDir); os.IsNotExist(err) {
-		logger.Fatalw("Configuration directory not found.  Correct the path or re-run with -init to generate initial config.", "path", configDir)
+		slogger.Error(fmt.Sprintf("Configuration directory not found.  Correct the path or re-run with -init to generate initial config."))
+		os.Exit(1)
 	}
 
-	srv, err := hotline.NewServer(*configDir, *netInterface, *basePort, logger, &hotline.OSFileStore{})
+	srv, err := hotline.NewServer(*configDir, *netInterface, *basePort, slogger, &hotline.OSFileStore{})
 	if err != nil {
-		logger.Fatal(err)
+		slogger.Error(fmt.Sprintf("Error starting server: %s", err))
+		os.Exit(1)
 	}
 
 	sh := statHandler{hlServer: srv}
@@ -116,7 +117,7 @@ func main() {
 	}
 
 	// Serve Hotline requests until program exit
-	logger.Fatal(srv.ListenAndServe(ctx, cancel))
+	log.Fatal(srv.ListenAndServe(ctx, cancel))
 }
 
 type statHandler struct {
@@ -130,43 +131,6 @@ func (sh *statHandler) RenderStats(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	_, _ = io.WriteString(w, string(u))
-}
-
-func newStdoutCore(level zapcore.Level) zapcore.Core {
-	encoderCfg := zap.NewProductionEncoderConfig()
-	encoderCfg.TimeKey = "timestamp"
-	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
-
-	return zapcore.NewCore(
-		zapcore.NewConsoleEncoder(encoderCfg),
-		zapcore.Lock(os.Stdout),
-		level,
-	)
-}
-
-func newLogFileCore(path string, level zapcore.Level) zapcore.Core {
-	encoderCfg := zap.NewProductionEncoderConfig()
-	encoderCfg.TimeKey = "timestamp"
-	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
-	writer := zapcore.AddSync(&lumberjack.Logger{
-		Filename:   path,
-		MaxSize:    100, // MB
-		MaxBackups: 3,
-		MaxAge:     365, // days
-	})
-
-	return zapcore.NewCore(
-		zapcore.NewConsoleEncoder(encoderCfg),
-		writer,
-		level,
-	)
-}
-
-var zapLogLevel = map[string]zapcore.Level{
-	"debug": zap.DebugLevel,
-	"info":  zap.InfoLevel,
-	"warn":  zap.WarnLevel,
-	"error": zap.ErrorLevel,
 }
 
 func defaultConfigPath() (cfgPath string) {

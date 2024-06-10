@@ -574,7 +574,7 @@ func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 		return res, err
 	}
 
-	cc.logger.Infow("Move file", "src", filePath+"/"+fileName, "dst", fileNewPath+"/"+fileName)
+	cc.logger.Info("Move file", "src", filePath+"/"+fileName, "dst", fileNewPath+"/"+fileName)
 
 	hlFile, err := newFileWrapper(cc.Server.FS, filePath, 0)
 	if err != nil {
@@ -784,7 +784,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			}
 
 			login := string(encodeString(getField(FieldData, &subFields).Data))
-			cc.logger.Infow("DeleteUser", "login", login)
+			cc.logger.Info("DeleteUser", "login", login)
 
 			if err := cc.Server.DeleteUser(login); err != nil {
 				return res, err
@@ -810,9 +810,9 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		// Check if accountToUpdate has an existing account.  If so, we know we are updating an existing user.
 		if acc, ok := cc.Server.Accounts[accountToUpdate]; ok {
 			if loginToRename != "" {
-				cc.logger.Infow("RenameUser", "prevLogin", accountToUpdate, "newLogin", userLogin)
+				cc.logger.Info("RenameUser", "prevLogin", accountToUpdate, "newLogin", userLogin)
 			} else {
-				cc.logger.Infow("UpdateUser", "login", accountToUpdate)
+				cc.logger.Info("UpdateUser", "login", accountToUpdate)
 			}
 
 			// account exists, so this is an update action
@@ -857,7 +857,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 				return res, nil
 			}
 
-			cc.logger.Infow("CreateUser", "login", userLogin)
+			cc.logger.Info("CreateUser", "login", userLogin)
 
 			newAccess := accessBitmap{}
 			copy(newAccess[:], getField(FieldUserAccess, &subFields).Data)
@@ -998,7 +998,7 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	cc.Icon = t.GetField(FieldUserIconID).Data
 
 	cc.logger = cc.logger.With("name", string(cc.UserName))
-	cc.logger.Infow("Login successful", "clientVersion", fmt.Sprintf("%v", func() int { i, _ := byteToInt(cc.Version); return i }()))
+	cc.logger.Info("Login successful", "clientVersion", fmt.Sprintf("%v", func() int { i, _ := byteToInt(cc.Version); return i }()))
 
 	options := t.GetField(FieldOptions).Data
 	optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
@@ -1107,7 +1107,7 @@ func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, er
 		switch t.GetField(FieldOptions).Data[1] {
 		case 1:
 			// send message: "You are temporarily banned on this server"
-			cc.logger.Infow("Disconnect & temporarily ban " + string(clientConn.UserName))
+			cc.logger.Info("Disconnect & temporarily ban " + string(clientConn.UserName))
 
 			res = append(res, *NewTransaction(
 				TranServerMsg,
@@ -1120,7 +1120,7 @@ func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, er
 			cc.Server.banList[strings.Split(clientConn.RemoteAddr, ":")[0]] = &banUntil
 		case 2:
 			// send message: "You are permanently banned on this server"
-			cc.logger.Infow("Disconnect & ban " + string(clientConn.UserName))
+			cc.logger.Info("Disconnect & ban " + string(clientConn.UserName))
 
 			res = append(res, *NewTransaction(
 				TranServerMsg,
@@ -1217,8 +1217,6 @@ func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction, err e
 
 	name := string(t.GetField(FieldFileName).Data)
 	pathStrs := ReadNewsPath(t.GetField(FieldNewsPath).Data)
-
-	cc.logger.Infof("Creating new news folder %s", name)
 
 	cats := cc.Server.GetNewsCatByPath(pathStrs)
 	cats[name] = NewsCategoryListData15{
@@ -2024,7 +2022,7 @@ func HandleMakeAlias(cc *ClientConn, t *Transaction) (res []Transaction, err err
 		return res, err
 	}
 
-	cc.logger.Debugw("Make alias", "src", fullFilePath, "dst", fullNewFilePath)
+	cc.logger.Debug("Make alias", "src", fullFilePath, "dst", fullNewFilePath)
 
 	if err := cc.Server.FS.Symlink(fullFilePath, fullNewFilePath); err != nil {
 		res = append(res, cc.NewErrReply(t, "Error creating alias"))
