@@ -5,8 +5,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap"
 	"io"
+	"log/slog"
 	"os"
 	"sync"
 	"testing"
@@ -35,7 +35,7 @@ func TestServer_handleFileTransfer(t *testing.T) {
 		fileTransfers map[[4]byte]*FileTransfer
 		Config        *Config
 		ConfigDir     string
-		Logger        *zap.SugaredLogger
+		Logger        *slog.Logger
 		PrivateChats  map[uint32]*PrivateChat
 		NextGuestID   *uint16
 		TrackerPassID [4]byte

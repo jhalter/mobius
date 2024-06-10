@@ -4,27 +4,13 @@ import (
 	"bytes"
 	"encoding/hex"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+	"log/slog"
 	"os"
 	"testing"
 )
 
-func NewTestLogger() *zap.SugaredLogger {
-	encoderCfg := zap.NewProductionEncoderConfig()
-	encoderCfg.TimeKey = "timestamp"
-	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
-
-	core := zapcore.NewCore(
-		zapcore.NewConsoleEncoder(encoderCfg),
-		zapcore.Lock(os.Stdout),
-		zap.DebugLevel,
-	)
-
-	cores := []zapcore.Core{core}
-	l := zap.New(zapcore.NewTee(cores...))
-	defer func() { _ = l.Sync() }()
-	return l.Sugar()
+func NewTestLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(os.Stdout, nil))
 }
 
 // assertTransferBytesEqual takes a string with a hexdump in the same format that `hexdump -C` produces and compares with

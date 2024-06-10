@@ -8,11 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-playground/validator/v10"
-	"go.uber.org/zap"
 	"golang.org/x/text/encoding/charmap"
 	"gopkg.in/yaml.v3"
 	"io"
 	"io/fs"
+	"log"
+	"log/slog"
 	"math/big"
 	"math/rand"
 	"net"
@@ -48,7 +49,7 @@ type Server struct {
 
 	Config    *Config
 	ConfigDir string
-	Logger    *zap.SugaredLogger
+	Logger    *slog.Logger
 	banner    []byte
 
 	PrivateChatsMu sync.Mutex
@@ -91,7 +92,7 @@ type PrivateChat struct {
 }
 
 func (s *Server) ListenAndServe(ctx context.Context, cancelRoot context.CancelFunc) error {
-	s.Logger.Infow("Hotline server started",
+	s.Logger.Info("Hotline server started",
 		"version", VERSION,
 		"API port", fmt.Sprintf("%s:%v", s.NetInterface, s.Port),
 		"Transfer port", fmt.Sprintf("%s:%v", s.NetInterface, s.Port+1),
@@ -103,20 +104,20 @@ func (s *Server) ListenAndServe(ctx context.Context, cancelRoot context.CancelFu
 	go func() {
 		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", s.NetInterface, s.Port))
 		if err != nil {
-			s.Logger.Fatal(err)
+			log.Fatal(err)
 		}
 
-		s.Logger.Fatal(s.Serve(ctx, ln))
+		log.Fatal(s.Serve(ctx, ln))
 	}()
 
 	wg.Add(1)
 	go func() {
 		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", s.NetInterface, s.Port+1))
 		if err != nil {
-			s.Logger.Fatal(err)
+			log.Fatal(err)
 		}
 
-		s.Logger.Fatal(s.ServeFileTransfers(ctx, ln))
+		log.Fatal(s.ServeFileTransfers(ctx, ln))
 	}()
 
 	wg.Wait()
@@ -142,7 +143,7 @@ func (s *Server) ServeFileTransfers(ctx context.Context, ln net.Listener) error 
 			)
 
 			if err != nil {
-				s.Logger.Errorw("file transfer error", "reason", err)
+				s.Logger.Error("file transfer error", "reason", err)
 			}
 		}()
 	}
@@ -179,7 +180,7 @@ func (s *Server) processOutbox() {
 		t := <-s.outbox
 		go func() {
 			if err := s.sendTransaction(t); err != nil {
-				s.Logger.Errorw("error sending transaction", "err", err)
+				s.Logger.Error("error sending transaction", "err", err)
 			}
 		}()
 	}
@@ -191,21 +192,21 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			s.Logger.Errorw("error accepting connection", "err", err)
+			s.Logger.Error("error accepting connection", "err", err)
 		}
 		connCtx := context.WithValue(ctx, contextKeyReq, requestCtx{
 			remoteAddr: conn.RemoteAddr().String(),
 		})
 
 		go func() {
-			s.Logger.Infow("Connection established", "RemoteAddr", conn.RemoteAddr())
+			s.Logger.Info("Connection established", "RemoteAddr", conn.RemoteAddr())
 
 			defer conn.Close()
 			if err := s.handleNewConnection(connCtx, conn, conn.RemoteAddr().String()); err != nil {
 				if err == io.EOF {
-					s.Logger.Infow("Client disconnected", "RemoteAddr", conn.RemoteAddr())
+					s.Logger.Info("Client disconnected", "RemoteAddr", conn.RemoteAddr())
 				} else {
-					s.Logger.Errorw("error serving request", "RemoteAddr", conn.RemoteAddr(), "err", err)
+					s.Logger.Error("error serving request", "RemoteAddr", conn.RemoteAddr(), "err", err)
 				}
 			}
 		}()
@@ -217,7 +218,7 @@ const (
 )
 
 // NewServer constructs a new Server from a config dir
-func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredLogger, fs FileStore) (*Server, error) {
+func NewServer(configDir, netInterface string, netPort int, logger *slog.Logger, fs FileStore) (*Server, error) {
 	server := Server{
 		NetInterface:  netInterface,
 		Port:          netPort,
@@ -280,7 +281,7 @@ func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredL
 	*server.NextGuestID = 1
 
 	if server.Config.EnableTrackerRegistration {
-		server.Logger.Infow(
+		server.Logger.Info(
 			"Tracker registration enabled",
 			"frequency", fmt.Sprintf("%vs", trackerUpdateFrequency),
 			"trackers", server.Config.Trackers,
@@ -297,9 +298,9 @@ func NewServer(configDir, netInterface string, netPort int, logger *zap.SugaredL
 				binary.BigEndian.PutUint16(tr.Port[:], uint16(server.Port))
 				for _, t := range server.Config.Trackers {
 					if err := register(t, tr); err != nil {
-						server.Logger.Errorw("unable to register with tracker %v", "error", err)
+						server.Logger.Error("unable to register with tracker %v", "error", err)
 					}
-					server.Logger.Debugw("Sent Tracker registration", "addr", t)
+					server.Logger.Debug("Sent Tracker registration", "addr", t)
 				}
 
 				time.Sleep(trackerUpdateFrequency * time.Second)
@@ -684,7 +685,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 			return err
 		}
 
-		c.logger.Infow("Login failed", "clientVersion", fmt.Sprintf("%x", c.Version))
+		c.logger.Info("Login failed", "clientVersion", fmt.Sprintf("%x", c.Version))
 
 		return nil
 	}
@@ -735,7 +736,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		// part of TranAgreed
 		c.logger = c.logger.With("name", string(c.UserName))
 
-		c.logger.Infow("Login successful", "clientVersion", "Not sent (probably 1.2.3)")
+		c.logger.Info("Login successful", "clientVersion", "Not sent (probably 1.2.3)")
 
 		// Notify other clients on the server that the new user has logged in.  For 1.5+ clients we don't have this
 		// information yet, so we do it in TranAgreed instead
@@ -770,7 +771,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		}
 
 		if err := c.handleTransaction(t); err != nil {
-			c.logger.Errorw("Error handling transaction", "err", err)
+			c.logger.Error("Error handling transaction", "err", err)
 		}
 	}
 	return nil
@@ -867,7 +868,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 			return err
 		}
 
-		rLogger.Infow("File download started", "filePath", fullPath)
+		rLogger.Info("File download started", "filePath", fullPath)
 
 		// if file transfer options are included, that means this is a "quick preview" request from a 1.5+ client
 		if fileTransfer.options == nil {
@@ -939,7 +940,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 			return err
 		}
 
-		rLogger.Infow("File upload started", "dstFile", fullPath)
+		rLogger.Info("File upload started", "dstFile", fullPath)
 
 		rForkWriter := io.Discard
 		iForkWriter := io.Discard
@@ -956,7 +957,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 		}
 
 		if err := receiveFile(rwc, file, rForkWriter, iForkWriter, fileTransfer.bytesSentCounter); err != nil {
-			s.Logger.Error(err)
+			s.Logger.Error(err.Error())
 		}
 
 		if err := file.Close(); err != nil {
@@ -967,7 +968,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 			return err
 		}
 
-		rLogger.Infow("File upload complete", "dstFile", fullPath)
+		rLogger.Info("File upload complete", "dstFile", fullPath)
 
 	case FolderDownload:
 		s.Stats.DownloadCounter += 1
@@ -1003,7 +1004,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 
 		basePathLen := len(fullPath)
 
-		rLogger.Infow("Start folder download", "path", fullPath)
+		rLogger.Info("Start folder download", "path", fullPath)
 
 		nextAction := make([]byte, 2)
 		if _, err := io.ReadFull(rwc, nextAction); err != nil {
@@ -1030,7 +1031,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 			}
 
 			subPath := path[basePathLen+1:]
-			rLogger.Debugw("Sending fileheader", "i", i, "path", path, "fullFilePath", fullPath, "subPath", subPath, "IsDir", info.IsDir())
+			rLogger.Debug("Sending fileheader", "i", i, "path", path, "fullFilePath", fullPath, "subPath", subPath, "IsDir", info.IsDir())
 
 			if i == 1 {
 				return nil
@@ -1046,7 +1047,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 				return err
 			}
 
-			rLogger.Debugw("Client folder download action", "action", fmt.Sprintf("%X", nextAction[0:2]))
+			rLogger.Debug("Client folder download action", "action", fmt.Sprintf("%X", nextAction[0:2]))
 
 			var dataOffset int64
 
@@ -1078,14 +1079,14 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 				return nil
 			}
 
-			rLogger.Infow("File download started",
+			rLogger.Info("File download started",
 				"fileName", info.Name(),
 				"TransferSize", fmt.Sprintf("%x", hlFile.ffo.TransferSize(dataOffset)),
 			)
 
 			// Send file size to client
 			if _, err := rwc.Write(hlFile.ffo.TransferSize(dataOffset)); err != nil {
-				s.Logger.Error(err)
+				s.Logger.Error(err.Error())
 				return err
 			}
 
@@ -1137,7 +1138,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 		s.Stats.UploadCounter += 1
 		s.Stats.UploadsInProgress += 1
 		defer func() { s.Stats.UploadsInProgress -= 1 }()
-		rLogger.Infow(
+		rLogger.Info(
 			"Folder upload started",
 			"dstPath", fullPath,
 			"TransferSize", binary.BigEndian.Uint32(fileTransfer.TransferSize),
@@ -1178,7 +1179,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 				return err
 			}
 
-			rLogger.Infow(
+			rLogger.Info(
 				"Folder upload continued",
 				"FormattedPath", fu.FormattedPath(),
 				"IsFolder", fmt.Sprintf("%x", fu.IsFolder),
@@ -1249,7 +1250,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 					}
 
 					if err := receiveFile(rwc, file, io.Discard, io.Discard, fileTransfer.bytesSentCounter); err != nil {
-						s.Logger.Error(err)
+						s.Logger.Error(err.Error())
 					}
 
 					err = os.Rename(fullPath+"/"+fu.FormattedPath()+".incomplete", fullPath+"/"+fu.FormattedPath())
@@ -1269,7 +1270,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 						return err
 					}
 
-					rLogger.Infow("Starting file transfer", "path", filePath, "fileNum", i+1, "fileSize", binary.BigEndian.Uint32(fileSize))
+					rLogger.Info("Starting file transfer", "path", filePath, "fileNum", i+1, "fileSize", binary.BigEndian.Uint32(fileSize))
 
 					incWriter, err := hlFile.incFileWriter()
 					if err != nil {
@@ -1304,7 +1305,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 				}
 			}
 		}
-		rLogger.Infof("Folder upload complete")
+		rLogger.Info("Folder upload complete")
 	}
 
 	return nil

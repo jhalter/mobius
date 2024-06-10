@@ -3,9 +3,9 @@ package hotline
 import (
 	"encoding/binary"
 	"fmt"
-	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 	"io"
+	"log/slog"
 	"math/big"
 	"sort"
 	"strings"
@@ -44,7 +44,7 @@ type ClientConn struct {
 	transfersMU sync.Mutex
 	transfers   map[int]map[[4]byte]*FileTransfer
 
-	logger *zap.SugaredLogger
+	logger *slog.Logger
 }
 
 func (cc *ClientConn) sendAll(t int, fields ...Field) {
@@ -61,7 +61,7 @@ func (cc *ClientConn) handleTransaction(transaction Transaction) error {
 
 			// Validate that required field is present
 			if field.ID == nil {
-				cc.logger.Errorw(
+				cc.logger.Error(
 					"Missing required field",
 					"RequestType", handler.Name, "FieldID", reqField.ID,
 				)
@@ -69,7 +69,7 @@ func (cc *ClientConn) handleTransaction(transaction Transaction) error {
 			}
 
 			if len(field.Data) < reqField.minLen {
-				cc.logger.Infow(
+				cc.logger.Info(
 					"Field does not meet minLen",
 					"RequestType", handler.Name, "FieldID", reqField.ID,
 				)
@@ -77,7 +77,7 @@ func (cc *ClientConn) handleTransaction(transaction Transaction) error {
 			}
 		}
 
-		cc.logger.Debugw("Received Transaction", "RequestType", handler.Name)
+		cc.logger.Debug("Received Transaction", "RequestType", handler.Name)
 
 		transactions, err := handler.Handler(cc, &transaction)
 		if err != nil {
@@ -87,7 +87,7 @@ func (cc *ClientConn) handleTransaction(transaction Transaction) error {
 			cc.Server.outbox <- t
 		}
 	} else {
-		cc.logger.Errorw(
+		cc.logger.Error(
 			"Unimplemented transaction type received", "RequestID", requestNum)
 	}
 
@@ -149,7 +149,7 @@ func (cc *ClientConn) Disconnect() {
 	}
 
 	if err := cc.Connection.Close(); err != nil {
-		cc.Server.Logger.Errorw("error closing client connection", "RemoteAddr", cc.RemoteAddr)
+		cc.Server.Logger.Error("error closing client connection", "RemoteAddr", cc.RemoteAddr)
 	}
 }
 
