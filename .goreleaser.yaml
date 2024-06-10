@@ -5,7 +5,21 @@ before:
     - go mod tidy
 
 builds:
-  - env:
+  - id: "mobius-hotline-server"
+    main: ./cmd/mobius-hotline-server
+    env:
+      - CGO_ENABLED=0
+    goarch:
+      - amd64
+      - arm
+      - arm64
+    goos:
+      - linux
+      - windows
+      - darwin
+  - id: "mobius-hotline-client"
+    main: ./cmd/mobius-hotline-client
+    env:
       - CGO_ENABLED=0
     goarch:
       - amd64
