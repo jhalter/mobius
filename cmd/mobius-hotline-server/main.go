@@ -122,6 +122,12 @@ func main() {
 		}(srv)
 	}
 
+	slogger.Info("Hotline server started",
+		"version", version,
+		"API port", fmt.Sprintf("%s:%v", *netInterface, *basePort),
+		"Transfer port", fmt.Sprintf("%s:%v", *netInterface, *basePort+1),
+	)
+
 	// Serve Hotline requests until program exit
 	log.Fatal(srv.ListenAndServe(ctx, cancel))
 }

@@ -92,12 +92,6 @@ type PrivateChat struct {
 }
 
 func (s *Server) ListenAndServe(ctx context.Context, cancelRoot context.CancelFunc) error {
-	s.Logger.Info("Hotline server started",
-		"version", VERSION,
-		"API port", fmt.Sprintf("%s:%v", s.NetInterface, s.Port),
-		"Transfer port", fmt.Sprintf("%s:%v", s.NetInterface, s.Port+1),
-	)
-
 	var wg sync.WaitGroup
 
 	wg.Add(1)
