@@ -152,7 +152,7 @@ func (ffif *FlatFileInformationFork) Read(p []byte) (int, error) {
 	), io.EOF
 }
 
-// Write implements the io.Writeer interface for FlatFileInformationFork
+// Write implements the io.Writer interface for FlatFileInformationFork
 func (ffif *FlatFileInformationFork) Write(p []byte) (int, error) {
 	nameSize := p[70:72]
 	bs := binary.BigEndian.Uint16(nameSize)

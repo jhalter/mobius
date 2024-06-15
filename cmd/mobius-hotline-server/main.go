@@ -28,6 +28,12 @@ var logLevels = map[string]slog.Level{
 	"error": slog.LevelError,
 }
 
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -50,7 +56,7 @@ func main() {
 	basePort := flag.Int("bind", defaultPort, "Base Hotline server port.  File transfer port is base port + 1.")
 	statsPort := flag.String("stats-port", "", "Enable stats HTTP endpoint on address and port")
 	configDir := flag.String("config", defaultConfigPath(), "Path to config root")
-	version := flag.Bool("version", false, "print version and exit")
+	printVersion := flag.Bool("version", false, "print version and exit")
 	logLevel := flag.String("log-level", "info", "Log level")
 	logFile := flag.String("log-file", "", "Path to log file")
 
@@ -58,8 +64,8 @@ func main() {
 
 	flag.Parse()
 
-	if *version {
-		fmt.Printf("v%s\n", hotline.VERSION)
+	if *printVersion {
+		fmt.Printf("mobius-hotline-server %s, commit %s, built at %s", version, commit, date)
 		os.Exit(0)
 	}
 

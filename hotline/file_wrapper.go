@@ -207,7 +207,7 @@ func (f *fileWrapper) delete() error {
 
 func (f *fileWrapper) flattenedFileObject() (*flattenedFileObject, error) {
 	dataSize := make([]byte, 4)
-	mTime := make([]byte, 8)
+	mTime := [8]byte{}
 
 	ft := defaultFileType
 
@@ -257,8 +257,8 @@ func (f *fileWrapper) flattenedFileObject() (*flattenedFileObject, error) {
 			Flags:            []byte{0, 0, 0, 0},
 			PlatformFlags:    []byte{0, 0, 1, 0}, // TODO: What is this?
 			RSVD:             make([]byte, 32),
-			CreateDate:       mTime, // some filesystems don't support createTime
-			ModifyDate:       mTime,
+			CreateDate:       mTime[:], // some filesystems don't support createTime
+			ModifyDate:       mTime[:],
 			NameScript:       []byte{0, 0},
 			Name:             []byte(f.name),
 			NameSize:         []byte{0, 0},

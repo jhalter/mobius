@@ -1,7 +1,6 @@
 package hotline
 
 import (
-	"bytes"
 	"encoding/hex"
 	"github.com/stretchr/testify/assert"
 	"log/slog"
@@ -40,7 +39,7 @@ func tranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
 		trans.ID = []byte{0, 0, 0, 0}
 		var fs []Field
 		for _, field := range trans.Fields {
-			if bytes.Equal(field.ID, []byte{0x00, 0x6b}) {
+			if field.ID == [2]byte{0x00, 0x6b} {
 				continue
 			}
 			fs = append(fs, field)
@@ -53,7 +52,7 @@ func tranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
 		trans.ID = []byte{0, 0, 0, 0}
 		var fs []Field
 		for _, field := range trans.Fields {
-			if bytes.Equal(field.ID, []byte{0x00, 0x6b}) {
+			if field.ID == [2]byte{0x00, 0x6b} {
 				continue
 			}
 			fs = append(fs, field)

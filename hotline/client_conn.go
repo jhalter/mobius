@@ -60,7 +60,7 @@ func (cc *ClientConn) handleTransaction(transaction Transaction) error {
 			field := transaction.GetField(reqField.ID)
 
 			// Validate that required field is present
-			if field.ID == nil {
+			if field.ID == [2]byte{0, 0} {
 				cc.logger.Error(
 					"Missing required field",
 					"RequestType", handler.Name, "FieldID", reqField.ID,
@@ -166,7 +166,7 @@ func (cc *ClientConn) notifyOthers(t Transaction) (trans []Transaction) {
 
 // NewReply returns a reply Transaction with fields for the ClientConn
 func (cc *ClientConn) NewReply(t *Transaction, fields ...Field) Transaction {
-	reply := Transaction{
+	return Transaction{
 		Flags:     0x00,
 		IsReply:   0x01,
 		Type:      []byte{0x00, 0x00},
@@ -175,8 +175,6 @@ func (cc *ClientConn) NewReply(t *Transaction, fields ...Field) Transaction {
 		ErrorCode: []byte{0, 0, 0, 0},
 		Fields:    fields,
 	}
-
-	return reply
 }
 
 // NewErrReply returns an error reply Transaction with errMsg

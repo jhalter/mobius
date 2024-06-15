@@ -32,13 +32,13 @@ func TestReadFields(t *testing.T) {
 			},
 			want: []Field{
 				{
-					ID:        []byte{0x00, 0x65},
-					FieldSize: []byte{0x00, 0x04},
+					ID:        [2]byte{0x00, 0x65},
+					FieldSize: [2]byte{0x00, 0x04},
 					Data:      []byte{0x01, 0x02, 0x03, 0x04},
 				},
 				{
-					ID:        []byte{0x00, 0x66},
-					FieldSize: []byte{0x00, 0x02},
+					ID:        [2]byte{0x00, 0x66},
+					FieldSize: [2]byte{0x00, 0x02},
 					Data:      []byte{0x00, 0x01},
 				},
 			},
@@ -299,25 +299,7 @@ func Test_transactionScanner(t *testing.T) {
 	}
 }
 
-func TestTransaction_Write(t1 *testing.T) {
-	sampleTransaction := &Transaction{
-		Flags:      byte(0),
-		IsReply:    byte(0),
-		Type:       []byte{0x000, 0x93},
-		ID:         []byte{0x000, 0x00, 0x00, 0x01},
-		ErrorCode:  []byte{0x000, 0x00, 0x00, 0x00},
-		TotalSize:  []byte{0x000, 0x00, 0x00, 0x08},
-		DataSize:   []byte{0x000, 0x00, 0x00, 0x08},
-		ParamCount: []byte{0x00, 0x01},
-		Fields: []Field{
-			{
-				ID:        []byte{0x00, 0x01},
-				FieldSize: []byte{0x00, 0x02},
-				Data:      []byte{0xff, 0xff},
-			},
-		},
-	}
-
+func TestTransaction_Read(t1 *testing.T) {
 	type fields struct {
 		clientID   *[]byte
 		Flags      byte
@@ -329,28 +311,77 @@ func TestTransaction_Write(t1 *testing.T) {
 		DataSize   []byte
 		ParamCount []byte
 		Fields     []Field
+		readOffset int
 	}
 	type args struct {
 		p []byte
 	}
 	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantN   int
-		wantErr assert.ErrorAssertionFunc
+		name      string
+		fields    fields
+		args      args
+		want      int
+		wantErr   assert.ErrorAssertionFunc
+		wantBytes []byte
 	}{
 		{
-			name:   "when buf contains all bytes for a single transaction",
-			fields: fields{},
-			args: args{
-				p: func() []byte {
-					b, _ := sampleTransaction.MarshalBinary()
-					return b
-				}(),
+			name: "returns transaction bytes",
+			fields: fields{
+				Flags:     0x00,
+				IsReply:   0x01,
+				Type:      []byte{0, 0},
+				ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+				ErrorCode: []byte{0, 0, 0, 0},
+				Fields: []Field{
+					NewField(FieldData, []byte("TEST")),
+				},
 			},
-			wantN:   28,
-			wantErr: assert.NoError,
+			args: args{
+				p: make([]byte, 1024),
+			},
+			want:      30,
+			wantErr:   assert.NoError,
+			wantBytes: []byte{0x0, 0x1, 0x0, 0x0, 0x9a, 0xcb, 0x4, 0x42, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa, 0x0, 0x0, 0x0, 0xa, 0x0, 0x1, 0x0, 0x65, 0x0, 0x4, 0x54, 0x45, 0x53, 0x54},
+		},
+		{
+			name: "returns transaction bytes from readOffset",
+			fields: fields{
+				Flags:     0x00,
+				IsReply:   0x01,
+				Type:      []byte{0, 0},
+				ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+				ErrorCode: []byte{0, 0, 0, 0},
+				Fields: []Field{
+					NewField(FieldData, []byte("TEST")),
+				},
+				readOffset: 20,
+			},
+			args: args{
+				p: make([]byte, 1024),
+			},
+			want:      10,
+			wantErr:   assert.NoError,
+			wantBytes: []byte{0x0, 0x1, 0x0, 0x65, 0x0, 0x4, 0x54, 0x45, 0x53, 0x54},
+		},
+		{
+			name: "returns io.EOF when all bytes read",
+			fields: fields{
+				Flags:     0x00,
+				IsReply:   0x01,
+				Type:      []byte{0, 0},
+				ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
+				ErrorCode: []byte{0, 0, 0, 0},
+				Fields: []Field{
+					NewField(FieldData, []byte("TEST")),
+				},
+				readOffset: 30,
+			},
+			args: args{
+				p: make([]byte, 1024),
+			},
+			want:      0,
+			wantErr:   assert.Error,
+			wantBytes: []byte{},
 		},
 	}
 	for _, tt := range tests {
@@ -366,12 +397,14 @@ func TestTransaction_Write(t1 *testing.T) {
 				DataSize:   tt.fields.DataSize,
 				ParamCount: tt.fields.ParamCount,
 				Fields:     tt.fields.Fields,
+				readOffset: tt.fields.readOffset,
 			}
-			gotN, err := t.Write(tt.args.p)
-			if !tt.wantErr(t1, err, fmt.Sprintf("Write(%v)", tt.args.p)) {
+			got, err := t.Read(tt.args.p)
+			if !tt.wantErr(t1, err, fmt.Sprintf("Read(%v)", tt.args.p)) {
 				return
 			}
-			assert.Equalf(t1, tt.wantN, gotN, "Write(%v)", tt.args.p)
+			assert.Equalf(t1, tt.want, got, "Read(%v)", tt.args.p)
+			assert.Equalf(t1, tt.wantBytes, tt.args.p[:got], "Read(%v)", tt.args.p)
 		})
 	}
 }

@@ -1,6 +1,7 @@
 package hotline
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -414,11 +415,11 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	return res, err
 }
 
-// HandleSetFileInfo updates a file or folder name and/or comment from the Get Info window
+// HandleSetFileInfo updates a file or folder Name and/or comment from the Get Info window
 // Fields used in the request:
-// * 201	File name
+// * 201	File Name
 // * 202	File path	Optional
-// * 211	File new name	Optional
+// * 211	File new Name	Optional
 // * 210	File comment	Optional
 // Fields used in the reply:	None
 func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
@@ -516,7 +517,7 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 
 // HandleDeleteFile deletes a file or folder
 // Fields used in the request:
-// * 201	File name
+// * 201	File Name
 // * 202	File path
 // Fields used in the reply: none
 func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
@@ -636,10 +637,10 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err err
 		return res, fmt.Errorf("invalid filepath encoding: %w", err)
 	}
 
-	// TODO: check path and folder name lengths
+	// TODO: check path and folder Name lengths
 
 	if _, err := cc.Server.FS.Stat(newFolderPath); !os.IsNotExist(err) {
-		msg := fmt.Sprintf("Cannot create folder \"%s\" because there is already a file or folder with that name.", folderName)
+		msg := fmt.Sprintf("Cannot create folder \"%s\" because there is already a file or folder with that Name.", folderName)
 		return []Transaction{cc.NewErrReply(t, msg)}, nil
 	}
 
@@ -771,9 +772,21 @@ func HandleListUsers(cc *ClientConn, t *Transaction) (res []Transaction, err err
 // performed.  This seems to be the only place in the Hotline protocol where a data field contains another data field.
 func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	for _, field := range t.Fields {
-		subFields, err := ReadFields(field.Data[0:2], field.Data[2:])
-		if err != nil {
-			return res, err
+
+		var subFields []Field
+
+		// Create a new scanner for parsing incoming bytes into transaction tokens
+		scanner := bufio.NewScanner(bytes.NewReader(field.Data[2:]))
+		scanner.Split(fieldScanner)
+
+		for i := 0; i < int(binary.BigEndian.Uint16(field.Data[0:2])); i++ {
+			scanner.Scan()
+
+			var field Field
+			if _, err := field.Write(scanner.Bytes()); err != nil {
+				return res, fmt.Errorf("error reading field: %w", err)
+			}
+			subFields = append(subFields, field)
 		}
 
 		// If there's only one subfield, that indicates this is a delete operation for the login in FieldData
@@ -958,7 +971,7 @@ func HandleUserBroadcast(cc *ClientConn, t *Transaction) (res []Transaction, err
 // 103	User ID
 //
 // Fields used in the reply:
-// 102	User name
+// 102	User Name
 // 101	Data		User info text string
 func HandleGetClientInfoText(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	if !cc.Authorize(accessGetClientInfo) {
@@ -997,7 +1010,7 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	cc.Icon = t.GetField(FieldUserIconID).Data
 
-	cc.logger = cc.logger.With("name", string(cc.UserName))
+	cc.logger = cc.logger.With("Name", string(cc.UserName))
 	cc.logger.Info("Login successful", "clientVersion", fmt.Sprintf("%v", func() int { i, _ := byteToInt(cc.Version); return i }()))
 
 	options := t.GetField(FieldOptions).Data
@@ -1006,19 +1019,19 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(cc.Flags)))
 
 	// Check refuse private PM option
-	if optBitmap.Bit(refusePM) == 1 {
+	if optBitmap.Bit(UserOptRefusePM) == 1 {
 		flagBitmap.SetBit(flagBitmap, UserFlagRefusePM, 1)
 		binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
 	}
 
 	// Check refuse private chat option
-	if optBitmap.Bit(refuseChat) == 1 {
+	if optBitmap.Bit(UserOptRefuseChat) == 1 {
 		flagBitmap.SetBit(flagBitmap, UserFlagRefusePChat, 1)
 		binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
 	}
 
 	// Check auto response
-	if optBitmap.Bit(autoResponse) == 1 {
+	if optBitmap.Bit(UserOptAutoResponse) == 1 {
 		cc.AutoReply = t.GetField(FieldAutomaticResponse).Data
 	} else {
 		cc.AutoReply = []byte{}
@@ -1207,7 +1220,7 @@ func HandleNewNewsCat(cc *ClientConn, t *Transaction) (res []Transaction, err er
 }
 
 // Fields used in the request:
-// 322	News category name
+// 322	News category Name
 // 325	News path
 func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	if !cc.Authorize(accessNewsCreateFldr) {
@@ -1313,11 +1326,11 @@ func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, er
 	res = append(res, cc.NewReply(t,
 		NewField(FieldNewsArtTitle, []byte(art.Title)),
 		NewField(FieldNewsArtPoster, []byte(art.Poster)),
-		NewField(FieldNewsArtDate, art.Date),
-		NewField(FieldNewsArtPrevArt, art.PrevArt),
-		NewField(FieldNewsArtNextArt, art.NextArt),
-		NewField(FieldNewsArtParentArt, art.ParentArt),
-		NewField(FieldNewsArt1stChildArt, art.FirstChildArt),
+		NewField(FieldNewsArtDate, art.Date[:]),
+		NewField(FieldNewsArtPrevArt, art.PrevArt[:]),
+		NewField(FieldNewsArtNextArt, art.NextArt[:]),
+		NewField(FieldNewsArtParentArt, art.ParentArt[:]),
+		NewField(FieldNewsArt1stChildArt, art.FirstChildArt[:]),
 		NewField(FieldNewsArtDataFlav, []byte("text/plain")),
 		NewField(FieldNewsArtData, []byte(art.Data)),
 	))
@@ -1423,10 +1436,10 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		Title:         string(t.GetField(FieldNewsArtTitle).Data),
 		Poster:        string(cc.UserName),
 		Date:          toHotlineTime(time.Now()),
-		PrevArt:       []byte{0, 0, 0, 0},
-		NextArt:       []byte{0, 0, 0, 0},
-		ParentArt:     bs,
-		FirstChildArt: []byte{0, 0, 0, 0},
+		PrevArt:       [4]byte{},
+		NextArt:       [4]byte{},
+		ParentArt:     [4]byte(bs),
+		FirstChildArt: [4]byte{},
 		DataFlav:      []byte("text/plain"),
 		Data:          string(t.GetField(FieldNewsArtData).Data),
 	}
@@ -1442,10 +1455,10 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		prevID := uint32(keys[len(keys)-1])
 		nextID = prevID + 1
 
-		binary.BigEndian.PutUint32(newArt.PrevArt, prevID)
+		binary.BigEndian.PutUint32(newArt.PrevArt[:], prevID)
 
 		// Set next article ID
-		binary.BigEndian.PutUint32(cat.Articles[prevID].NextArt, nextID)
+		binary.BigEndian.PutUint32(cat.Articles[prevID].NextArt[:], nextID)
 	}
 
 	// Update parent article with first child reply
@@ -1453,8 +1466,8 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	if parentID != 0 {
 		parentArt := cat.Articles[parentID]
 
-		if bytes.Equal(parentArt.FirstChildArt, []byte{0, 0, 0, 0}) {
-			binary.BigEndian.PutUint32(parentArt.FirstChildArt, nextID)
+		if parentArt.FirstChildArt == [4]byte{0, 0, 0, 0} {
+			binary.BigEndian.PutUint32(parentArt.FirstChildArt[:], nextID)
 		}
 	}
 
@@ -1582,7 +1595,7 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 
 // Upload all files from the local folder and its subfolders to the specified path on the server
 // Fields used in the request
-// 201	File name
+// 201	File Name
 // 202	File path
 // 108	transfer size	Total size of all items in the folder
 // 220	Folder item count
@@ -1617,7 +1630,7 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err 
 
 // HandleUploadFile
 // Fields used in the request:
-// 201	File name
+// 201	File Name
 // 202	File path
 // 204	File transfer options	"Optional
 // Used only to resume download, currently has value 2"
@@ -1653,7 +1666,7 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	}
 
 	if _, err := cc.Server.FS.Stat(fullFilePath); err == nil {
-		res = append(res, cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload because there is already a file named \"%v\".  Try choosing a different name.", string(fileName))))
+		res = append(res, cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload because there is already a file named \"%v\".  Try choosing a different Name.", string(fileName))))
 		return res, err
 	}
 
@@ -1702,14 +1715,14 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction,
 		optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
 		flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(cc.Flags)))
 
-		flagBitmap.SetBit(flagBitmap, UserFlagRefusePM, optBitmap.Bit(refusePM))
+		flagBitmap.SetBit(flagBitmap, UserFlagRefusePM, optBitmap.Bit(UserOptRefusePM))
 		binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
 
-		flagBitmap.SetBit(flagBitmap, UserFlagRefusePChat, optBitmap.Bit(refuseChat))
+		flagBitmap.SetBit(flagBitmap, UserFlagRefusePChat, optBitmap.Bit(UserOptRefuseChat))
 		binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
 
 		// Check auto response
-		if optBitmap.Bit(autoResponse) == 1 {
+		if optBitmap.Bit(UserOptAutoResponse) == 1 {
 			cc.AutoReply = t.GetField(FieldAutomaticResponse).Data
 		} else {
 			cc.AutoReply = []byte{}
@@ -1894,7 +1907,7 @@ func HandleRejectChatInvite(cc *ClientConn, t *Transaction) (res []Transaction, 
 // HandleJoinChat is sent from a v1.8+ Hotline client when the joins a private chat
 // Fields used in the reply:
 // * 115	Chat subject
-// * 300	User name with info (Optional)
+// * 300	User Name with info (Optional)
 // * 300 	(more user names with info)
 func HandleJoinChat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	chatID := t.GetField(FieldChatID).Data
@@ -1997,7 +2010,7 @@ func HandleSetChatSubject(cc *ClientConn, t *Transaction) (res []Transaction, er
 
 // HandleMakeAlias makes a file alias using the specified path.
 // Fields used in the request:
-// 201	File name
+// 201	File Name
 // 202	File path
 // 212	File new path	Destination path
 //

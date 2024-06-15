@@ -2,6 +2,7 @@ package hotline
 
 import (
 	"encoding/binary"
+	"io"
 	"slices"
 )
 
@@ -66,9 +67,11 @@ const (
 )
 
 type Field struct {
-	ID        []byte // Type of field
-	FieldSize []byte // Size of the data part
-	Data      []byte // Actual field content
+	ID        [2]byte // Type of field
+	FieldSize [2]byte // Size of the data part
+	Data      []byte  // Actual field content
+
+	readOffset int // Internal offset to track read progress
 }
 
 type requiredField struct {
@@ -84,19 +87,55 @@ func NewField(id uint16, data []byte) Field {
 	binary.BigEndian.PutUint16(bs, uint16(len(data)))
 
 	return Field{
-		ID:        idBytes,
-		FieldSize: bs,
+		ID:        [2]byte(idBytes),
+		FieldSize: [2]byte(bs),
 		Data:      data,
 	}
 }
 
-func (f Field) Payload() []byte {
-	return slices.Concat(f.ID, f.FieldSize, f.Data)
+// fieldScanner implements bufio.SplitFunc for parsing byte slices into complete tokens
+func fieldScanner(data []byte, _ bool) (advance int, token []byte, err error) {
+	if len(data) < minFieldLen {
+		return 0, nil, nil
+	}
+
+	// tranLen represents the length of bytes that are part of the transaction
+	neededSize := minFieldLen + int(binary.BigEndian.Uint16(data[2:4]))
+	if neededSize > len(data) {
+		return 0, nil, nil
+	}
+
+	return neededSize, data[0:neededSize], nil
+}
+
+// Read implements io.Reader for Field
+func (f *Field) Read(p []byte) (int, error) {
+	buf := slices.Concat(f.ID[:], f.FieldSize[:], f.Data)
+
+	if f.readOffset >= len(buf) {
+		return 0, io.EOF // All bytes have been read
+	}
+
+	n := copy(p, buf[f.readOffset:])
+	f.readOffset += n
+
+	return n, nil
+}
+
+// Write implements io.Writer for Field
+func (f *Field) Write(p []byte) (int, error) {
+	f.ID = [2]byte(p[0:2])
+	f.FieldSize = [2]byte(p[2:4])
+
+	i := int(binary.BigEndian.Uint16(f.FieldSize[:]))
+	f.Data = p[4 : 4+i]
+
+	return minFieldLen + i, nil
 }
 
 func getField(id int, fields *[]Field) *Field {
 	for _, field := range *fields {
-		if id == int(binary.BigEndian.Uint16(field.ID)) {
+		if id == int(binary.BigEndian.Uint16(field.ID[:])) {
 			return &field
 		}
 	}

@@ -43,8 +43,8 @@ func (newscat *NewsCategoryListData15) GetNewsArtListData() NewsArtListData {
 
 		newArt := NewsArtList{
 			ID:          id,
-			TimeStamp:   art.Date,
-			ParentID:    art.ParentArt,
+			TimeStamp:   art.Date[:],
+			ParentID:    art.ParentArt[:],
 			Flags:       []byte{0, 0, 0, 0},
 			FlavorCount: []byte{0, 0},
 			Title:       []byte(art.Title),
@@ -57,7 +57,11 @@ func (newscat *NewsCategoryListData15) GetNewsArtListData() NewsArtListData {
 	sort.Sort(byID(newsArts))
 
 	for _, v := range newsArts {
-		newsArtsPayload = append(newsArtsPayload, v.Payload()...)
+		b, err := io.ReadAll(&v)
+		if err != nil {
+			// TODO
+		}
+		newsArtsPayload = append(newsArtsPayload, b...)
 	}
 
 	nald := NewsArtListData{
@@ -73,15 +77,15 @@ func (newscat *NewsCategoryListData15) GetNewsArtListData() NewsArtListData {
 
 // NewsArtData represents single news article
 type NewsArtData struct {
-	Title         string `yaml:"Title"`
-	Poster        string `yaml:"Poster"`
-	Date          []byte `yaml:"Date"`             // size 8
-	PrevArt       []byte `yaml:"PrevArt"`          // size 4
-	NextArt       []byte `yaml:"NextArt"`          // size 4
-	ParentArt     []byte `yaml:"ParentArt"`        // size 4
-	FirstChildArt []byte `yaml:"FirstChildArtArt"` // size 4
-	DataFlav      []byte `yaml:"DataFlav"`         // "text/plain"
-	Data          string `yaml:"Data"`
+	Title         string  `yaml:"Title"`
+	Poster        string  `yaml:"Poster"`
+	Date          [8]byte `yaml:"Date"`             // size 8
+	PrevArt       [4]byte `yaml:"PrevArt"`          // size 4
+	NextArt       [4]byte `yaml:"NextArt"`          // size 4
+	ParentArt     [4]byte `yaml:"ParentArt"`        // size 4
+	FirstChildArt [4]byte `yaml:"FirstChildArtArt"` // size 4
+	DataFlav      []byte  `yaml:"DataFlav"`         // "text/plain"
+	Data          string  `yaml:"Data"`
 }
 
 func (art *NewsArtData) DataSize() []byte {
@@ -133,6 +137,8 @@ type NewsArtList struct {
 	FlavorList []NewsFlavorList
 	// Flavor list…			Optional (if flavor count > 0)
 	ArticleSize []byte // Size 2
+
+	readOffset int // Internal offset to track read progress
 }
 
 type byID []NewsArtList
@@ -147,21 +153,29 @@ func (s byID) Less(i, j int) bool {
 	return binary.BigEndian.Uint32(s[i].ID) < binary.BigEndian.Uint32(s[j].ID)
 }
 
-func (nal *NewsArtList) Payload() []byte {
-	out := append(nal.ID, nal.TimeStamp...)
-	out = append(out, nal.ParentID...)
-	out = append(out, nal.Flags...)
+func (nal *NewsArtList) Read(p []byte) (int, error) {
+	out := slices.Concat(
+		nal.ID,
+		nal.TimeStamp,
+		nal.ParentID,
+		nal.Flags,
+		[]byte{0, 1},
+		[]byte{uint8(len(nal.Title))},
+		nal.Title,
+		[]byte{uint8(len(nal.Poster))},
+		nal.Poster,
+		[]byte{0x0a, 0x74, 0x65, 0x78, 0x74, 0x2f, 0x70, 0x6c, 0x61, 0x69, 0x6e},
+		nal.ArticleSize,
+	)
 
-	out = append(out, []byte{0, 1}...)
+	if nal.readOffset >= len(out) {
+		return 0, io.EOF // All bytes have been read
+	}
 
-	out = append(out, []byte{uint8(len(nal.Title))}...)
-	out = append(out, nal.Title...)
-	out = append(out, []byte{uint8(len(nal.Poster))}...)
-	out = append(out, nal.Poster...)
-	out = append(out, []byte{0x0a, 0x74, 0x65, 0x78, 0x74, 0x2f, 0x70, 0x6c, 0x61, 0x69, 0x6e}...) // TODO: wat?
-	out = append(out, nal.ArticleSize...)
+	n := copy(p, out[nal.readOffset:])
+	nal.readOffset += n
 
-	return out
+	return n, io.EOF
 }
 
 type NewsFlavorList struct {

@@ -2,6 +2,7 @@ package hotline
 
 import (
 	"encoding/binary"
+	"fmt"
 	"golang.org/x/crypto/bcrypt"
 	"io"
 	"log"
@@ -15,10 +16,12 @@ type Account struct {
 	Name     string       `yaml:"Name"`
 	Password string       `yaml:"Password"`
 	Access   accessBitmap `yaml:"Access"`
+
+	readOffset int // Internal offset to track read progress
 }
 
 // Read implements io.Reader interface for Account
-func (a *Account) Read(p []byte) (n int, err error) {
+func (a *Account) Read(p []byte) (int, error) {
 	fields := []Field{
 		NewField(FieldUserName, []byte(a.Name)),
 		NewField(FieldUserLogin, encodeString([]byte(a.Login))),
@@ -34,10 +37,22 @@ func (a *Account) Read(p []byte) (n int, err error) {
 
 	var fieldBytes []byte
 	for _, field := range fields {
-		fieldBytes = append(fieldBytes, field.Payload()...)
+		b, err := io.ReadAll(&field)
+		if err != nil {
+			return 0, fmt.Errorf("error reading field: %w", err)
+		}
+		fieldBytes = append(fieldBytes, b...)
 	}
 
-	return copy(p, slices.Concat(fieldCount, fieldBytes)), io.EOF
+	buf := slices.Concat(fieldCount, fieldBytes)
+	if a.readOffset >= len(buf) {
+		return 0, io.EOF // All bytes have been read
+	}
+
+	n := copy(p, buf[a.readOffset:])
+	a.readOffset += n
+
+	return n, nil
 }
 
 // hashAndSalt generates a password hash from a users obfuscated plaintext password

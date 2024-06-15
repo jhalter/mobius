@@ -8,17 +8,17 @@ import (
 
 // User flags are stored as a 2 byte bitmap and represent various user states
 const (
-	UserFlagAway        = 0 // User is away
-	UserFlagAdmin       = 1 // User is admin
-	UserFlagRefusePM    = 2 // User refuses private messages
-	UserFlagRefusePChat = 3 // User refuses private chat
+	UserFlagAway        = iota // User is away
+	UserFlagAdmin              // User is admin
+	UserFlagRefusePM           // User refuses private messages
+	UserFlagRefusePChat        // User refuses private chat
 )
 
 // FieldOptions flags are sent from v1.5+ clients as part of TranAgreed
 const (
-	refusePM     = 0 // User has "Refuse private messages" pref set
-	refuseChat   = 1 // User has "Refuse private chat" pref set
-	autoResponse = 2 // User has "Automatic response" pref set
+	UserOptRefusePM     = iota // User has "Refuse private messages" pref set
+	UserOptRefuseChat          // User has "Refuse private chat" pref set
+	UserOptAutoResponse        // User has "Automatic response" pref set
 )
 
 type User struct {
@@ -26,6 +26,8 @@ type User struct {
 	Icon  []byte // Size 2
 	Flags []byte // Size 2
 	Name  string // Variable length user name
+
+	readOffset int // Internal offset to track read progress
 }
 
 func (u *User) Read(p []byte) (int, error) {
@@ -40,18 +42,21 @@ func (u *User) Read(p []byte) (int, error) {
 		u.Flags = u.Flags[2:]
 	}
 
-	out := append(u.ID[:2], u.Icon[:2]...)
-	out = append(out, u.Flags[:2]...)
-	out = append(out, nameLen...)
-	out = append(out, u.Name...)
-
-	return copy(p, slices.Concat(
+	b := slices.Concat(
 		u.ID,
 		u.Icon,
 		u.Flags,
 		nameLen,
 		[]byte(u.Name),
-	)), io.EOF
+	)
+
+	if u.readOffset >= len(b) {
+		return 0, io.EOF // All bytes have been read
+	}
+
+	n := copy(p, b)
+
+	return n, io.EOF
 }
 
 func (u *User) Write(p []byte) (int, error) {

@@ -2858,7 +2858,7 @@ func TestHandleGetFileNameList(t *testing.T) {
 										NameScript: [2]byte{},
 										NameSize:   [2]byte{0, 0x0b},
 									},
-									name: []byte("testfile-1k"),
+									Name: []byte("testfile-1k"),
 								}
 								b, _ := io.ReadAll(&fnwi)
 								return b
@@ -3817,7 +3817,7 @@ func TestHandleNewNewsFldr(t *testing.T) {
 			wantErr: assert.NoError,
 		},
 		//{
-		//	name: "when there is an error writing the threaded news file",
+		//	Name: "when there is an error writing the threaded news file",
 		//	args: args{
 		//		cc: &ClientConn{
 		//			Account: &Account{

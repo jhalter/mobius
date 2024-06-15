@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestTransfer_Read(t *testing.T) {
+func TestTransfer_Write(t *testing.T) {
 	type fields struct {
 		Protocol        [4]byte
 		ReferenceNumber [4]byte
@@ -146,7 +146,7 @@ func Test_receiveFile(t *testing.T) {
 			wantErr: assert.NoError,
 		},
 		// {
-		// 	name: "transfers fileWrapper when there is a resource fork",
+		// 	Name: "transfers fileWrapper when there is a resource fork",
 		// 	args: args{
 		// 		conn: func() io.Reader {
 		// 			testFile := flattenedFileObject{

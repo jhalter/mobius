@@ -131,7 +131,7 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 		binary.BigEndian.PutUint16(nameSize, uint16(len(strippedName)))
 		copy(fnwi.NameSize[:], nameSize)
 
-		fnwi.name = []byte(strippedName)
+		fnwi.Name = []byte(strippedName)
 
 		b, err := io.ReadAll(&fnwi)
 		if err != nil {

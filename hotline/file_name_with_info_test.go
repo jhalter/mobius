@@ -47,7 +47,7 @@ func TestFileNameWithInfo_MarshalBinary(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f := &FileNameWithInfo{
 				fileNameWithInfoHeader: tt.fields.fileNameWithInfoHeader,
-				name:                   tt.fields.name,
+				Name:                   tt.fields.name,
 			}
 			gotData, err := io.ReadAll(f)
 			if (err != nil) != tt.wantErr {
@@ -98,7 +98,7 @@ func TestFileNameWithInfo_UnmarshalBinary(t *testing.T) {
 					NameScript: [2]byte{0, 0},
 					NameSize:   [2]byte{0x00, 0x0e},
 				},
-				name: []byte("Audion.app.zip"),
+				Name: []byte("Audion.app.zip"),
 			},
 			wantErr: false,
 		},
@@ -107,7 +107,7 @@ func TestFileNameWithInfo_UnmarshalBinary(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f := &FileNameWithInfo{
 				fileNameWithInfoHeader: tt.fields.fileNameWithInfoHeader,
-				name:                   tt.fields.name,
+				Name:                   tt.fields.name,
 			}
 			if _, err := f.Write(tt.args.data); (err != nil) != tt.wantErr {
 				t.Errorf("Write() error = %v, wantErr %v", err, tt.wantErr)

@@ -4,43 +4,19 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"embed"
 	"encoding/binary"
-	"errors"
 	"fmt"
-	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
-	"gopkg.in/yaml.v3"
+	"io"
 	"log/slog"
-	"math/big"
-	"math/rand"
 	"net"
-	"os"
-	"strings"
 	"time"
 )
 
-const (
-	trackerListPage = "trackerList"
-	serverUIPage    = "serverUI"
-)
-
-//go:embed banners/*.txt
-var bannerDir embed.FS
-
-type Bookmark struct {
-	Name     string `yaml:"Name"`
-	Addr     string `yaml:"Addr"`
-	Login    string `yaml:"Login"`
-	Password string `yaml:"Password"`
-}
-
 type ClientPrefs struct {
-	Username   string     `yaml:"Username"`
-	IconID     int        `yaml:"IconID"`
-	Bookmarks  []Bookmark `yaml:"Bookmarks"`
-	Tracker    string     `yaml:"Tracker"`
-	EnableBell bool       `yaml:"EnableBell"`
+	Username   string `yaml:"Username"`
+	IconID     int    `yaml:"IconID"`
+	Tracker    string `yaml:"Tracker"`
+	EnableBell bool   `yaml:"EnableBell"`
 }
 
 func (cp *ClientPrefs) IconBytes() []byte {
@@ -49,42 +25,12 @@ func (cp *ClientPrefs) IconBytes() []byte {
 	return iconBytes
 }
 
-func (cp *ClientPrefs) AddBookmark(name, addr, login, pass string) {
-	cp.Bookmarks = append(cp.Bookmarks, Bookmark{Addr: addr, Login: login, Password: pass})
-}
-
-func readConfig(cfgPath string) (*ClientPrefs, error) {
-	fh, err := os.Open(cfgPath)
-	if err != nil {
-		return nil, err
-	}
-
-	prefs := ClientPrefs{}
-	decoder := yaml.NewDecoder(fh)
-	if err := decoder.Decode(&prefs); err != nil {
-		return nil, err
-	}
-	return &prefs, nil
-}
-
 type Client struct {
-	cfgPath     string
-	DebugBuf    *DebugBuffer
 	Connection  net.Conn
-	UserAccess  []byte
-	filePath    []string
-	UserList    []User
 	Logger      *slog.Logger
+	Pref        *ClientPrefs
+	Handlers    map[uint16]ClientHandler
 	activeTasks map[uint32]*Transaction
-	serverName  string
-
-	Pref *ClientPrefs
-
-	Handlers map[uint16]ClientHandler
-
-	UI *UI
-
-	Inbox chan *Transaction
 }
 
 type ClientHandler func(context.Context, *Client, *Transaction) ([]Transaction, error)
@@ -104,48 +50,6 @@ func NewClient(username string, logger *slog.Logger) *Client {
 	return c
 }
 
-func NewUIClient(cfgPath string, logger *slog.Logger) *Client {
-	c := &Client{
-		cfgPath:     cfgPath,
-		Logger:      logger,
-		activeTasks: make(map[uint32]*Transaction),
-		Handlers:    clientHandlers,
-	}
-	c.UI = NewUI(c)
-
-	prefs, err := readConfig(cfgPath)
-	if err != nil {
-		logger.Error(fmt.Sprintf("unable to read config file %s\n", cfgPath))
-		os.Exit(1)
-	}
-	c.Pref = prefs
-
-	return c
-}
-
-// DebugBuffer wraps a *tview.TextView and adds a Sync() method to make it available as a Zap logger
-type DebugBuffer struct {
-	TextView *tview.TextView
-}
-
-func (db *DebugBuffer) Write(p []byte) (int, error) {
-	return db.TextView.Write(p)
-}
-
-// Sync is a noop function that dataFile to satisfy the zapcore.WriteSyncer interface
-func (db *DebugBuffer) Sync() error {
-	return nil
-}
-
-func randomBanner() string {
-	rand.Seed(time.Now().UnixNano())
-
-	bannerFiles, _ := bannerDir.ReadDir("banners")
-	file, _ := bannerDir.ReadFile("banners/" + bannerFiles[rand.Intn(len(bannerFiles))].Name())
-
-	return fmt.Sprintf("\n\n\nWelcome to...\n\n[red::b]%s[-:-:-]\n\n", file)
-}
-
 type ClientTransaction struct {
 	Name    string
 	Handler func(*Client, *Transaction) ([]Transaction, error)
@@ -157,354 +61,6 @@ func (ch ClientTransaction) Handle(cc *Client, t *Transaction) ([]Transaction, e
 
 type ClientTHandler interface {
 	Handle(*Client, *Transaction) ([]Transaction, error)
-}
-
-var clientHandlers = map[uint16]ClientHandler{
-	TranChatMsg:          handleClientChatMsg,
-	TranLogin:            handleClientTranLogin,
-	TranShowAgreement:    handleClientTranShowAgreement,
-	TranUserAccess:       handleClientTranUserAccess,
-	TranGetUserNameList:  handleClientGetUserNameList,
-	TranNotifyChangeUser: handleNotifyChangeUser,
-	TranNotifyDeleteUser: handleNotifyDeleteUser,
-	TranGetMsgs:          handleGetMsgs,
-	TranGetFileNameList:  handleGetFileNameList,
-	TranServerMsg:        handleTranServerMsg,
-	TranKeepAlive: func(ctx context.Context, client *Client, transaction *Transaction) (t []Transaction, err error) {
-		return t, err
-	},
-}
-
-func handleTranServerMsg(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
-	now := time.Now().Format(time.RFC850)
-
-	msg := strings.ReplaceAll(string(t.GetField(FieldData).Data), "\r", "\n")
-	msg += "\n\nAt " + now
-	title := fmt.Sprintf("| Private Message From: 	%s |", t.GetField(FieldUserName).Data)
-
-	msgBox := tview.NewTextView().SetScrollable(true)
-	msgBox.SetText(msg).SetBackgroundColor(tcell.ColorDarkSlateBlue)
-	msgBox.SetTitle(title).SetBorder(true)
-	msgBox.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyEscape:
-			c.UI.Pages.RemovePage("serverMsgModal" + now)
-		}
-		return event
-	})
-
-	centeredFlex := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(msgBox, 0, 2, true).
-			AddItem(nil, 0, 1, false), 0, 2, true).
-		AddItem(nil, 0, 1, false)
-
-	c.UI.Pages.AddPage("serverMsgModal"+now, centeredFlex, true, true)
-	c.UI.App.Draw() // TODO: errModal doesn't render without this.  wtf?
-
-	return res, err
-}
-
-func (c *Client) showErrMsg(msg string) {
-	t := time.Now().Format(time.RFC850)
-
-	title := "| Error |"
-
-	msgBox := tview.NewTextView().SetScrollable(true)
-	msgBox.SetText(msg).SetBackgroundColor(tcell.ColorDarkRed)
-	msgBox.SetTitle(title).SetBorder(true)
-	msgBox.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyEscape:
-			c.UI.Pages.RemovePage("serverMsgModal" + t)
-		}
-		return event
-	})
-
-	centeredFlex := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(msgBox, 0, 2, true).
-			AddItem(nil, 0, 1, false), 0, 2, true).
-		AddItem(nil, 0, 1, false)
-
-	c.UI.Pages.AddPage("serverMsgModal"+t, centeredFlex, true, true)
-	c.UI.App.Draw() // TODO: errModal doesn't render without this.  wtf?
-}
-
-func handleGetFileNameList(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
-	if t.IsError() {
-		c.showErrMsg(string(t.GetField(FieldError).Data))
-		return res, err
-	}
-
-	fTree := tview.NewTreeView().SetTopLevel(1)
-	root := tview.NewTreeNode("Root")
-	fTree.SetRoot(root).SetCurrentNode(root)
-	fTree.SetBorder(true).SetTitle("| Files |")
-	fTree.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyEscape:
-			c.UI.Pages.RemovePage("files")
-			c.filePath = []string{}
-		case tcell.KeyEnter:
-			selectedNode := fTree.GetCurrentNode()
-
-			if selectedNode.GetText() == "<- Back" {
-				c.filePath = c.filePath[:len(c.filePath)-1]
-				f := NewField(FieldFilePath, EncodeFilePath(strings.Join(c.filePath, "/")))
-
-				if err := c.UI.HLClient.Send(*NewTransaction(TranGetFileNameList, nil, f)); err != nil {
-					c.UI.HLClient.Logger.Error("err", "err", err)
-				}
-				return event
-			}
-
-			entry := selectedNode.GetReference().(*FileNameWithInfo)
-
-			if bytes.Equal(entry.Type[:], []byte("fldr")) {
-				c.Logger.Info("get new directory listing", "name", string(entry.name))
-
-				c.filePath = append(c.filePath, string(entry.name))
-				f := NewField(FieldFilePath, EncodeFilePath(strings.Join(c.filePath, "/")))
-
-				if err := c.UI.HLClient.Send(*NewTransaction(TranGetFileNameList, nil, f)); err != nil {
-					c.UI.HLClient.Logger.Error("err", "err", err)
-				}
-			} else {
-				// TODO: initiate file download
-				c.Logger.Info("download file", "name", string(entry.name))
-			}
-		}
-
-		return event
-	})
-
-	if len(c.filePath) > 0 {
-		node := tview.NewTreeNode("<- Back")
-		root.AddChild(node)
-	}
-
-	for _, f := range t.Fields {
-		var fn FileNameWithInfo
-		_, err = fn.Write(f.Data)
-		if err != nil {
-			return nil, nil
-		}
-
-		if bytes.Equal(fn.Type[:], []byte("fldr")) {
-			node := tview.NewTreeNode(fmt.Sprintf("[blue::]📁 %s[-:-:-]", fn.name))
-			node.SetReference(&fn)
-			root.AddChild(node)
-		} else {
-			size := binary.BigEndian.Uint32(fn.FileSize[:]) / 1024
-
-			node := tview.NewTreeNode(fmt.Sprintf("   %-40s %10v KB", fn.name, size))
-			node.SetReference(&fn)
-			root.AddChild(node)
-		}
-	}
-
-	centerFlex := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().
-			SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(fTree, 20, 1, true).
-			AddItem(nil, 0, 1, false), 60, 1, true).
-		AddItem(nil, 0, 1, false)
-
-	c.UI.Pages.AddPage("files", centerFlex, true, true)
-	c.UI.App.Draw()
-
-	return res, err
-}
-
-func handleGetMsgs(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
-	newsText := string(t.GetField(FieldData).Data)
-	newsText = strings.ReplaceAll(newsText, "\r", "\n")
-
-	newsTextView := tview.NewTextView().
-		SetText(newsText).
-		SetDoneFunc(func(key tcell.Key) {
-			c.UI.Pages.SwitchToPage(serverUIPage)
-			c.UI.App.SetFocus(c.UI.chatInput)
-		})
-	newsTextView.SetBorder(true).SetTitle("News")
-
-	c.UI.Pages.AddPage("news", newsTextView, true, true)
-	// c.UI.Pages.SwitchToPage("news")
-	// c.UI.App.SetFocus(newsTextView)
-	c.UI.App.Draw()
-
-	return res, err
-}
-
-func handleNotifyChangeUser(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
-	newUser := User{
-		ID:    t.GetField(FieldUserID).Data,
-		Name:  string(t.GetField(FieldUserName).Data),
-		Icon:  t.GetField(FieldUserIconID).Data,
-		Flags: t.GetField(FieldUserFlags).Data,
-	}
-
-	// Possible cases:
-	// user is new to the server
-	// user is already on the server but has a new name
-
-	var oldName string
-	var newUserList []User
-	updatedUser := false
-	for _, u := range c.UserList {
-		if bytes.Equal(newUser.ID, u.ID) {
-			oldName = u.Name
-			u.Name = newUser.Name
-			if u.Name != newUser.Name {
-				_, _ = fmt.Fprintf(c.UI.chatBox, " <<< "+oldName+" is now known as "+newUser.Name+" >>>\n")
-			}
-			updatedUser = true
-		}
-		newUserList = append(newUserList, u)
-	}
-
-	if !updatedUser {
-		newUserList = append(newUserList, newUser)
-	}
-
-	c.UserList = newUserList
-
-	c.renderUserList()
-
-	return res, err
-}
-
-func handleNotifyDeleteUser(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
-	exitUser := t.GetField(FieldUserID).Data
-
-	var newUserList []User
-	for _, u := range c.UserList {
-		if !bytes.Equal(exitUser, u.ID) {
-			newUserList = append(newUserList, u)
-		}
-	}
-
-	c.UserList = newUserList
-
-	c.renderUserList()
-
-	return res, err
-}
-
-func handleClientGetUserNameList(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
-	var users []User
-	for _, field := range t.Fields {
-		// The Hotline protocol docs say that ClientGetUserNameList should only return FieldUsernameWithInfo (300)
-		// fields, but shxd sneaks in FieldChatSubject (115) so it's important to filter explicitly for the expected
-		// field type.  Probably a good idea to do everywhere.
-		if bytes.Equal(field.ID, []byte{0x01, 0x2c}) {
-			var user User
-			if _, err := user.Write(field.Data); err != nil {
-				return res, fmt.Errorf("unable to read user data: %w", err)
-			}
-
-			users = append(users, user)
-		}
-	}
-	c.UserList = users
-
-	c.renderUserList()
-
-	return res, err
-}
-
-func (c *Client) renderUserList() {
-	c.UI.userList.Clear()
-	for _, u := range c.UserList {
-		flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(u.Flags)))
-		if flagBitmap.Bit(UserFlagAdmin) == 1 {
-			_, _ = fmt.Fprintf(c.UI.userList, "[red::b]%s[-:-:-]\n", u.Name)
-		} else {
-			_, _ = fmt.Fprintf(c.UI.userList, "%s\n", u.Name)
-		}
-		// TODO: fade if user is away
-	}
-}
-
-func handleClientChatMsg(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
-	if c.Pref.EnableBell {
-		fmt.Println("\a")
-	}
-
-	_, _ = fmt.Fprintf(c.UI.chatBox, "%s \n", t.GetField(FieldData).Data)
-
-	return res, err
-}
-
-func handleClientTranUserAccess(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
-	c.UserAccess = t.GetField(FieldUserAccess).Data
-
-	return res, err
-}
-
-func handleClientTranShowAgreement(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
-	agreement := string(t.GetField(FieldData).Data)
-	agreement = strings.ReplaceAll(agreement, "\r", "\n")
-
-	agreeModal := tview.NewModal().
-		SetText(agreement).
-		AddButtons([]string{"Agree", "Disagree"}).
-		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-			if buttonIndex == 0 {
-				res = append(res,
-					*NewTransaction(
-						TranAgreed, nil,
-						NewField(FieldUserName, []byte(c.Pref.Username)),
-						NewField(FieldUserIconID, c.Pref.IconBytes()),
-						NewField(FieldUserFlags, []byte{0x00, 0x00}),
-						NewField(FieldOptions, []byte{0x00, 0x00}),
-					),
-				)
-				c.UI.Pages.HidePage("agreement")
-				c.UI.App.SetFocus(c.UI.chatInput)
-			} else {
-				_ = c.Disconnect()
-				c.UI.Pages.SwitchToPage("home")
-			}
-		},
-		)
-
-	c.UI.Pages.AddPage("agreement", agreeModal, false, true)
-
-	return res, err
-}
-
-func handleClientTranLogin(ctx context.Context, c *Client, t *Transaction) (res []Transaction, err error) {
-	if !bytes.Equal(t.ErrorCode, []byte{0, 0, 0, 0}) {
-		errMsg := string(t.GetField(FieldError).Data)
-		errModal := tview.NewModal()
-		errModal.SetText(errMsg)
-		errModal.AddButtons([]string{"Oh no"})
-		errModal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-			c.UI.Pages.RemovePage("errModal")
-		})
-		c.UI.Pages.RemovePage("joinServer")
-		c.UI.Pages.AddPage("errModal", errModal, false, true)
-
-		c.UI.App.Draw() // TODO: errModal doesn't render without this.  wtf?
-
-		c.Logger.Error(string(t.GetField(FieldError).Data))
-		return nil, errors.New("login error: " + string(t.GetField(FieldError).Data))
-	}
-	c.UI.Pages.AddAndSwitchToPage(serverUIPage, c.UI.renderServerUI(), true)
-	c.UI.App.SetFocus(c.UI.chatInput)
-
-	if err := c.Send(*NewTransaction(TranGetUserNameList, nil)); err != nil {
-		c.Logger.Error("err", "err", err)
-	}
-	return res, err
 }
 
 // JoinServer connects to a Hotline server and completes the login flow
@@ -521,8 +77,18 @@ func (c *Client) Connect(address, login, passwd string) (err error) {
 	}
 
 	// Authenticate (send TranLogin 107)
-	if err := c.LogIn(login, passwd); err != nil {
-		return err
+
+	err = c.Send(
+		*NewTransaction(
+			TranLogin, nil,
+			NewField(FieldUserName, []byte(c.Pref.Username)),
+			NewField(FieldUserIconID, c.Pref.IconBytes()),
+			NewField(FieldUserLogin, encodeString([]byte(login))),
+			NewField(FieldUserPassword, encodeString([]byte(passwd))),
+		),
+	)
+	if err != nil {
+		return fmt.Errorf("error sending login transaction: %w", err)
 	}
 
 	// start keepalive go routine
@@ -575,18 +141,6 @@ func (c *Client) Handshake() error {
 	return fmt.Errorf("handshake response err: %s", err)
 }
 
-func (c *Client) LogIn(login string, password string) error {
-	return c.Send(
-		*NewTransaction(
-			TranLogin, nil,
-			NewField(FieldUserName, []byte(c.Pref.Username)),
-			NewField(FieldUserIconID, c.Pref.IconBytes()),
-			NewField(FieldUserLogin, encodeString([]byte(login))),
-			NewField(FieldUserPassword, encodeString([]byte(password))),
-		),
-	)
-}
-
 func (c *Client) Send(t Transaction) error {
 	requestNum := binary.BigEndian.Uint16(t.Type)
 
@@ -595,15 +149,11 @@ func (c *Client) Send(t Transaction) error {
 		c.activeTasks[binary.BigEndian.Uint32(t.ID)] = &t
 	}
 
-	b, err := t.MarshalBinary()
+	n, err := io.Copy(c.Connection, &t)
 	if err != nil {
-		return err
+		return fmt.Errorf("error sending transaction: %w", err)
 	}
 
-	var n int
-	if n, err = c.Connection.Write(b); err != nil {
-		return err
-	}
 	c.Logger.Debug("Sent Transaction",
 		"IsReply", t.IsReply,
 		"type", requestNum,

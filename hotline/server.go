@@ -152,24 +152,19 @@ func (s *Server) ServeFileTransfers(ctx context.Context, ln net.Listener) error 
 func (s *Server) sendTransaction(t Transaction) error {
 	clientID, err := byteToInt(*t.clientID)
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid client ID: %v", err)
 	}
 
 	s.mux.Lock()
-	client := s.Clients[uint16(clientID)]
+	client, ok := s.Clients[uint16(clientID)]
 	s.mux.Unlock()
-	if client == nil {
+	if !ok || client == nil {
 		return fmt.Errorf("invalid client id %v", *t.clientID)
 	}
 
-	b, err := t.MarshalBinary()
+	_, err = io.Copy(client.Connection, &t)
 	if err != nil {
-		return err
-	}
-
-	_, err = client.Connection.Write(b)
-	if err != nil {
-		return err
+		return fmt.Errorf("failed to send transaction to client %v: %v", clientID, err)
 	}
 
 	return nil
@@ -620,12 +615,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 				NewField(FieldChatOptions, []byte{0, 0}),
 			)
 
-			b, err := t.MarshalBinary()
-			if err != nil {
-				return err
-			}
-
-			_, err = rwc.Write(b)
+			_, err := io.Copy(rwc, t)
 			if err != nil {
 				return err
 			}
@@ -642,12 +632,8 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 				NewField(FieldData, []byte("You are temporarily banned on this server")),
 				NewField(FieldChatOptions, []byte{0, 0}),
 			)
-			b, err := t.MarshalBinary()
-			if err != nil {
-				return err
-			}
 
-			_, err = rwc.Write(b)
+			_, err := io.Copy(rwc, t)
 			if err != nil {
 				return err
 			}
@@ -677,11 +663,9 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	// If authentication fails, send error reply and close connection
 	if !c.Authenticate(login, encodedPassword) {
 		t := c.NewErrReply(&clientLogin, "Incorrect login.")
-		b, err := t.MarshalBinary()
+
+		_, err := io.Copy(rwc, &t)
 		if err != nil {
-			return err
-		}
-		if _, err := rwc.Write(b); err != nil {
 			return err
 		}
 
@@ -734,7 +718,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	if len(c.UserName) != 0 {
 		// Add the client username to the logger.  For 1.5+ clients, we don't have this information yet as it comes as
 		// part of TranAgreed
-		c.logger = c.logger.With("name", string(c.UserName))
+		c.logger = c.logger.With("Name", string(c.UserName))
 
 		c.logger.Info("Login successful", "clientVersion", "Not sent (probably 1.2.3)")
 
@@ -838,7 +822,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 	rLogger := s.Logger.With(
 		"remoteAddr", ctx.Value(contextKeyReq).(requestCtx).remoteAddr,
 		"login", fileTransfer.ClientConn.Account.Login,
-		"name", string(fileTransfer.ClientConn.UserName),
+		"Name", string(fileTransfer.ClientConn.UserName),
 	)
 
 	fullPath, err := readPath(s.Config.FileRoot, fileTransfer.FilePath, fileTransfer.FileName)

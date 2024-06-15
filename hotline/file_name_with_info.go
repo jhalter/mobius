@@ -9,7 +9,7 @@ import (
 
 type FileNameWithInfo struct {
 	fileNameWithInfoHeader
-	name []byte // File name
+	Name []byte // File Name
 }
 
 // fileNameWithInfoHeader contains the fixed length fields of FileNameWithInfo
@@ -19,7 +19,7 @@ type fileNameWithInfoHeader struct {
 	FileSize   [4]byte // File Size in bytes
 	RSVD       [4]byte
 	NameScript [2]byte // ??
-	NameSize   [2]byte // Length of name field
+	NameSize   [2]byte // Length of Name field
 }
 
 func (f *fileNameWithInfoHeader) nameLen() int {
@@ -36,7 +36,7 @@ func (f *FileNameWithInfo) Read(b []byte) (int, error) {
 			f.RSVD[:],
 			f.NameScript[:],
 			f.NameSize[:],
-			f.name,
+			f.Name,
 		),
 	), io.EOF
 }
@@ -47,7 +47,7 @@ func (f *FileNameWithInfo) Write(p []byte) (int, error) {
 		return 0, err
 	}
 	headerLen := binary.Size(f.fileNameWithInfoHeader)
-	f.name = p[headerLen : headerLen+f.nameLen()]
+	f.Name = p[headerLen : headerLen+f.nameLen()]
 
 	return len(p), nil
 }

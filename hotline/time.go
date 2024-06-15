@@ -2,12 +2,13 @@ package hotline
 
 import (
 	"encoding/binary"
+	"slices"
 	"time"
 )
 
 // toHotlineTime converts a time.Time to the 8 byte Hotline time format:
 // Year (2 bytes), milliseconds (2 bytes) and seconds (4 bytes)
-func toHotlineTime(t time.Time) (b []byte) {
+func toHotlineTime(t time.Time) (b [8]byte) {
 	yearBytes := make([]byte, 2)
 	secondBytes := make([]byte, 4)
 
@@ -17,9 +18,9 @@ func toHotlineTime(t time.Time) (b []byte) {
 	binary.BigEndian.PutUint16(yearBytes, uint16(t.Year()))
 	binary.BigEndian.PutUint32(secondBytes, uint32(t.Sub(startOfYear).Seconds()))
 
-	b = append(b, yearBytes...)
-	b = append(b, []byte{0, 0}...)
-	b = append(b, secondBytes...)
-
-	return b
+	return [8]byte(slices.Concat(
+		yearBytes,
+		[]byte{0, 0},
+		secondBytes,
+	))
 }
