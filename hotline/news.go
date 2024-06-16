@@ -2,7 +2,6 @@ package hotline
 
 import (
 	"bytes"
-	"crypto/rand"
 	"encoding/binary"
 	"io"
 	"slices"
@@ -17,20 +16,19 @@ const defaultNewsTemplate = `From %s (%s):
 
 __________________________________________________________`
 
+// ThreadedNews is the top level struct containing all threaded news categories, bundles, and articles
 type ThreadedNews struct {
 	Categories map[string]NewsCategoryListData15 `yaml:"Categories"`
 }
 
 type NewsCategoryListData15 struct {
-	Type     [2]byte `yaml:"Type"` // Size 2 ; Bundle (2) or category (3)
-	Count    []byte  // Article or SubCategory count Size 2
-	NameSize byte
-	Name     string                            `yaml:"Name"`     //
+	Type     [2]byte                           `yaml:"Type,flow"` // Bundle (2) or category (3)
+	Name     string                            `yaml:"Name"`
 	Articles map[uint32]*NewsArtData           `yaml:"Articles"` // Optional, if Type is Category
 	SubCats  map[string]NewsCategoryListData15 `yaml:"SubCats"`
-	GUID     []byte                            // Size 16
-	AddSN    []byte                            // Size 4
-	DeleteSN []byte                            // Size 4
+	GUID     [16]byte                          `yaml:"-"` // What does this do?  Undocumented and seeming unused.
+	AddSN    [4]byte                           `yaml:"-"` // What does this do?  Undocumented and seeming unused.
+	DeleteSN [4]byte                           `yaml:"-"` // What does this do?  Undocumented and seeming unused.
 }
 
 func (newscat *NewsCategoryListData15) GetNewsArtListData() NewsArtListData {
@@ -42,15 +40,14 @@ func (newscat *NewsCategoryListData15) GetNewsArtListData() NewsArtListData {
 		binary.BigEndian.PutUint32(id, i)
 
 		newArt := NewsArtList{
-			ID:          id,
-			TimeStamp:   art.Date[:],
-			ParentID:    art.ParentArt[:],
-			Flags:       []byte{0, 0, 0, 0},
-			FlavorCount: []byte{0, 0},
+			ID:          [4]byte(id),
+			TimeStamp:   art.Date,
+			ParentID:    art.ParentArt,
 			Title:       []byte(art.Title),
 			Poster:      []byte(art.Poster),
 			ArticleSize: art.DataSize(),
 		}
+
 		newsArts = append(newsArts, newArt)
 	}
 
@@ -60,31 +57,29 @@ func (newscat *NewsCategoryListData15) GetNewsArtListData() NewsArtListData {
 		b, err := io.ReadAll(&v)
 		if err != nil {
 			// TODO
+			panic(err)
 		}
 		newsArtsPayload = append(newsArtsPayload, b...)
 	}
 
-	nald := NewsArtListData{
-		ID:          [4]byte{0, 0, 0, 0},
+	return NewsArtListData{
 		Count:       len(newsArts),
 		Name:        []byte{},
 		Description: []byte{},
 		NewsArtList: newsArtsPayload,
 	}
-
-	return nald
 }
 
 // NewsArtData represents single news article
 type NewsArtData struct {
 	Title         string  `yaml:"Title"`
 	Poster        string  `yaml:"Poster"`
-	Date          [8]byte `yaml:"Date"`             // size 8
-	PrevArt       [4]byte `yaml:"PrevArt"`          // size 4
-	NextArt       [4]byte `yaml:"NextArt"`          // size 4
-	ParentArt     [4]byte `yaml:"ParentArt"`        // size 4
-	FirstChildArt [4]byte `yaml:"FirstChildArtArt"` // size 4
-	DataFlav      []byte  `yaml:"DataFlav"`         // "text/plain"
+	Date          [8]byte `yaml:"Date,flow"`
+	PrevArt       [4]byte `yaml:"PrevArt,flow"`
+	NextArt       [4]byte `yaml:"NextArt,flow"`
+	ParentArt     [4]byte `yaml:"ParentArt,flow"`
+	FirstChildArt [4]byte `yaml:"FirstChildArtArt,flow"`
+	DataFlav      []byte  `yaml:"-"` // "text/plain"
 	Data          string  `yaml:"Data"`
 }
 
@@ -96,39 +91,45 @@ func (art *NewsArtData) DataSize() []byte {
 }
 
 type NewsArtListData struct {
-	ID          [4]byte `yaml:"ID"` // Size 4
+	ID          [4]byte `yaml:"ID"`
 	Name        []byte  `yaml:"Name"`
 	Description []byte  `yaml:"Description"` // not used?
 	NewsArtList []byte  // List of articles			Optional (if article count > 0)
 	Count       int
+
+	readOffset int // Internal offset to track read progress
 }
 
 func (nald *NewsArtListData) Read(p []byte) (int, error) {
 	count := make([]byte, 4)
 	binary.BigEndian.PutUint32(count, uint32(nald.Count))
 
-	return copy(
-			p,
-			slices.Concat(
-				nald.ID[:],
-				count,
-				[]byte{uint8(len(nald.Name))},
-				nald.Name,
-				[]byte{uint8(len(nald.Description))},
-				nald.Description,
-				nald.NewsArtList,
-			),
-		),
-		io.EOF
+	buf := slices.Concat(
+		nald.ID[:],
+		count,
+		[]byte{uint8(len(nald.Name))},
+		nald.Name,
+		[]byte{uint8(len(nald.Description))},
+		nald.Description,
+		nald.NewsArtList,
+	)
+
+	if nald.readOffset >= len(buf) {
+		return 0, io.EOF // All bytes have been read
+	}
+	n := copy(p, buf[nald.readOffset:])
+	nald.readOffset += n
+
+	return n, nil
 }
 
 // NewsArtList is a summarized version of a NewArtData record for display in list view
 type NewsArtList struct {
-	ID          []byte // Size 4
-	TimeStamp   []byte // Year (2 bytes), milliseconds (2 bytes) and seconds (4 bytes)
-	ParentID    []byte // Size 4
-	Flags       []byte // Size 4
-	FlavorCount []byte // Size 2
+	ID          [4]byte
+	TimeStamp   [8]byte // Year (2 bytes), milliseconds (2 bytes) and seconds (4 bytes)
+	ParentID    [4]byte
+	Flags       [4]byte
+	FlavorCount [2]byte
 	// Title size	1
 	Title []byte // string
 	// Poster size	1
@@ -150,21 +151,27 @@ func (s byID) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 func (s byID) Less(i, j int) bool {
-	return binary.BigEndian.Uint32(s[i].ID) < binary.BigEndian.Uint32(s[j].ID)
+	return binary.BigEndian.Uint32(s[i].ID[:]) < binary.BigEndian.Uint32(s[j].ID[:])
 }
+
+var (
+	NewsFlavorLen = []byte{0x0a}
+	NewsFlavor    = []byte("text/plain")
+)
 
 func (nal *NewsArtList) Read(p []byte) (int, error) {
 	out := slices.Concat(
-		nal.ID,
-		nal.TimeStamp,
-		nal.ParentID,
-		nal.Flags,
-		[]byte{0, 1},
+		nal.ID[:],
+		nal.TimeStamp[:],
+		nal.ParentID[:],
+		nal.Flags[:],
+		[]byte{0, 1}, // Flavor Count
 		[]byte{uint8(len(nal.Title))},
 		nal.Title,
 		[]byte{uint8(len(nal.Poster))},
 		nal.Poster,
-		[]byte{0x0a, 0x74, 0x65, 0x78, 0x74, 0x2f, 0x70, 0x6c, 0x61, 0x69, 0x6e},
+		NewsFlavorLen,
+		NewsFlavor,
 		nal.ArticleSize,
 	)
 
@@ -190,17 +197,11 @@ func (newscat *NewsCategoryListData15) MarshalBinary() (data []byte, err error) 
 
 	out := append(newscat.Type[:], count...)
 
+	// If type is category
 	if bytes.Equal(newscat.Type[:], []byte{0, 3}) {
-		// Generate a random GUID // TODO: does this need to be random?
-		b := make([]byte, 16)
-		_, err := rand.Read(b)
-		if err != nil {
-			return data, err
-		}
-
-		out = append(out, b...)                  // GUID
-		out = append(out, []byte{0, 0, 0, 1}...) // Add SN (TODO: not sure what this is)
-		out = append(out, []byte{0, 0, 0, 2}...) // Delete SN (TODO: not sure what this is)
+		out = append(out, newscat.GUID[:]...)     // GUID
+		out = append(out, newscat.AddSN[:]...)    // Add SN
+		out = append(out, newscat.DeleteSN[:]...) // Delete SN
 	}
 
 	out = append(out, newscat.nameLen()...)

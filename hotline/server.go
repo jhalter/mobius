@@ -246,7 +246,7 @@ func NewServer(configDir, netInterface string, netPort int, logger *slog.Logger,
 	_ = server.loadBanList(filepath.Join(configDir, "Banlist.yaml"))
 
 	if err := server.loadThreadedNews(filepath.Join(configDir, "ThreadedNews.yaml")); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error loading threaded news: %w", err)
 	}
 
 	if err := server.loadConfig(filepath.Join(configDir, "config.yaml")); err != nil {

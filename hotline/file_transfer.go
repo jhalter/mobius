@@ -11,11 +11,11 @@ import (
 
 // File transfer types
 const (
-	FileDownload   = 0
-	FileUpload     = 1
-	FolderDownload = 2
-	FolderUpload   = 3
-	bannerDownload = 4
+	FileDownload = iota
+	FileUpload
+	FolderDownload
+	FolderUpload
+	bannerDownload
 )
 
 type FileTransfer struct {

@@ -167,7 +167,6 @@ func (cc *ClientConn) notifyOthers(t Transaction) (trans []Transaction) {
 // NewReply returns a reply Transaction with fields for the ClientConn
 func (cc *ClientConn) NewReply(t *Transaction, fields ...Field) Transaction {
 	return Transaction{
-		Flags:     0x00,
 		IsReply:   0x01,
 		Type:      []byte{0x00, 0x00},
 		ID:        t.ID,
@@ -181,7 +180,6 @@ func (cc *ClientConn) NewReply(t *Transaction, fields ...Field) Transaction {
 func (cc *ClientConn) NewErrReply(t *Transaction, errMsg string) Transaction {
 	return Transaction{
 		clientID:  cc.ID,
-		Flags:     0x00,
 		IsReply:   0x01,
 		Type:      []byte{0, 0},
 		ID:        t.ID,

@@ -749,7 +749,8 @@ func HandleListUsers(cc *ClientConn, t *Transaction) (res []Transaction, err err
 
 	var userFields []Field
 	for _, acc := range cc.Server.Accounts {
-		b, err := io.ReadAll(acc)
+		accCopy := *acc
+		b, err := io.ReadAll(&accCopy)
 		if err != nil {
 			return res, err
 		}
@@ -1432,6 +1433,9 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	bs := make([]byte, 4)
 	binary.BigEndian.PutUint32(bs, convertedArtID)
 
+	cc.Server.mux.Lock()
+	defer cc.Server.mux.Unlock()
+
 	newArt := NewsArtData{
 		Title:         string(t.GetField(FieldNewsArtTitle).Data),
 		Poster:        string(cc.UserName),
@@ -2053,19 +2057,11 @@ func HandleMakeAlias(cc *ClientConn, t *Transaction) (res []Transaction, err err
 // 107	FieldRefNum			Used later for transfer
 // 108	FieldTransferSize	Size of data to be downloaded
 func HandleDownloadBanner(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	fi, err := cc.Server.FS.Stat(filepath.Join(cc.Server.ConfigDir, cc.Server.Config.BannerFile))
-	if err != nil {
-		return res, err
-	}
-
 	ft := cc.newFileTransfer(bannerDownload, []byte{}, []byte{}, make([]byte, 4))
+	binary.BigEndian.PutUint32(ft.TransferSize, uint32(len(cc.Server.banner)))
 
-	binary.BigEndian.PutUint32(ft.TransferSize, uint32(fi.Size()))
-
-	res = append(res, cc.NewReply(t,
+	return append(res, cc.NewReply(t,
 		NewField(FieldRefNum, ft.refNum[:]),
 		NewField(FieldTransferSize, ft.TransferSize),
-	))
-
-	return res, err
+	)), err
 }
