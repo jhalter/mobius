@@ -15,7 +15,7 @@ type Account struct {
 	Login    string       `yaml:"Login"`
 	Name     string       `yaml:"Name"`
 	Password string       `yaml:"Password"`
-	Access   accessBitmap `yaml:"Access"`
+	Access   accessBitmap `yaml:"Access,flow"`
 
 	readOffset int // Internal offset to track read progress
 }

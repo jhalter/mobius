@@ -12,9 +12,9 @@ func TestNewsCategoryListData15_MarshalBinary(t *testing.T) {
 		Articles map[uint32]*NewsArtData
 		SubCats  map[string]NewsCategoryListData15
 		Count    []byte
-		AddSN    []byte
-		DeleteSN []byte
-		GUID     []byte
+		AddSN    [4]byte
+		DeleteSN [4]byte
+		GUID     [16]byte
 	}
 	tests := []struct {
 		name     string
@@ -75,7 +75,6 @@ func TestNewsCategoryListData15_MarshalBinary(t *testing.T) {
 				Name:     tt.fields.Name,
 				Articles: tt.fields.Articles,
 				SubCats:  tt.fields.SubCats,
-				Count:    tt.fields.Count,
 				AddSN:    tt.fields.AddSN,
 				DeleteSN: tt.fields.DeleteSN,
 				GUID:     tt.fields.GUID,

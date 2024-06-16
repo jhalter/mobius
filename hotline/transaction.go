@@ -214,7 +214,8 @@ func (t *Transaction) Read(p []byte) (int, error) {
 	bbuf := new(bytes.Buffer)
 
 	for _, field := range t.Fields {
-		_, err := bbuf.ReadFrom(&field)
+		f := field
+		_, err := bbuf.ReadFrom(&f)
 		if err != nil {
 			return 0, fmt.Errorf("error reading field: %w", err)
 		}

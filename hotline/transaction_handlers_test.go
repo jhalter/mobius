@@ -3191,10 +3191,8 @@ func TestHandleDelNewsItem(t *testing.T) {
 					Server: &Server{
 						ThreadedNews: &ThreadedNews{Categories: map[string]NewsCategoryListData15{
 							"test": {
-								Type:     [2]byte{0, 3},
-								Count:    nil,
-								NameSize: 0,
-								Name:     "zz",
+								Type: [2]byte{0, 3},
+								Name: "zz",
 							},
 						}},
 					},
@@ -3237,10 +3235,8 @@ func TestHandleDelNewsItem(t *testing.T) {
 					Server: &Server{
 						ThreadedNews: &ThreadedNews{Categories: map[string]NewsCategoryListData15{
 							"testcat": {
-								Type:     [2]byte{0, 2},
-								Count:    nil,
-								NameSize: 0,
-								Name:     "test",
+								Type: [2]byte{0, 2},
+								Name: "test",
 							},
 						}},
 					},
@@ -3293,10 +3289,8 @@ func TestHandleDelNewsItem(t *testing.T) {
 						}(),
 						ThreadedNews: &ThreadedNews{Categories: map[string]NewsCategoryListData15{
 							"testcat": {
-								Type:     [2]byte{0, 2},
-								Count:    nil,
-								NameSize: 0,
-								Name:     "test",
+								Type: [2]byte{0, 2},
+								Name: "test",
 							},
 						}},
 					},
@@ -3781,11 +3775,9 @@ func TestHandleNewNewsFldr(t *testing.T) {
 						}(),
 						ThreadedNews: &ThreadedNews{Categories: map[string]NewsCategoryListData15{
 							"test": {
-								Type:     [2]byte{0, 2},
-								Count:    nil,
-								NameSize: 0,
-								Name:     "test",
-								SubCats:  make(map[string]NewsCategoryListData15),
+								Type:    [2]byte{0, 2},
+								Name:    "test",
+								SubCats: make(map[string]NewsCategoryListData15),
 							},
 						}},
 					},
@@ -3882,6 +3874,30 @@ func TestHandleNewNewsFldr(t *testing.T) {
 				return
 			}
 			tranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}
+
+func TestHandleDownloadBanner(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  *Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+		wantErr assert.ErrorAssertionFunc
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes, err := HandleDownloadBanner(tt.args.cc, tt.args.t)
+			if !tt.wantErr(t, err, fmt.Sprintf("HandleDownloadBanner(%v, %v)", tt.args.cc, tt.args.t)) {
+				return
+			}
+			assert.Equalf(t, tt.wantRes, gotRes, "HandleDownloadBanner(%v, %v)", tt.args.cc, tt.args.t)
 		})
 	}
 }
