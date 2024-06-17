@@ -10,6 +10,8 @@ import (
 type FileNameWithInfo struct {
 	fileNameWithInfoHeader
 	Name []byte // File Name
+
+	readOffset int // Internal offset to track read progress
 }
 
 // fileNameWithInfoHeader contains the fixed length fields of FileNameWithInfo
@@ -27,18 +29,25 @@ func (f *fileNameWithInfoHeader) nameLen() int {
 }
 
 // Read implements io.Reader for FileNameWithInfo
-func (f *FileNameWithInfo) Read(b []byte) (int, error) {
-	return copy(b,
-		slices.Concat(
-			f.Type[:],
-			f.Creator[:],
-			f.FileSize[:],
-			f.RSVD[:],
-			f.NameScript[:],
-			f.NameSize[:],
-			f.Name,
-		),
-	), io.EOF
+func (f *FileNameWithInfo) Read(p []byte) (int, error) {
+	buf := slices.Concat(
+		f.Type[:],
+		f.Creator[:],
+		f.FileSize[:],
+		f.RSVD[:],
+		f.NameScript[:],
+		f.NameSize[:],
+		f.Name,
+	)
+
+	if f.readOffset >= len(buf) {
+		return 0, io.EOF // All bytes have been read
+	}
+
+	n := copy(p, buf[f.readOffset:])
+	f.readOffset += n
+
+	return n, nil
 }
 
 func (f *FileNameWithInfo) Write(p []byte) (int, error) {
