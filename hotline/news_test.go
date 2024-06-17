@@ -1,7 +1,7 @@
 package hotline
 
 import (
-	"reflect"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -60,8 +60,8 @@ func TestNewsCategoryListData15_MarshalBinary(t *testing.T) {
 				0x00, 0x03,
 				0x00, 0x01,
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-				0x00, 0x00, 0x00, 0x01,
-				0x00, 0x00, 0x00, 0x02,
+				0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00,
 				0x03,
 				0x66, 0x6f, 0x6f,
 			},
@@ -90,7 +90,7 @@ func TestNewsCategoryListData15_MarshalBinary(t *testing.T) {
 				t.Errorf("MarshalBinary() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(gotData, tt.wantData) {
+			if !assert.Equal(t, tt.wantData, gotData) {
 				t.Errorf("MarshalBinary() gotData = %v, want %v", gotData, tt.wantData)
 			}
 		})
