@@ -246,7 +246,7 @@ func (f *fileWrapper) flattenedFileObject() (*flattenedFileObject, error) {
 
 		_, err = io.Copy(&f.ffo.FlatFileInformationFork, bytes.NewReader(b))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error copying FlatFileInformationFork: %w", err)
 		}
 
 	} else {

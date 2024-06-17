@@ -81,7 +81,7 @@ func (cc *ClientConn) handleTransaction(transaction Transaction) error {
 
 		transactions, err := handler.Handler(cc, &transaction)
 		if err != nil {
-			return err
+			return fmt.Errorf("error handling transaction: %w", err)
 		}
 		for _, t := range transactions {
 			cc.Server.outbox <- t

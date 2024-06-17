@@ -13,6 +13,8 @@ type flattenedFileObject struct {
 	FlatFileInformationFork       FlatFileInformationFork
 	FlatFileDataForkHeader        FlatFileForkHeader
 	FlatFileResForkHeader         FlatFileForkHeader
+
+	readOffset int // Internal offset to track read progress
 }
 
 // FlatFileHeader is the first section of a "Flattened File Object".  All fields have static values.
@@ -37,6 +39,8 @@ type FlatFileInformationFork struct {
 	Name             []byte // File name
 	CommentSize      []byte // Length of the comment
 	Comment          []byte // File comment
+
+	readOffset int // Internal offset to track read progress
 }
 
 func NewFlatFileInformationFork(fileName string, modifyTime []byte, typeSignature string, creatorSignature string) FlatFileInformationFork {
@@ -133,23 +137,30 @@ type FlatFileForkHeader struct {
 }
 
 func (ffif *FlatFileInformationFork) Read(p []byte) (int, error) {
-	return copy(p,
-		slices.Concat(
-			ffif.Platform,
-			ffif.TypeSignature,
-			ffif.CreatorSignature,
-			ffif.Flags,
-			ffif.PlatformFlags,
-			ffif.RSVD,
-			ffif.CreateDate,
-			ffif.ModifyDate,
-			ffif.NameScript,
-			ffif.ReadNameSize(),
-			ffif.Name,
-			ffif.CommentSize,
-			ffif.Comment,
-		),
-	), io.EOF
+	buf := slices.Concat(
+		ffif.Platform,
+		ffif.TypeSignature,
+		ffif.CreatorSignature,
+		ffif.Flags,
+		ffif.PlatformFlags,
+		ffif.RSVD,
+		ffif.CreateDate,
+		ffif.ModifyDate,
+		ffif.NameScript,
+		ffif.ReadNameSize(),
+		ffif.Name,
+		ffif.CommentSize,
+		ffif.Comment,
+	)
+
+	if ffif.readOffset >= len(buf) {
+		return 0, io.EOF // All bytes have been read
+	}
+
+	n := copy(p, buf[ffif.readOffset:])
+	ffif.readOffset += n
+
+	return n, nil
 }
 
 // Write implements the io.Writer interface for FlatFileInformationFork
@@ -173,7 +184,6 @@ func (ffif *FlatFileInformationFork) Write(p []byte) (int, error) {
 	if len(p) > int(total) {
 		ffif.CommentSize = p[total : total+2]
 		commentLen := binary.BigEndian.Uint16(ffif.CommentSize)
-
 		commentStartPos := int(total) + 2
 		commentEndPos := int(total) + 2 + int(commentLen)
 
@@ -182,7 +192,7 @@ func (ffif *FlatFileInformationFork) Write(p []byte) (int, error) {
 		total = uint16(commentEndPos)
 	}
 
-	return int(total), nil
+	return len(p), nil
 }
 
 func (ffif *FlatFileInformationFork) UnmarshalBinary(b []byte) error {
@@ -217,7 +227,7 @@ func (ffif *FlatFileInformationFork) UnmarshalBinary(b []byte) error {
 
 // Read implements the io.Reader interface for flattenedFileObject
 func (ffo *flattenedFileObject) Read(p []byte) (int, error) {
-	return copy(p, slices.Concat(
+	buf := slices.Concat(
 		ffo.FlatFileHeader.Format[:],
 		ffo.FlatFileHeader.Version[:],
 		ffo.FlatFileHeader.RSVD[:],
@@ -243,8 +253,16 @@ func (ffo *flattenedFileObject) Read(p []byte) (int, error) {
 		ffo.FlatFileDataForkHeader.CompressionType[:],
 		ffo.FlatFileDataForkHeader.RSVD[:],
 		ffo.FlatFileDataForkHeader.DataSize[:],
-	),
-	), io.EOF
+	)
+
+	if ffo.readOffset >= len(buf) {
+		return 0, io.EOF // All bytes have been read
+	}
+
+	n := copy(p, buf[ffo.readOffset:])
+	ffo.readOffset += n
+
+	return n, nil
 }
 
 func (ffo *flattenedFileObject) ReadFrom(r io.Reader) (int64, error) {

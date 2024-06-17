@@ -3,6 +3,7 @@ package hotline
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -36,10 +37,11 @@ const maxFileSize = 4294967296
 func getFileNameList(path string, ignoreList []string) (fields []Field, err error) {
 	files, err := os.ReadDir(path)
 	if err != nil {
-		return fields, nil
+		return fields, fmt.Errorf("error reading path: %s: %w", path, err)
 	}
 
-	for _, file := range files {
+	for i, _ := range files {
+		file := files[i]
 		var fnwi FileNameWithInfo
 
 		if ignoreFile(file.Name(), ignoreList) {
@@ -50,14 +52,14 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 
 		fileInfo, err := file.Info()
 		if err != nil {
-			return fields, err
+			return fields, fmt.Errorf("error getting file info: %s: %w", file.Name(), err)
 		}
 
 		// Check if path is a symlink.  If so, follow it.
 		if fileInfo.Mode()&os.ModeSymlink != 0 {
 			resolvedPath, err := os.Readlink(filepath.Join(path, file.Name()))
 			if err != nil {
-				return fields, err
+				return fields, fmt.Errorf("error following symlink: %s: %w", resolvedPath, err)
 			}
 
 			rFile, err := os.Stat(resolvedPath)
@@ -92,7 +94,7 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 		} else if file.IsDir() {
 			dir, err := os.ReadDir(filepath.Join(path, file.Name()))
 			if err != nil {
-				return fields, err
+				return fields, fmt.Errorf("readDir: %w", err)
 			}
 
 			var c uint32
@@ -113,7 +115,7 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 
 			hlFile, err := newFileWrapper(&OSFileStore{}, path+"/"+file.Name(), 0)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("newFileWrapper: %w", err)
 			}
 
 			copy(fnwi.FileSize[:], hlFile.totalSize())
@@ -135,7 +137,7 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 
 		b, err := io.ReadAll(&fnwi)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error io.ReadAll: %w", err)
 		}
 		fields = append(fields, NewField(FieldFileNameWithInfo, b))
 	}

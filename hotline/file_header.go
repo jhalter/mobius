@@ -10,6 +10,8 @@ type FileHeader struct {
 	Size     [2]byte // Total size of FileHeader payload
 	Type     [2]byte // 0 for file, 1 for dir
 	FilePath []byte  // encoded file path
+
+	readOffset int // Internal offset to track read progress
 }
 
 func NewFileHeader(fileName string, isDir bool) FileHeader {
@@ -28,10 +30,18 @@ func NewFileHeader(fileName string, isDir bool) FileHeader {
 }
 
 func (fh *FileHeader) Read(p []byte) (int, error) {
-	return copy(p, slices.Concat(
+	buf := slices.Concat(
 		fh.Size[:],
 		fh.Type[:],
 		fh.FilePath,
-	),
-	), io.EOF
+	)
+
+	if fh.readOffset >= len(buf) {
+		return 0, io.EOF // All bytes have been read
+	}
+
+	n := copy(p, buf[fh.readOffset:])
+	fh.readOffset += n
+
+	return n, nil
 }

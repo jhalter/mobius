@@ -1763,13 +1763,13 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 		nil,
 	)
 	if err != nil {
-		return res, err
+		return res, fmt.Errorf("error reading file path: %w", err)
 	}
 
 	var fp FilePath
 	if t.GetField(FieldFilePath).Data != nil {
 		if _, err = fp.Write(t.GetField(FieldFilePath).Data); err != nil {
-			return res, err
+			return res, fmt.Errorf("error writing file path: %w", err)
 		}
 	}
 
@@ -1781,7 +1781,7 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 
 	fileNames, err := getFileNameList(fullPath, cc.Server.Config.IgnoreFiles)
 	if err != nil {
-		return res, err
+		return res, fmt.Errorf("getFileNameList: %w", err)
 	}
 
 	res = append(res, cc.NewReply(t, fileNames...))
