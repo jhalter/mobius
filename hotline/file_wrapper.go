@@ -114,7 +114,7 @@ func (f *fileWrapper) rsrcForkWriter() (io.WriteCloser, error) {
 }
 
 func (f *fileWrapper) infoForkWriter() (io.WriteCloser, error) {
-	file, err := os.OpenFile(f.infoPath, os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(f.infoPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return nil, err
 	}
