@@ -118,8 +118,8 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 			}
 
 			copy(fnwi.FileSize[:], hlFile.totalSize())
-			copy(fnwi.Type[:], hlFile.ffo.FlatFileInformationFork.TypeSignature)
-			copy(fnwi.Creator[:], hlFile.ffo.FlatFileInformationFork.CreatorSignature)
+			copy(fnwi.Type[:], hlFile.ffo.FlatFileInformationFork.TypeSignature[:])
+			copy(fnwi.Creator[:], hlFile.ffo.FlatFileInformationFork.CreatorSignature[:])
 		}
 
 		strippedName := strings.ReplaceAll(file.Name(), ".incomplete", "")

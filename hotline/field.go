@@ -80,17 +80,11 @@ type requiredField struct {
 }
 
 func NewField(id uint16, data []byte) Field {
-	idBytes := make([]byte, 2)
-	binary.BigEndian.PutUint16(idBytes, id)
+	f := Field{Data: data}
+	binary.BigEndian.PutUint16(f.ID[:], id)
+	binary.BigEndian.PutUint16(f.FieldSize[:], uint16(len(data)))
 
-	bs := make([]byte, 2)
-	binary.BigEndian.PutUint16(bs, uint16(len(data)))
-
-	return Field{
-		ID:        [2]byte(idBytes),
-		FieldSize: [2]byte(bs),
-		Data:      data,
-	}
+	return f
 }
 
 // fieldScanner implements bufio.SplitFunc for parsing byte slices into complete tokens

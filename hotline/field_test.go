@@ -99,3 +99,90 @@ func Test_fieldScanner(t *testing.T) {
 		})
 	}
 }
+
+func TestField_Read(t *testing.T) {
+	type fields struct {
+		ID         [2]byte
+		FieldSize  [2]byte
+		Data       []byte
+		readOffset int
+	}
+	type args struct {
+		p []byte
+	}
+	tests := []struct {
+		name      string
+		fields    fields
+		args      args
+		want      int
+		wantErr   assert.ErrorAssertionFunc
+		wantBytes []byte
+	}{
+		{
+			name: "returns field bytes",
+			fields: fields{
+				ID:        [2]byte{0x00, 0x62},
+				FieldSize: [2]byte{0x00, 0x03},
+				Data:      []byte("hai!"),
+			},
+			args: args{
+				p: make([]byte, 512),
+			},
+			want:    8,
+			wantErr: assert.NoError,
+			wantBytes: []byte{
+				0x00, 0x62,
+				0x00, 0x03,
+				0x68, 0x61, 0x69, 0x21,
+			},
+		},
+		{
+			name: "returns field bytes from readOffset",
+			fields: fields{
+				ID:         [2]byte{0x00, 0x62},
+				FieldSize:  [2]byte{0x00, 0x03},
+				Data:       []byte("hai!"),
+				readOffset: 4,
+			},
+			args: args{
+				p: make([]byte, 512),
+			},
+			want:    4,
+			wantErr: assert.NoError,
+			wantBytes: []byte{
+				0x68, 0x61, 0x69, 0x21,
+			},
+		},
+		{
+			name: "returns io.EOF when all bytes read",
+			fields: fields{
+				ID:         [2]byte{0x00, 0x62},
+				FieldSize:  [2]byte{0x00, 0x03},
+				Data:       []byte("hai!"),
+				readOffset: 8,
+			},
+			args: args{
+				p: make([]byte, 512),
+			},
+			want:      0,
+			wantErr:   assert.Error,
+			wantBytes: []byte{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &Field{
+				ID:         tt.fields.ID,
+				FieldSize:  tt.fields.FieldSize,
+				Data:       tt.fields.Data,
+				readOffset: tt.fields.readOffset,
+			}
+			got, err := f.Read(tt.args.p)
+			if !tt.wantErr(t, err, fmt.Sprintf("Read(%v)", tt.args.p)) {
+				return
+			}
+			assert.Equalf(t, tt.want, got, "Read(%v)", tt.args.p)
+			assert.Equalf(t, tt.wantBytes, tt.args.p[:got], "Read(%v)", tt.args.p)
+		})
+	}
+}

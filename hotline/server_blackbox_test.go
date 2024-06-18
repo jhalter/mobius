@@ -45,7 +45,7 @@ func tranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
 			if field.ID == [2]byte{0x00, 0x72} { // FieldChatID
 				continue
 			}
-			fs = append(fs, field)
+			trans.Fields = append(trans.Fields, field)
 		}
 		trans.Fields = fs
 		newT1 = append(newT1, trans)
@@ -61,7 +61,7 @@ func tranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
 			if field.ID == [2]byte{0x00, 0x72} { // FieldChatID
 				continue
 			}
-			fs = append(fs, field)
+			trans.Fields = append(trans.Fields, field)
 		}
 		trans.Fields = fs
 		newT2 = append(newT2, trans)

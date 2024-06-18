@@ -135,6 +135,7 @@ func GetListing(addr string) ([]ServerRecord, error) {
 	var servers []ServerRecord
 	for {
 		scanner.Scan()
+
 		var srv ServerRecord
 		_, err = srv.Write(scanner.Bytes())
 		if err != nil {

@@ -114,7 +114,7 @@ func TestServer_handleFileTransfer(t *testing.T) {
 				Logger: NewTestLogger(),
 				Stats:  &Stats{},
 				fileTransfers: map[[4]byte]*FileTransfer{
-					[4]byte{0, 0, 0, 5}: {
+					{0, 0, 0, 5}: {
 						ReferenceNumber: []byte{0, 0, 0, 5},
 						Type:            FileDownload,
 						FileName:        []byte("testfile-8b"),

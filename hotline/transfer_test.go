@@ -126,7 +126,7 @@ func Test_receiveFile(t *testing.T) {
 							ForkCount: [2]byte{0, 2},
 						},
 						FlatFileInformationForkHeader: FlatFileForkHeader{},
-						FlatFileInformationFork:       NewFlatFileInformationFork("testfile.txt", make([]byte, 8), "TEXT", "TEXT"),
+						FlatFileInformationFork:       NewFlatFileInformationFork("testfile.txt", [8]byte{}, "TEXT", "TEXT"),
 						FlatFileDataForkHeader: FlatFileForkHeader{
 							ForkType:        [4]byte{0x4d, 0x41, 0x43, 0x52}, // DATA
 							CompressionType: [4]byte{0, 0, 0, 0},

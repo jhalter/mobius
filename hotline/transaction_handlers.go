@@ -373,6 +373,8 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 	return res, err
 }
 
+var fileTypeFLDR = [4]byte{0x66, 0x6c, 0x64, 0x72}
+
 func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	fileName := t.GetField(FieldFileName).Data
 	filePath := t.GetField(FieldFilePath).Data
@@ -396,9 +398,9 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		NewField(FieldFileName, []byte(encodedName)),
 		NewField(FieldFileTypeString, fw.ffo.FlatFileInformationFork.friendlyType()),
 		NewField(FieldFileCreatorString, fw.ffo.FlatFileInformationFork.friendlyCreator()),
-		NewField(FieldFileType, fw.ffo.FlatFileInformationFork.TypeSignature),
-		NewField(FieldFileCreateDate, fw.ffo.FlatFileInformationFork.CreateDate),
-		NewField(FieldFileModifyDate, fw.ffo.FlatFileInformationFork.ModifyDate),
+		NewField(FieldFileType, fw.ffo.FlatFileInformationFork.TypeSignature[:]),
+		NewField(FieldFileCreateDate, fw.ffo.FlatFileInformationFork.CreateDate[:]),
+		NewField(FieldFileModifyDate, fw.ffo.FlatFileInformationFork.ModifyDate[:]),
 	}
 
 	// Include the optional FileComment field if there is a comment.
@@ -407,7 +409,7 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	}
 
 	// Include the FileSize field for files.
-	if !bytes.Equal(fw.ffo.FlatFileInformationFork.TypeSignature, []byte{0x66, 0x6c, 0x64, 0x72}) {
+	if fw.ffo.FlatFileInformationFork.TypeSignature != fileTypeFLDR {
 		fields = append(fields, NewField(FieldFileSize, fw.totalSize()))
 	}
 
@@ -773,7 +775,6 @@ func HandleListUsers(cc *ClientConn, t *Transaction) (res []Transaction, err err
 // performed.  This seems to be the only place in the Hotline protocol where a data field contains another data field.
 func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	for _, field := range t.Fields {
-
 		var subFields []Field
 
 		// Create a new scanner for parsing incoming bytes into transaction tokens
@@ -1937,7 +1938,6 @@ func HandleJoinChat(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 
 	replyFields := []Field{NewField(FieldChatSubject, []byte(privChat.Subject))}
 	for _, c := range sortedClients(privChat.ClientConn) {
-
 		b, err := io.ReadAll(&User{
 			ID:    *c.ID,
 			Icon:  c.Icon,

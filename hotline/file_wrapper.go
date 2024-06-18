@@ -248,24 +248,21 @@ func (f *fileWrapper) flattenedFileObject() (*flattenedFileObject, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error copying FlatFileInformationFork: %w", err)
 		}
-
 	} else {
 		f.ffo.FlatFileInformationFork = FlatFileInformationFork{
-			Platform:         []byte("AMAC"), // TODO: Remove hardcode to support "AWIN" Platform (maybe?)
-			TypeSignature:    []byte(ft.TypeCode),
-			CreatorSignature: []byte(ft.CreatorCode),
-			Flags:            []byte{0, 0, 0, 0},
-			PlatformFlags:    []byte{0, 0, 1, 0}, // TODO: What is this?
-			RSVD:             make([]byte, 32),
-			CreateDate:       mTime[:], // some filesystems don't support createTime
-			ModifyDate:       mTime[:],
-			NameScript:       []byte{0, 0},
+			Platform:         [4]byte{0x41, 0x4D, 0x41, 0x43}, // "AMAC" TODO: Remove hardcode to support "AWIN" Platform (maybe?)
+			TypeSignature:    [4]byte([]byte(ft.TypeCode)),
+			CreatorSignature: [4]byte([]byte(ft.CreatorCode)),
+			PlatformFlags:    [4]byte{0, 0, 1, 0}, // TODO: What is this?
+			CreateDate:       mTime,               // some filesystems don't support createTime
+			ModifyDate:       mTime,
 			Name:             []byte(f.name),
-			NameSize:         []byte{0, 0},
-			CommentSize:      []byte{0, 0},
 			Comment:          []byte{},
 		}
-		binary.BigEndian.PutUint16(f.ffo.FlatFileInformationFork.NameSize, uint16(len(f.name)))
+
+		ns := make([]byte, 2)
+		binary.BigEndian.PutUint16(ns, uint16(len(f.name)))
+		f.ffo.FlatFileInformationFork.NameSize = [2]byte(ns[:])
 	}
 
 	f.ffo.FlatFileInformationForkHeader = FlatFileForkHeader{
