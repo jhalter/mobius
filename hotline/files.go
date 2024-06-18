@@ -40,8 +40,7 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 		return fields, fmt.Errorf("error reading path: %s: %w", path, err)
 	}
 
-	for i, _ := range files {
-		file := files[i]
+	for _, file := range files {
 		var fnwi FileNameWithInfo
 
 		if ignoreFile(file.Name(), ignoreList) {

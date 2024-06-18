@@ -1,10 +1,10 @@
 package hotline
 
 import (
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"math"
-	"math/rand"
 	"path/filepath"
 	"sync"
 )
@@ -51,7 +51,7 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 
 func (cc *ClientConn) newFileTransfer(transferType int, fileName, filePath, size []byte) *FileTransfer {
 	var transactionRef [4]byte
-	rand.Read(transactionRef[:])
+	_, _ = rand.Read(transactionRef[:])
 
 	ft := &FileTransfer{
 		FileName:         fileName,

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -15,7 +16,6 @@ import (
 	"log"
 	"log/slog"
 	"math/big"
-	"math/rand"
 	"net"
 	"os"
 	"path"
@@ -760,7 +760,8 @@ func (s *Server) NewPrivateChat(cc *ClientConn) []byte {
 	defer s.PrivateChatsMu.Unlock()
 
 	randID := make([]byte, 4)
-	rand.Read(randID)
+	_, _ = rand.Read(randID)
+
 	data := binary.BigEndian.Uint32(randID)
 
 	s.PrivateChats[data] = &PrivateChat{

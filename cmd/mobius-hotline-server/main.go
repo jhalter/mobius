@@ -99,7 +99,7 @@ func main() {
 	}
 
 	if _, err := os.Stat(*configDir); os.IsNotExist(err) {
-		slogger.Error(fmt.Sprintf("Configuration directory not found.  Correct the path or re-run with -init to generate initial config."))
+		slogger.Error("Configuration directory not found.  Correct the path or re-run with -init to generate initial config.")
 		os.Exit(1)
 	}
 
@@ -145,7 +145,9 @@ func (sh *statHandler) RenderStats(w http.ResponseWriter, _ *http.Request) {
 	_, _ = io.WriteString(w, string(u))
 }
 
-func defaultConfigPath() (cfgPath string) {
+func defaultConfigPath() string {
+	var cfgPath string
+
 	switch runtime.GOOS {
 	case "windows":
 		cfgPath = "config/"

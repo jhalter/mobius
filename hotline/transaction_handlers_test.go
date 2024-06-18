@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"io"
 	"io/fs"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -109,15 +108,13 @@ func TestHandleSetChatSubject(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		rand.Seed(1) // reset seed between tests to make transaction IDs predictable
-
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := HandleSetChatSubject(tt.args.cc, tt.args.t)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("HandleSetChatSubject() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !assert.Equal(t, tt.want, got) {
+			if !tranAssertEqual(t, tt.want, got) {
 				t.Errorf("HandleSetChatSubject() got = %v, want %v", got, tt.want)
 			}
 		})
@@ -195,14 +192,13 @@ func TestHandleLeaveChat(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		rand.Seed(1)
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := HandleLeaveChat(tt.args.cc, tt.args.t)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("HandleLeaveChat() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !assert.Equal(t, tt.want, got) {
+			if !tranAssertEqual(t, tt.want, got) {
 				t.Errorf("HandleLeaveChat() got = %v, want %v", got, tt.want)
 			}
 		})
@@ -724,8 +720,6 @@ func TestHandleChatSend(t *testing.T) {
 }
 
 func TestHandleGetFileInfo(t *testing.T) {
-	rand.Seed(1) // reset seed between tests to make transaction IDs predictable
-
 	type args struct {
 		cc *ClientConn
 		t  *Transaction
@@ -781,8 +775,6 @@ func TestHandleGetFileInfo(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rand.Seed(1) // reset seed between tests to make transaction IDs predictable
-
 			gotRes, err := HandleGetFileInfo(tt.args.cc, tt.args.t)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("HandleGetFileInfo() error = %v, wantErr %v", err, tt.wantErr)
@@ -793,7 +785,8 @@ func TestHandleGetFileInfo(t *testing.T) {
 			// TODO: revisit how to test this by mocking the stat calls
 			gotRes[0].Fields[4].Data = make([]byte, 8)
 			gotRes[0].Fields[5].Data = make([]byte, 8)
-			if !assert.Equal(t, tt.wantRes, gotRes) {
+
+			if !tranAssertEqual(t, tt.wantRes, gotRes) {
 				t.Errorf("HandleGetFileInfo() gotRes = %v, want %v", gotRes, tt.wantRes)
 			}
 		})
@@ -1166,7 +1159,6 @@ func TestHandleUploadFile(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rand.Seed(1)
 			gotRes, err := HandleUploadFile(tt.args.cc, tt.args.t)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("HandleUploadFile() error = %v, wantErr %v", err, tt.wantErr)
@@ -3592,7 +3584,6 @@ func TestHandleInviteNewChat(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rand.Seed(1)
 			gotRes, err := HandleInviteNewChat(tt.args.cc, tt.args.t)
 			if !tt.wantErr(t, err, fmt.Sprintf("HandleInviteNewChat(%v, %v)", tt.args.cc, tt.args.t)) {
 				return
@@ -3694,6 +3685,78 @@ func TestHandleGetNewsArtNameList(t *testing.T) {
 					ErrorCode: []byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to read news.")),
+					},
+				},
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "when user has required access",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							bits.Set(accessNewsReadArt)
+							return bits
+						}(),
+					},
+					Server: &Server{
+						ThreadedNews: &ThreadedNews{
+							Categories: map[string]NewsCategoryListData15{
+								"Example Category": {
+									Type: [2]byte{0, 2},
+									Name: "",
+									Articles: map[uint32]*NewsArtData{
+										uint32(1): {
+											Title:  "testTitle",
+											Poster: "testPoster",
+											Data:   "testBody",
+										},
+									},
+									SubCats:  nil,
+									GUID:     [16]byte{},
+									AddSN:    [4]byte{},
+									DeleteSN: [4]byte{},
+								},
+							},
+						},
+
+						//Accounts: map[string]*Account{
+						//	"guest": {
+						//		Name:     "guest",
+						//		Login:    "guest",
+						//		Password: "zz",
+						//		Access:   accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
+						//	},
+						//},
+					},
+				},
+				t: NewTransaction(
+					TranGetNewsArtNameList,
+					&[]byte{0, 1},
+					//  00000000  00 01 00 00 10 45 78 61  6d 70 6c 65 20 43 61 74  |.....Example Cat|
+					//  00000010  65 67 6f 72 79                                    |egory|
+					NewField(FieldNewsPath, []byte{
+						0x00, 0x01, 0x00, 0x00, 0x10, 0x45, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x20, 0x43, 0x61, 0x74, 0x65, 0x67, 0x6f, 0x72, 0x79,
+					}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      []byte{0, 0},
+					ErrorCode: []byte{0, 0, 0, 0},
+					Fields: []Field{
+						NewField(FieldNewsArtListData, []byte{
+							0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
+							0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+							0x09, 0x74, 0x65, 0x73, 0x74, 0x54, 0x69, 0x74, 0x6c, 0x65, 0x0a, 0x74, 0x65, 0x73, 0x74, 0x50,
+							0x6f, 0x73, 0x74, 0x65, 0x72, 0x0a, 0x74, 0x65, 0x78, 0x74, 0x2f, 0x70, 0x6c, 0x61, 0x69, 0x6e,
+							0x00, 0x08,
+						},
+						),
 					},
 				},
 			},

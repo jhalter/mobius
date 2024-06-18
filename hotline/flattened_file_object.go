@@ -189,7 +189,7 @@ func (ffif *FlatFileInformationFork) Write(p []byte) (int, error) {
 
 		ffif.Comment = p[commentStartPos:commentEndPos]
 
-		total = uint16(commentEndPos)
+		//total = uint16(commentEndPos)
 	}
 
 	return len(p), nil

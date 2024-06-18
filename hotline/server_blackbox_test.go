@@ -30,7 +30,7 @@ func assertTransferBytesEqual(t *testing.T, wantHexDump string, got []byte) bool
 	return assert.Equal(t, wantHexDump, hex.Dump(clean))
 }
 
-// tranAssertEqual compares equality of transactions slices after stripping out the random ID
+// tranAssertEqual compares equality of transactions slices after stripping out the random transaction ID
 func tranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
 	var newT1 []Transaction
 	var newT2 []Transaction
@@ -39,7 +39,10 @@ func tranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
 		trans.ID = []byte{0, 0, 0, 0}
 		var fs []Field
 		for _, field := range trans.Fields {
-			if field.ID == [2]byte{0x00, 0x6b} {
+			if field.ID == [2]byte{0x00, 0x6b} { // FieldRefNum
+				continue
+			}
+			if field.ID == [2]byte{0x00, 0x72} { // FieldChatID
 				continue
 			}
 			fs = append(fs, field)
@@ -52,7 +55,10 @@ func tranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
 		trans.ID = []byte{0, 0, 0, 0}
 		var fs []Field
 		for _, field := range trans.Fields {
-			if field.ID == [2]byte{0x00, 0x6b} {
+			if field.ID == [2]byte{0x00, 0x6b} { // FieldRefNum
+				continue
+			}
+			if field.ID == [2]byte{0x00, 0x72} { // FieldChatID
 				continue
 			}
 			fs = append(fs, field)

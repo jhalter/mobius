@@ -1256,8 +1256,9 @@ func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction, err e
 func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
 	if !cc.Authorize(accessNewsReadArt) {
 		res = append(res, cc.NewErrReply(t, "You are not allowed to read news."))
-		return res, err
+		return res, nil
 	}
+
 	pathStrs := ReadNewsPath(t.GetField(FieldNewsPath).Data)
 
 	var cat NewsCategoryListData15
@@ -1272,11 +1273,11 @@ func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction
 
 	b, err := io.ReadAll(&nald)
 	if err != nil {
-
+		return res, fmt.Errorf("error loading news articles: %w", err)
 	}
 
 	res = append(res, cc.NewReply(t, NewField(FieldNewsArtListData, b)))
-	return res, err
+	return res, nil
 }
 
 // HandleGetNewsArtData requests information about the specific news article.
