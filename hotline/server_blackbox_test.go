@@ -36,7 +36,7 @@ func tranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
 	var newT2 []Transaction
 
 	for _, trans := range tran1 {
-		trans.ID = []byte{0, 0, 0, 0}
+		trans.ID = [4]byte{0, 0, 0, 0}
 		var fs []Field
 		for _, field := range trans.Fields {
 			if field.ID == [2]byte{0x00, 0x6b} { // FieldRefNum
@@ -52,7 +52,7 @@ func tranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
 	}
 
 	for _, trans := range tran2 {
-		trans.ID = []byte{0, 0, 0, 0}
+		trans.ID = [4]byte{0, 0, 0, 0}
 		var fs []Field
 		for _, field := range trans.Fields {
 			if field.ID == [2]byte{0x00, 0x6b} { // FieldRefNum

@@ -67,11 +67,8 @@ func TestHandleSetChatSubject(t *testing.T) {
 					},
 				},
 				t: &Transaction{
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x6a},
-					ID:        []byte{0, 0, 0, 1},
-					ErrorCode: []byte{0, 0, 0, 0},
+					Type: [2]byte{0, 0x6a},
+					ID:   [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0, 0, 0, 1}),
 						NewField(FieldChatSubject, []byte("Test Subject")),
@@ -80,24 +77,16 @@ func TestHandleSetChatSubject(t *testing.T) {
 			},
 			want: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x77},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					Type:     [2]byte{0, 0x77},
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0, 0, 0, 1}),
 						NewField(FieldChatSubject, []byte("Test Subject")),
 					},
 				},
 				{
-					clientID:  &[]byte{0, 2},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x77},
-					ID:        []byte{0xf0, 0xc5, 0x34, 0x1e}, // Random ID from rand.Seed(1)
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 2},
+					Type:     [2]byte{0, 0x77},
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0, 0, 0, 1}),
 						NewField(FieldChatSubject, []byte("Test Subject")),
@@ -176,12 +165,10 @@ func TestHandleLeaveChat(t *testing.T) {
 			},
 			want: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x76},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					Flags:    0x00,
+					IsReply:  0x00,
+					Type:     [2]byte{0, 0x76},
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0, 0, 0, 1}),
 						NewField(FieldUserID, []byte{0, 2}),
@@ -239,19 +226,12 @@ func TestHandleGetUserNameList(t *testing.T) {
 						},
 					},
 				},
-				t: &Transaction{
-					ID:   []byte{0, 0, 0, 1},
-					Type: []byte{0, 1},
-				},
+				t: &Transaction{},
 			},
 			want: []Transaction{
 				{
-					clientID:  &[]byte{1, 1},
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 1},
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{1, 1},
+					IsReply:  0x01,
 					Fields: []Field{
 						NewField(
 							FieldUsernameWithInfo,
@@ -327,23 +307,19 @@ func TestHandleChatSend(t *testing.T) {
 			},
 			want: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x6a},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					Flags:    0x00,
+					IsReply:  0x00,
+					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldData, []byte{0x0d, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x01, 0x3a, 0x20, 0x20, 0x68, 0x61, 0x69}),
 					},
 				},
 				{
-					clientID:  &[]byte{0, 2},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x6a},
-					ID:        []byte{0xf0, 0xc5, 0x34, 0x1e}, // Random ID from rand.Seed(1)
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 2},
+					Flags:    0x00,
+					IsReply:  0x00,
+					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldData, []byte{0x0d, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x01, 0x3a, 0x20, 0x20, 0x68, 0x61, 0x69}),
 					},
@@ -389,23 +365,15 @@ func TestHandleChatSend(t *testing.T) {
 			},
 			want: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x6a},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldData, []byte{0x0d, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x01, 0x3a, 0x20, 0x20, 0x68, 0x61, 0x69}),
 					},
 				},
 				{
-					clientID:  &[]byte{0, 2},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x6a},
-					ID:        []byte{0xf0, 0xc5, 0x34, 0x1e}, // Random ID from rand.Seed(1)
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 2},
+					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldData, []byte{0x0d, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x01, 0x3a, 0x20, 0x20, 0x68, 0x61, 0x69}),
 					},
@@ -434,11 +402,8 @@ func TestHandleChatSend(t *testing.T) {
 			},
 			want: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to participate in chat.")),
 					},
@@ -484,23 +449,19 @@ func TestHandleChatSend(t *testing.T) {
 			},
 			want: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x6a},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					Flags:    0x00,
+					IsReply:  0x00,
+					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldData, []byte("\r*** Testy McTest performed action")),
 					},
 				},
 				{
-					clientID:  &[]byte{0, 2},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x6a},
-					ID:        []byte{0xf0, 0xc5, 0x34, 0x1e},
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 2},
+					Flags:    0x00,
+					IsReply:  0x00,
+					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldData, []byte("\r*** Testy McTest performed action")),
 					},
@@ -546,23 +507,15 @@ func TestHandleChatSend(t *testing.T) {
 			},
 			want: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x6a},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldData, []byte("\r Testy McTest:  hello")),
 					},
 				},
 				{
-					clientID:  &[]byte{0, 2},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x6a},
-					ID:        []byte{0xf0, 0xc5, 0x34, 0x1e},
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 2},
+					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldData, []byte("\r Testy McTest:  hello")),
 					},
@@ -610,12 +563,8 @@ func TestHandleChatSend(t *testing.T) {
 			},
 			want: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x6a},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldData, []byte{0x0d, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x01, 0x3a, 0x20, 0x20, 0x68, 0x61, 0x69}),
 					},
@@ -679,24 +628,16 @@ func TestHandleChatSend(t *testing.T) {
 			},
 			want: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x6a},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0, 0, 0, 1}),
 						NewField(FieldData, []byte{0x0d, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x01, 0x3a, 0x20, 0x20, 0x68, 0x61, 0x69}),
 					},
 				},
 				{
-					clientID:  &[]byte{0, 2},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x6a},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 2},
+					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0, 0, 0, 1}),
 						NewField(FieldData, []byte{0x0d, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x01, 0x3a, 0x20, 0x20, 0x68, 0x61, 0x69}),
@@ -753,12 +694,9 @@ func TestHandleGetFileInfo(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					IsReply:  0x01,
+					Type:     [2]byte{0, 0},
 					Fields: []Field{
 						NewField(FieldFileName, []byte("testfile.txt")),
 						NewField(FieldFileTypeString, []byte("Text File")),
@@ -822,11 +760,8 @@ func TestHandleNewFolder(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to create folders.")),
 					},
@@ -871,12 +806,8 @@ func TestHandleNewFolder(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					IsReply:  0x01,
 				},
 			},
 			wantErr: false,
@@ -912,12 +843,8 @@ func TestHandleNewFolder(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					IsReply:  0x01,
 				},
 			},
 			wantErr: false,
@@ -988,12 +915,8 @@ func TestHandleNewFolder(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					IsReply:  0x01,
 				},
 			}, wantErr: false,
 		},
@@ -1037,12 +960,8 @@ func TestHandleNewFolder(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42}, // Random ID from rand.Seed(1)
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					IsReply:  0x01,
 				},
 			}, wantErr: false,
 		},
@@ -1108,11 +1027,7 @@ func TestHandleUploadFile(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 0},
+					IsReply: 0x01,
 					Fields: []Field{
 						NewField(FieldRefNum, []byte{0x52, 0xfd, 0xfc, 0x07}), // rand.Seed(1)
 					},
@@ -1144,11 +1059,8 @@ func TestHandleUploadFile(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to upload files.")), // rand.Seed(1)
 					},
@@ -1222,12 +1134,8 @@ func TestHandleMakeAlias(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 0},
-					Fields:    []Field(nil),
+					IsReply: 0x01,
+					Fields:  []Field(nil),
 				},
 			},
 			wantErr: false,
@@ -1273,11 +1181,8 @@ func TestHandleMakeAlias(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("Error creating alias")),
 					},
@@ -1324,11 +1229,8 @@ func TestHandleMakeAlias(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to make aliases.")),
 					},
@@ -1390,11 +1292,7 @@ func TestHandleGetUser(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 0},
+					IsReply: 0x01,
 					Fields: []Field{
 						NewField(FieldUserName, []byte("Guest")),
 						NewField(FieldUserLogin, encodeString([]byte("guest"))),
@@ -1426,11 +1324,8 @@ func TestHandleGetUser(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to view accounts.")),
 					},
@@ -1462,9 +1357,8 @@ func TestHandleGetUser(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					Type:      [2]byte{0, 0},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("Account does not exist.")),
 					},
@@ -1530,12 +1424,10 @@ func TestHandleDeleteUser(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 0},
-					Fields:    []Field(nil),
+					Flags:   0x00,
+					IsReply: 0x01,
+					Type:    [2]byte{0, 0},
+					Fields:  []Field(nil),
 				},
 			},
 			wantErr: assert.NoError,
@@ -1561,11 +1453,8 @@ func TestHandleDeleteUser(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to delete accounts.")),
 					},
@@ -1618,11 +1507,7 @@ func TestHandleGetMsgs(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 0},
+					IsReply: 0x01,
 					Fields: []Field{
 						NewField(FieldData, []byte("TEST")),
 					},
@@ -1650,11 +1535,8 @@ func TestHandleGetMsgs(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to read news.")),
 					},
@@ -1706,11 +1588,8 @@ func TestHandleNewUser(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to create new accounts.")),
 					},
@@ -1748,11 +1627,8 @@ func TestHandleNewUser(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("Cannot create account with more access than yourself.")),
 					},
@@ -1804,11 +1680,8 @@ func TestHandleListUsers(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to view accounts.")),
 					},
@@ -1845,11 +1718,7 @@ func TestHandleListUsers(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
+					IsReply: 0x01,
 					Fields: []Field{
 						NewField(FieldData, []byte{
 							0x00, 0x04, 0x00, 0x66, 0x00, 0x05, 0x67, 0x75, 0x65, 0x73, 0x74, 0x00, 0x69, 0x00, 0x05, 0x98,
@@ -1901,11 +1770,8 @@ func TestHandleDownloadFile(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to download files.")),
 					},
@@ -1945,11 +1811,7 @@ func TestHandleDownloadFile(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 0},
+					IsReply: 0x01,
 					Fields: []Field{
 						NewField(FieldRefNum, []byte{0x52, 0xfd, 0xfc, 0x07}),
 						NewField(FieldWaitingCount, []byte{0x00, 0x00}),
@@ -2036,11 +1898,7 @@ func TestHandleDownloadFile(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 0},
+					IsReply: 0x01,
 					Fields: []Field{
 						NewField(FieldRefNum, []byte{0x52, 0xfd, 0xfc, 0x07}),
 						NewField(FieldWaitingCount, []byte{0x00, 0x00}),
@@ -2116,11 +1974,8 @@ func TestHandleUpdateUser(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to create new accounts.")),
 					},
@@ -2172,11 +2027,8 @@ func TestHandleUpdateUser(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to modify accounts.")),
 					},
@@ -2214,11 +2066,8 @@ func TestHandleUpdateUser(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to delete accounts.")),
 					},
@@ -2268,11 +2117,8 @@ func TestHandleDelNewsArt(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to delete news articles.")),
 					},
@@ -2321,11 +2167,8 @@ func TestHandleDisconnectUser(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to disconnect users.")),
 					},
@@ -2367,11 +2210,8 @@ func TestHandleDisconnectUser(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("unnamed is not allowed to be disconnected.")),
 					},
@@ -2420,11 +2260,8 @@ func TestHandleSendInstantMsg(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to send private messages.")),
 					},
@@ -2471,13 +2308,9 @@ func TestHandleSendInstantMsg(t *testing.T) {
 					NewField(FieldOptions, []byte{0, 1}),
 				),
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
-					Fields:    []Field(nil),
+					clientID: &[]byte{0, 1},
+					IsReply:  0x01,
+					Fields:   []Field(nil),
 				},
 			},
 			wantErr: assert.NoError,
@@ -2531,13 +2364,9 @@ func TestHandleSendInstantMsg(t *testing.T) {
 					NewField(FieldOptions, []byte{0, 1}),
 				),
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
-					Fields:    []Field(nil),
+					clientID: &[]byte{0, 1},
+					IsReply:  0x01,
+					Fields:   []Field(nil),
 				},
 			},
 			wantErr: assert.NoError,
@@ -2582,13 +2411,9 @@ func TestHandleSendInstantMsg(t *testing.T) {
 					NewField(FieldOptions, []byte{0, 2}),
 				),
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
-					Fields:    []Field(nil),
+					clientID: &[]byte{0, 1},
+					IsReply:  0x01,
+					Fields:   []Field(nil),
 				},
 			},
 			wantErr: assert.NoError,
@@ -2664,11 +2489,8 @@ func TestHandleDeleteFile(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to delete files.")),
 					},
@@ -2729,12 +2551,8 @@ func TestHandleDeleteFile(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x0, 0x0, 0x0, 0x0},
-					ErrorCode: []byte{0, 0, 0, 0},
-					Fields:    []Field(nil),
+					IsReply: 0x01,
+					Fields:  []Field(nil),
 				},
 			},
 			wantErr: assert.NoError,
@@ -2797,11 +2615,8 @@ func TestHandleGetFileNameList(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to view drop boxes.")),
 					},
@@ -2832,11 +2647,7 @@ func TestHandleGetFileNameList(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
+					IsReply: 0x01,
 					Fields: []Field{
 						NewField(
 							FieldFileNameWithInfo,
@@ -2906,11 +2717,8 @@ func TestHandleGetClientInfoText(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to get client info.")),
 					},
@@ -2965,11 +2773,7 @@ func TestHandleGetClientInfoText(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
+					IsReply: 0x01,
 					Fields: []Field{
 						NewField(FieldData, []byte(
 							strings.ReplaceAll(`Nickname:   Testy McTest
@@ -3059,24 +2863,16 @@ func TestHandleTranAgreed(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x7a},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					Type:     [2]byte{0, 0x7a},
 					Fields: []Field{
 						NewField(FieldBannerType, []byte("JPEG")),
 					},
 				},
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
-					Fields:    []Field{},
+					clientID: &[]byte{0, 1},
+					IsReply:  0x01,
+					Fields:   []Field{},
 				},
 			},
 			wantErr: assert.NoError,
@@ -3133,12 +2929,8 @@ func TestHandleSetClientUserInfo(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0x01, 0x2d},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					Type:     [2]byte{0x01, 0x2d},
 					Fields: []Field{
 						NewField(FieldUserID, []byte{0, 1}),
 						NewField(FieldUserIconID, []byte{0, 1}),
@@ -3204,11 +2996,8 @@ func TestHandleDelNewsItem(t *testing.T) {
 			wantRes: []Transaction{
 				{
 					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to delete news categories.")),
 					},
@@ -3248,11 +3037,8 @@ func TestHandleDelNewsItem(t *testing.T) {
 			wantRes: []Transaction{
 				{
 					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to delete news folders.")),
 					},
@@ -3301,13 +3087,9 @@ func TestHandleDelNewsItem(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
-					Fields:    []Field{},
+					clientID: &[]byte{0, 1},
+					IsReply:  0x01,
+					Fields:   []Field{},
 				},
 			},
 			wantErr: assert.NoError,
@@ -3353,11 +3135,8 @@ func TestHandleTranOldPostNews(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to post news.")),
 					},
@@ -3393,11 +3172,7 @@ func TestHandleTranOldPostNews(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
+					IsReply: 0x01,
 				},
 			},
 			wantErr: assert.NoError,
@@ -3441,11 +3216,8 @@ func TestHandleInviteNewChat(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to request private chat.")),
 					},
@@ -3486,12 +3258,8 @@ func TestHandleInviteNewChat(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID:  &[]byte{0, 2},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x71},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 2},
+					Type:     [2]byte{0, 0x71},
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0x52, 0xfd, 0xfc, 0x07}),
 						NewField(FieldUserName, []byte("UserA")),
@@ -3500,12 +3268,8 @@ func TestHandleInviteNewChat(t *testing.T) {
 				},
 
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					IsReply:  0x01,
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0x52, 0xfd, 0xfc, 0x07}),
 						NewField(FieldUserName, []byte("UserA")),
@@ -3550,12 +3314,8 @@ func TestHandleInviteNewChat(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x00,
-					Type:      []byte{0, 0x68},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					Type:     [2]byte{0, 0x68},
 					Fields: []Field{
 						NewField(FieldData, []byte("UserB does not accept private chats.")),
 						NewField(FieldUserName, []byte("UserB")),
@@ -3564,12 +3324,8 @@ func TestHandleInviteNewChat(t *testing.T) {
 					},
 				},
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
+					clientID: &[]byte{0, 1},
+					IsReply:  0x01,
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0x52, 0xfd, 0xfc, 0x07}),
 						NewField(FieldUserName, []byte("UserA")),
@@ -3624,11 +3380,8 @@ func TestHandleGetNewsArtData(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-					ErrorCode: []byte{0, 0, 0, 1},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to read news.")),
 					},
@@ -3681,8 +3434,8 @@ func TestHandleGetNewsArtNameList(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ErrorCode: []byte{0, 0, 0, 1},
+					Type:      [2]byte{0, 0},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to read news.")),
 					},
@@ -3744,10 +3497,7 @@ func TestHandleGetNewsArtNameList(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
+					IsReply: 0x01,
 					Fields: []Field{
 						NewField(FieldNewsArtListData, []byte{
 							0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
@@ -3807,8 +3557,8 @@ func TestHandleNewNewsFldr(t *testing.T) {
 				{
 					Flags:     0x00,
 					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ErrorCode: []byte{0, 0, 0, 1},
+					Type:      [2]byte{0, 0},
+					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
 						NewField(FieldError, []byte("You are not allowed to create news folders.")),
 					},
@@ -3860,13 +3610,9 @@ func TestHandleNewNewsFldr(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
-					Flags:     0x00,
-					IsReply:   0x01,
-					Type:      []byte{0, 0},
-					ID:        []byte{0, 0, 0, 0},
-					ErrorCode: []byte{0, 0, 0, 0},
-					Fields:    []Field{},
+					clientID: &[]byte{0, 1},
+					IsReply:  0x01,
+					Fields:   []Field{},
 				},
 			},
 			wantErr: assert.NoError,
@@ -3920,8 +3666,8 @@ func TestHandleNewNewsFldr(t *testing.T) {
 		//			clientID:  &[]byte{0, 1},
 		//			Flags:     0x00,
 		//			IsReply:   0x01,
-		//			Type:      []byte{0, 0},
-		//			ErrorCode: []byte{0, 0, 0, 1},
+		//			Type:      [2]byte{0, 0},
+		//			ErrorCode: [4]byte{0, 0, 0, 1},
 		//			Fields: []Field{
 		//				NewField(FieldError, []byte("Error creating news folder.")),
 		//			},

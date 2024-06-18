@@ -73,14 +73,14 @@ const (
 )
 
 type Transaction struct {
-	Flags      byte   // Reserved (should be 0)
-	IsReply    byte   // Request (0) or reply (1)
-	Type       []byte // Requested operation (user defined)
-	ID         []byte // Unique transaction ID (must be != 0)
-	ErrorCode  []byte // Used in the reply (user defined, 0 = no error)
-	TotalSize  []byte // Total data size for the transaction (all parts)
-	DataSize   []byte // Size of data in this transaction part. This allows splitting large transactions into smaller parts.
-	ParamCount []byte // Number of the parameters for this transaction
+	Flags      byte    // Reserved (should be 0)
+	IsReply    byte    // Request (0) or reply (1)
+	Type       [2]byte // Requested operation (user defined)
+	ID         [4]byte // Unique transaction ID (must be != 0)
+	ErrorCode  [4]byte // Used in the reply (user defined, 0 = no error)
+	TotalSize  [4]byte // Total data size for the transaction (all parts)
+	DataSize   [4]byte // Size of data in this transaction part. This allows splitting large transactions into smaller parts.
+	ParamCount [2]byte // Number of the parameters for this transaction
 	Fields     []Field
 
 	clientID   *[]byte // Internal identifier for target client
@@ -95,13 +95,10 @@ func NewTransaction(t int, clientID *[]byte, fields ...Field) *Transaction {
 	binary.BigEndian.PutUint32(idSlice, rand.Uint32())
 
 	return &Transaction{
-		clientID:  clientID,
-		Flags:     0x00,
-		IsReply:   0x00,
-		Type:      typeSlice,
-		ID:        idSlice,
-		ErrorCode: []byte{0, 0, 0, 0},
-		Fields:    fields,
+		clientID: clientID,
+		Type:     [2]byte(typeSlice),
+		ID:       [4]byte(idSlice),
+		Fields:   fields,
 	}
 }
 
@@ -133,12 +130,12 @@ func (t *Transaction) Write(p []byte) (n int, err error) {
 
 	t.Flags = p[0]
 	t.IsReply = p[1]
-	t.Type = p[2:4]
-	t.ID = p[4:8]
-	t.ErrorCode = p[8:12]
-	t.TotalSize = p[12:16]
-	t.DataSize = p[16:20]
-	t.ParamCount = p[20:22]
+	t.Type = [2]byte(p[2:4])
+	t.ID = [4]byte(p[4:8])
+	t.ErrorCode = [4]byte(p[8:12])
+	t.TotalSize = [4]byte(p[12:16])
+	t.DataSize = [4]byte(p[16:20])
+	t.ParamCount = [2]byte(p[20:22])
 
 	return len(p), err
 }
@@ -223,9 +220,9 @@ func (t *Transaction) Read(p []byte) (int, error) {
 
 	buf := slices.Concat(
 		[]byte{t.Flags, t.IsReply},
-		t.Type,
-		t.ID,
-		t.ErrorCode,
+		t.Type[:],
+		t.ID[:],
+		t.ErrorCode[:],
 		payloadSize,
 		payloadSize, // this is the dataSize field, but seeming the same as totalSize
 		fieldCount,
@@ -267,5 +264,5 @@ func (t *Transaction) GetField(id int) Field {
 }
 
 func (t *Transaction) IsError() bool {
-	return bytes.Equal(t.ErrorCode, []byte{0, 0, 0, 1})
+	return t.ErrorCode == [4]byte{0, 0, 0, 1}
 }

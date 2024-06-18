@@ -995,9 +995,7 @@ func HandleGetClientInfoText(cc *ClientConn, t *Transaction) (res []Transaction,
 }
 
 func HandleGetUserNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	res = append(res, cc.NewReply(t, cc.Server.connectedUsers()...))
-
-	return res, err
+	return []Transaction{cc.NewReply(t, cc.Server.connectedUsers()...)}, nil
 }
 
 func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err error) {

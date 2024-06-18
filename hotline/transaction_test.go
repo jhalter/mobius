@@ -304,12 +304,12 @@ func TestTransaction_Read(t1 *testing.T) {
 		clientID   *[]byte
 		Flags      byte
 		IsReply    byte
-		Type       []byte
-		ID         []byte
-		ErrorCode  []byte
-		TotalSize  []byte
-		DataSize   []byte
-		ParamCount []byte
+		Type       [2]byte
+		ID         [4]byte
+		ErrorCode  [4]byte
+		TotalSize  [4]byte
+		DataSize   [4]byte
+		ParamCount [2]byte
 		Fields     []Field
 		readOffset int
 	}
@@ -329,9 +329,9 @@ func TestTransaction_Read(t1 *testing.T) {
 			fields: fields{
 				Flags:     0x00,
 				IsReply:   0x01,
-				Type:      []byte{0, 0},
-				ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-				ErrorCode: []byte{0, 0, 0, 0},
+				Type:      [2]byte{0, 0},
+				ID:        [4]byte{0x9a, 0xcb, 0x04, 0x42},
+				ErrorCode: [4]byte{0, 0, 0, 0},
 				Fields: []Field{
 					NewField(FieldData, []byte("TEST")),
 				},
@@ -348,9 +348,9 @@ func TestTransaction_Read(t1 *testing.T) {
 			fields: fields{
 				Flags:     0x00,
 				IsReply:   0x01,
-				Type:      []byte{0, 0},
-				ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-				ErrorCode: []byte{0, 0, 0, 0},
+				Type:      [2]byte{0, 0},
+				ID:        [4]byte{0x9a, 0xcb, 0x04, 0x42},
+				ErrorCode: [4]byte{0, 0, 0, 0},
 				Fields: []Field{
 					NewField(FieldData, []byte("TEST")),
 				},
@@ -368,9 +368,9 @@ func TestTransaction_Read(t1 *testing.T) {
 			fields: fields{
 				Flags:     0x00,
 				IsReply:   0x01,
-				Type:      []byte{0, 0},
-				ID:        []byte{0x9a, 0xcb, 0x04, 0x42},
-				ErrorCode: []byte{0, 0, 0, 0},
+				Type:      [2]byte{0, 0},
+				ID:        [4]byte{0x9a, 0xcb, 0x04, 0x42},
+				ErrorCode: [4]byte{0, 0, 0, 0},
 				Fields: []Field{
 					NewField(FieldData, []byte("TEST")),
 				},

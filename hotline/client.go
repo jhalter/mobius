@@ -142,11 +142,11 @@ func (c *Client) Handshake() error {
 }
 
 func (c *Client) Send(t Transaction) error {
-	requestNum := binary.BigEndian.Uint16(t.Type)
+	requestNum := binary.BigEndian.Uint16(t.Type[:])
 
 	// if transaction is NOT reply, add it to the list to transactions we're expecting a response for
 	if t.IsReply == 0 {
-		c.activeTasks[binary.BigEndian.Uint32(t.ID)] = &t
+		c.activeTasks[binary.BigEndian.Uint32(t.ID[:])] = &t
 	}
 
 	n, err := io.Copy(c.Connection, &t)
@@ -165,16 +165,16 @@ func (c *Client) Send(t Transaction) error {
 func (c *Client) HandleTransaction(ctx context.Context, t *Transaction) error {
 	var origT Transaction
 	if t.IsReply == 1 {
-		requestID := binary.BigEndian.Uint32(t.ID)
+		requestID := binary.BigEndian.Uint32(t.ID[:])
 		origT = *c.activeTasks[requestID]
 		t.Type = origT.Type
 	}
 
-	if handler, ok := c.Handlers[binary.BigEndian.Uint16(t.Type)]; ok {
+	if handler, ok := c.Handlers[binary.BigEndian.Uint16(t.Type[:])]; ok {
 		c.Logger.Debug(
 			"Received transaction",
 			"IsReply", t.IsReply,
-			"type", binary.BigEndian.Uint16(t.Type),
+			"type", binary.BigEndian.Uint16(t.Type[:]),
 		)
 		outT, err := handler(ctx, c, t)
 		if err != nil {
@@ -189,7 +189,7 @@ func (c *Client) HandleTransaction(ctx context.Context, t *Transaction) error {
 		c.Logger.Debug(
 			"Unimplemented transaction type",
 			"IsReply", t.IsReply,
-			"type", binary.BigEndian.Uint16(t.Type),
+			"type", binary.BigEndian.Uint16(t.Type[:]),
 		)
 	}
 

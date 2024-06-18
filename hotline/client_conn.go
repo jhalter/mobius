@@ -54,7 +54,7 @@ func (cc *ClientConn) sendAll(t int, fields ...Field) {
 }
 
 func (cc *ClientConn) handleTransaction(transaction Transaction) error {
-	requestNum := binary.BigEndian.Uint16(transaction.Type)
+	requestNum := binary.BigEndian.Uint16(transaction.Type[:])
 	if handler, ok := TransactionHandlers[requestNum]; ok {
 		for _, reqField := range handler.RequiredFields {
 			field := transaction.GetField(reqField.ID)
@@ -168,10 +168,10 @@ func (cc *ClientConn) notifyOthers(t Transaction) (trans []Transaction) {
 func (cc *ClientConn) NewReply(t *Transaction, fields ...Field) Transaction {
 	return Transaction{
 		IsReply:   0x01,
-		Type:      []byte{0x00, 0x00},
+		Type:      [2]byte{0x00, 0x00},
 		ID:        t.ID,
 		clientID:  cc.ID,
-		ErrorCode: []byte{0, 0, 0, 0},
+		ErrorCode: [4]byte{0, 0, 0, 0},
 		Fields:    fields,
 	}
 }
@@ -181,9 +181,9 @@ func (cc *ClientConn) NewErrReply(t *Transaction, errMsg string) Transaction {
 	return Transaction{
 		clientID:  cc.ID,
 		IsReply:   0x01,
-		Type:      []byte{0, 0},
+		Type:      [2]byte{0, 0},
 		ID:        t.ID,
-		ErrorCode: []byte{0, 0, 0, 1},
+		ErrorCode: [4]byte{0, 0, 0, 1},
 		Fields: []Field{
 			NewField(FieldError, []byte(errMsg)),
 		},
