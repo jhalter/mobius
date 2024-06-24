@@ -2,7 +2,9 @@ package hotline
 
 import (
 	"bytes"
+	"encoding/binary"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -77,6 +79,92 @@ func TestCalcTotalSize(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("CalcTotalSize() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func createTestDirStructure(baseDir string, structure map[string]string) error {
+	// First pass: create directories
+	for path, content := range structure {
+		if content == "dir" {
+			if err := os.MkdirAll(filepath.Join(baseDir, path), 0755); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Second pass: create files
+	for path, content := range structure {
+		if content != "dir" {
+			fullPath := filepath.Join(baseDir, path)
+			dir := filepath.Dir(fullPath)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func TestCalcItemCount(t *testing.T) {
+	tests := []struct {
+		name      string
+		structure map[string]string
+		expected  uint16
+	}{
+		{
+			name: "directory with files",
+			structure: map[string]string{
+				"file1.txt":        "content1",
+				"file2.txt":        "content2",
+				"subdir/":          "dir",
+				"subdir/file3.txt": "content3",
+			},
+			expected: 4, // 3 files and 1 directory, should count 4 items
+		},
+		{
+			name: "directory with hidden files",
+			structure: map[string]string{
+				".hiddenfile": "hiddencontent",
+				"file1.txt":   "content1",
+			},
+			expected: 1, // 1 non-hidden file
+		},
+		{
+			name:      "empty directory",
+			structure: map[string]string{},
+			expected:  0, // 0 files
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a temporary directory for the test
+			tempDir, err := os.MkdirTemp("", "test")
+			if err != nil {
+				t.Fatalf("Failed to create temp dir: %v", err)
+			}
+			defer os.RemoveAll(tempDir)
+
+			// Create the test directory structure
+			if err := createTestDirStructure(tempDir, tt.structure); err != nil {
+				t.Fatalf("Failed to create test dir structure: %v", err)
+			}
+
+			// Calculate item count
+			result, err := CalcItemCount(tempDir)
+			if err != nil {
+				t.Fatalf("CalcItemCount returned an error: %v", err)
+			}
+
+			// Convert result to uint16
+			count := binary.BigEndian.Uint16(result)
+			if count != tt.expected {
+				t.Errorf("expected %d, got %d", tt.expected, count)
 			}
 		})
 	}

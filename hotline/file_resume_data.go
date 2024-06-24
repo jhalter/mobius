@@ -12,6 +12,8 @@ type FileResumeData struct {
 	RSVD         [34]byte // Unused
 	ForkCount    [2]byte  // Length of ForkInfoList.  Either 2 or 3 depending on whether file has a resource fork
 	ForkInfoList []ForkInfoList
+
+	readOffset int
 }
 
 type ForkInfoList struct {
@@ -39,6 +41,31 @@ func NewFileResumeData(list []ForkInfoList) *FileResumeData {
 		ForkInfoList: list,
 	}
 }
+
+//
+//func (frd *FileResumeData) Read(p []byte) (int, error) {
+//	buf := slices.Concat(
+//		frd.Format[:],
+//		frd.Version[:],
+//		frd.RSVD[:],
+//		frd.ForkCount[:],
+//	)
+//	for _, fil := range frd.ForkInfoList {
+//		buf = append(buf, fil...)
+//		_ = binary.Write(&buf, binary.LittleEndian, fil)
+//	}
+//
+//	var buf bytes.Buffer
+//	_ = binary.Write(&buf, binary.LittleEndian, frd.Format)
+//	_ = binary.Write(&buf, binary.LittleEndian, frd.Version)
+//	_ = binary.Write(&buf, binary.LittleEndian, frd.RSVD)
+//	_ = binary.Write(&buf, binary.LittleEndian, frd.ForkCount)
+//	for _, fil := range frd.ForkInfoList {
+//		_ = binary.Write(&buf, binary.LittleEndian, fil)
+//	}
+//
+//	return buf.Bytes(), nil
+//}
 
 func (frd *FileResumeData) BinaryMarshal() ([]byte, error) {
 	var buf bytes.Buffer

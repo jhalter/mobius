@@ -1,10 +1,13 @@
 package hotline
 
 import (
+	"cmp"
+	"encoding/binary"
 	"encoding/hex"
 	"github.com/stretchr/testify/assert"
 	"log/slog"
 	"os"
+	"slices"
 	"testing"
 )
 
@@ -30,6 +33,13 @@ func assertTransferBytesEqual(t *testing.T, wantHexDump string, got []byte) bool
 	return assert.Equal(t, wantHexDump, hex.Dump(clean))
 }
 
+var tranSortFunc = func(a, b Transaction) int {
+	return cmp.Compare(
+		binary.BigEndian.Uint16(a.clientID[:]),
+		binary.BigEndian.Uint16(b.clientID[:]),
+	)
+}
+
 // tranAssertEqual compares equality of transactions slices after stripping out the random transaction ID
 func tranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
 	var newT1 []Transaction
@@ -45,7 +55,7 @@ func tranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
 			if field.ID == [2]byte{0x00, 0x72} { // FieldChatID
 				continue
 			}
-			trans.Fields = append(trans.Fields, field)
+			fs = append(fs, field)
 		}
 		trans.Fields = fs
 		newT1 = append(newT1, trans)
@@ -61,11 +71,14 @@ func tranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
 			if field.ID == [2]byte{0x00, 0x72} { // FieldChatID
 				continue
 			}
-			trans.Fields = append(trans.Fields, field)
+			fs = append(fs, field)
 		}
 		trans.Fields = fs
 		newT2 = append(newT2, trans)
 	}
+
+	slices.SortFunc(newT1, tranSortFunc)
+	slices.SortFunc(newT2, tranSortFunc)
 
 	return assert.Equal(t, newT1, newT2)
 }

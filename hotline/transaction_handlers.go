@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"gopkg.in/yaml.v3"
 	"io"
 	"math/big"
@@ -17,233 +17,59 @@ import (
 	"time"
 )
 
-type HandlerFunc func(*ClientConn, *Transaction) ([]Transaction, error)
+// HandlerFunc is the signature of a func to handle a Hotline transaction.
+type HandlerFunc func(*ClientConn, *Transaction) []Transaction
 
-type TransactionType struct {
-	Handler        HandlerFunc // function for handling the transaction type
-	Name           string      // Name of transaction as it will appear in logging
-	RequiredFields []requiredField
+// TransactionHandlers maps a transaction type to a handler function.
+var TransactionHandlers = map[TranType]HandlerFunc{
+	TranAgreed:             HandleTranAgreed,
+	TranChatSend:           HandleChatSend,
+	TranDelNewsArt:         HandleDelNewsArt,
+	TranDelNewsItem:        HandleDelNewsItem,
+	TranDeleteFile:         HandleDeleteFile,
+	TranDeleteUser:         HandleDeleteUser,
+	TranDisconnectUser:     HandleDisconnectUser,
+	TranDownloadFile:       HandleDownloadFile,
+	TranDownloadFldr:       HandleDownloadFolder,
+	TranGetClientInfoText:  HandleGetClientInfoText,
+	TranGetFileInfo:        HandleGetFileInfo,
+	TranGetFileNameList:    HandleGetFileNameList,
+	TranGetMsgs:            HandleGetMsgs,
+	TranGetNewsArtData:     HandleGetNewsArtData,
+	TranGetNewsArtNameList: HandleGetNewsArtNameList,
+	TranGetNewsCatNameList: HandleGetNewsCatNameList,
+	TranGetUser:            HandleGetUser,
+	TranGetUserNameList:    HandleGetUserNameList,
+	TranInviteNewChat:      HandleInviteNewChat,
+	TranInviteToChat:       HandleInviteToChat,
+	TranJoinChat:           HandleJoinChat,
+	TranKeepAlive:          HandleKeepAlive,
+	TranLeaveChat:          HandleLeaveChat,
+	TranListUsers:          HandleListUsers,
+	TranMoveFile:           HandleMoveFile,
+	TranNewFolder:          HandleNewFolder,
+	TranNewNewsCat:         HandleNewNewsCat,
+	TranNewNewsFldr:        HandleNewNewsFldr,
+	TranNewUser:            HandleNewUser,
+	TranUpdateUser:         HandleUpdateUser,
+	TranOldPostNews:        HandleTranOldPostNews,
+	TranPostNewsArt:        HandlePostNewsArt,
+	TranRejectChatInvite:   HandleRejectChatInvite,
+	TranSendInstantMsg:     HandleSendInstantMsg,
+	TranSetChatSubject:     HandleSetChatSubject,
+	TranMakeFileAlias:      HandleMakeAlias,
+	TranSetClientUserInfo:  HandleSetClientUserInfo,
+	TranSetFileInfo:        HandleSetFileInfo,
+	TranSetUser:            HandleSetUser,
+	TranUploadFile:         HandleUploadFile,
+	TranUploadFldr:         HandleUploadFolder,
+	TranUserBroadcast:      HandleUserBroadcast,
+	TranDownloadBanner:     HandleDownloadBanner,
 }
 
-var TransactionHandlers = map[uint16]TransactionType{
-	// Server initiated
-	TranChatMsg: {
-		Name: "TranChatMsg",
-	},
-	// Server initiated
-	TranNotifyChangeUser: {
-		Name: "TranNotifyChangeUser",
-	},
-	TranError: {
-		Name: "TranError",
-	},
-	TranShowAgreement: {
-		Name: "TranShowAgreement",
-	},
-	TranUserAccess: {
-		Name: "TranUserAccess",
-	},
-	TranNotifyDeleteUser: {
-		Name: "TranNotifyDeleteUser",
-	},
-	TranAgreed: {
-		Name:    "TranAgreed",
-		Handler: HandleTranAgreed,
-	},
-	TranChatSend: {
-		Name:    "TranChatSend",
-		Handler: HandleChatSend,
-		RequiredFields: []requiredField{
-			{
-				ID:     FieldData,
-				minLen: 0,
-			},
-		},
-	},
-	TranDelNewsArt: {
-		Name:    "TranDelNewsArt",
-		Handler: HandleDelNewsArt,
-	},
-	TranDelNewsItem: {
-		Name:    "TranDelNewsItem",
-		Handler: HandleDelNewsItem,
-	},
-	TranDeleteFile: {
-		Name:    "TranDeleteFile",
-		Handler: HandleDeleteFile,
-	},
-	TranDeleteUser: {
-		Name:    "TranDeleteUser",
-		Handler: HandleDeleteUser,
-	},
-	TranDisconnectUser: {
-		Name:    "TranDisconnectUser",
-		Handler: HandleDisconnectUser,
-	},
-	TranDownloadFile: {
-		Name:    "TranDownloadFile",
-		Handler: HandleDownloadFile,
-	},
-	TranDownloadFldr: {
-		Name:    "TranDownloadFldr",
-		Handler: HandleDownloadFolder,
-	},
-	TranGetClientInfoText: {
-		Name:    "TranGetClientInfoText",
-		Handler: HandleGetClientInfoText,
-	},
-	TranGetFileInfo: {
-		Name:    "TranGetFileInfo",
-		Handler: HandleGetFileInfo,
-	},
-	TranGetFileNameList: {
-		Name:    "TranGetFileNameList",
-		Handler: HandleGetFileNameList,
-	},
-	TranGetMsgs: {
-		Name:    "TranGetMsgs",
-		Handler: HandleGetMsgs,
-	},
-	TranGetNewsArtData: {
-		Name:    "TranGetNewsArtData",
-		Handler: HandleGetNewsArtData,
-	},
-	TranGetNewsArtNameList: {
-		Name:    "TranGetNewsArtNameList",
-		Handler: HandleGetNewsArtNameList,
-	},
-	TranGetNewsCatNameList: {
-		Name:    "TranGetNewsCatNameList",
-		Handler: HandleGetNewsCatNameList,
-	},
-	TranGetUser: {
-		Name:    "TranGetUser",
-		Handler: HandleGetUser,
-	},
-	TranGetUserNameList: {
-		Name:    "tranHandleGetUserNameList",
-		Handler: HandleGetUserNameList,
-	},
-	TranInviteNewChat: {
-		Name:    "TranInviteNewChat",
-		Handler: HandleInviteNewChat,
-	},
-	TranInviteToChat: {
-		Name:    "TranInviteToChat",
-		Handler: HandleInviteToChat,
-	},
-	TranJoinChat: {
-		Name:    "TranJoinChat",
-		Handler: HandleJoinChat,
-	},
-	TranKeepAlive: {
-		Name:    "TranKeepAlive",
-		Handler: HandleKeepAlive,
-	},
-	TranLeaveChat: {
-		Name:    "TranJoinChat",
-		Handler: HandleLeaveChat,
-	},
-	TranListUsers: {
-		Name:    "TranListUsers",
-		Handler: HandleListUsers,
-	},
-	TranMoveFile: {
-		Name:    "TranMoveFile",
-		Handler: HandleMoveFile,
-	},
-	TranNewFolder: {
-		Name:    "TranNewFolder",
-		Handler: HandleNewFolder,
-	},
-	TranNewNewsCat: {
-		Name:    "TranNewNewsCat",
-		Handler: HandleNewNewsCat,
-	},
-	TranNewNewsFldr: {
-		Name:    "TranNewNewsFldr",
-		Handler: HandleNewNewsFldr,
-	},
-	TranNewUser: {
-		Name:    "TranNewUser",
-		Handler: HandleNewUser,
-	},
-	TranUpdateUser: {
-		Name:    "TranUpdateUser",
-		Handler: HandleUpdateUser,
-	},
-	TranOldPostNews: {
-		Name:    "TranOldPostNews",
-		Handler: HandleTranOldPostNews,
-	},
-	TranPostNewsArt: {
-		Name:    "TranPostNewsArt",
-		Handler: HandlePostNewsArt,
-	},
-	TranRejectChatInvite: {
-		Name:    "TranRejectChatInvite",
-		Handler: HandleRejectChatInvite,
-	},
-	TranSendInstantMsg: {
-		Name:    "TranSendInstantMsg",
-		Handler: HandleSendInstantMsg,
-		RequiredFields: []requiredField{
-			{
-				ID:     FieldData,
-				minLen: 0,
-			},
-			{
-				ID: FieldUserID,
-			},
-		},
-	},
-	TranSetChatSubject: {
-		Name:    "TranSetChatSubject",
-		Handler: HandleSetChatSubject,
-	},
-	TranMakeFileAlias: {
-		Name:    "TranMakeFileAlias",
-		Handler: HandleMakeAlias,
-		RequiredFields: []requiredField{
-			{ID: FieldFileName, minLen: 1},
-			{ID: FieldFilePath, minLen: 1},
-			{ID: FieldFileNewPath, minLen: 1},
-		},
-	},
-	TranSetClientUserInfo: {
-		Name:    "TranSetClientUserInfo",
-		Handler: HandleSetClientUserInfo,
-	},
-	TranSetFileInfo: {
-		Name:    "TranSetFileInfo",
-		Handler: HandleSetFileInfo,
-	},
-	TranSetUser: {
-		Name:    "TranSetUser",
-		Handler: HandleSetUser,
-	},
-	TranUploadFile: {
-		Name:    "TranUploadFile",
-		Handler: HandleUploadFile,
-	},
-	TranUploadFldr: {
-		Name:    "TranUploadFldr",
-		Handler: HandleUploadFolder,
-	},
-	TranUserBroadcast: {
-		Name:    "TranUserBroadcast",
-		Handler: HandleUserBroadcast,
-	},
-	TranDownloadBanner: {
-		Name:    "TranDownloadBanner",
-		Handler: HandleDownloadBanner,
-	},
-}
-
-func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessSendChat) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to participate in chat."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to participate in chat.")
 	}
 
 	// Truncate long usernames
@@ -262,31 +88,33 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 	// All clients *except* Frogblast omit this field for public chat, but Frogblast sends a value of 00 00 00 00.
 	chatID := t.GetField(FieldChatID).Data
 	if chatID != nil && !bytes.Equal([]byte{0, 0, 0, 0}, chatID) {
-		chatInt := binary.BigEndian.Uint32(chatID)
-		privChat := cc.Server.PrivateChats[chatInt]
-
-		clients := sortedClients(privChat.ClientConn)
+		privChat := cc.Server.PrivateChats[[4]byte(chatID)]
 
 		// send the message to all connected clients of the private chat
-		for _, c := range clients {
-			res = append(res, *NewTransaction(
+		for _, c := range privChat.ClientConn {
+			res = append(res, NewTransaction(
 				TranChatMsg,
 				c.ID,
 				NewField(FieldChatID, chatID),
 				NewField(FieldData, []byte(formattedMsg)),
 			))
 		}
-		return res, err
+		return res
 	}
 
-	for _, c := range sortedClients(cc.Server.Clients) {
-		// Filter out clients that do not have the read chat permission
+	//cc.Server.mux.Lock()
+	for _, c := range cc.Server.Clients {
+		if c == nil || cc.Account == nil {
+			continue
+		}
+		// Skip clients that do not have the read chat permission.
 		if c.Authorize(accessReadChat) {
-			res = append(res, *NewTransaction(TranChatMsg, c.ID, NewField(FieldData, []byte(formattedMsg))))
+			res = append(res, NewTransaction(TranChatMsg, c.ID, NewField(FieldData, []byte(formattedMsg))))
 		}
 	}
+	//cc.Server.mux.Unlock()
 
-	return res, err
+	return res
 }
 
 // HandleSendInstantMsg sends instant message to the user on the current server.
@@ -304,21 +132,20 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 //
 // Fields used in the reply:
 // None
-func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessSendPrivMsg) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to send private messages."))
-		return res, errors.New("user is not allowed to send private messages")
+		return cc.NewErrReply(t, "You are not allowed to send private messages.")
 	}
 
 	msg := t.GetField(FieldData)
-	ID := t.GetField(FieldUserID)
+	userID := t.GetField(FieldUserID)
 
 	reply := NewTransaction(
 		TranServerMsg,
-		&ID.Data,
+		[2]byte(userID.Data),
 		NewField(FieldData, msg.Data),
 		NewField(FieldUserName, cc.UserName),
-		NewField(FieldUserID, *cc.ID),
+		NewField(FieldUserID, cc.ID[:]),
 		NewField(FieldOptions, []byte{0, 1}),
 	)
 
@@ -328,70 +155,63 @@ func HandleSendInstantMsg(cc *ClientConn, t *Transaction) (res []Transaction, er
 		reply.Fields = append(reply.Fields, NewField(FieldQuotingMsg, t.GetField(FieldQuotingMsg).Data))
 	}
 
-	id, err := byteToInt(ID.Data)
-	if err != nil {
-		return res, errors.New("invalid client ID")
-	}
-	otherClient, ok := cc.Server.Clients[uint16(id)]
+	otherClient, ok := cc.Server.Clients[[2]byte(userID.Data)]
 	if !ok {
-		return res, errors.New("invalid client ID")
+		return res
 	}
 
 	// Check if target user has "Refuse private messages" flag
-	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(otherClient.Flags)))
-	if flagBitmap.Bit(UserFlagRefusePM) == 1 {
+	if otherClient.Flags.IsSet(UserFlagRefusePM) {
 		res = append(res,
-			*NewTransaction(
+			NewTransaction(
 				TranServerMsg,
 				cc.ID,
 				NewField(FieldData, []byte(string(otherClient.UserName)+" does not accept private messages.")),
 				NewField(FieldUserName, otherClient.UserName),
-				NewField(FieldUserID, *otherClient.ID),
+				NewField(FieldUserID, otherClient.ID[:]),
 				NewField(FieldOptions, []byte{0, 2}),
 			),
 		)
 	} else {
-		res = append(res, *reply)
+		res = append(res, reply)
 	}
 
 	// Respond with auto reply if other client has it enabled
 	if len(otherClient.AutoReply) > 0 {
 		res = append(res,
-			*NewTransaction(
+			NewTransaction(
 				TranServerMsg,
 				cc.ID,
 				NewField(FieldData, otherClient.AutoReply),
 				NewField(FieldUserName, otherClient.UserName),
-				NewField(FieldUserID, *otherClient.ID),
+				NewField(FieldUserID, otherClient.ID[:]),
 				NewField(FieldOptions, []byte{0, 1}),
 			),
 		)
 	}
 
-	res = append(res, cc.NewReply(t))
-
-	return res, err
+	return append(res, cc.NewReply(t))
 }
 
 var fileTypeFLDR = [4]byte{0x66, 0x6c, 0x64, 0x72}
 
-func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction) {
 	fileName := t.GetField(FieldFileName).Data
 	filePath := t.GetField(FieldFilePath).Data
 
 	fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	fw, err := newFileWrapper(cc.Server.FS, fullFilePath, 0)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	encodedName, err := txtEncoder.String(fw.name)
 	if err != nil {
-		return res, fmt.Errorf("invalid filepath encoding: %w", err)
+		return res
 	}
 
 	fields := []Field{
@@ -414,7 +234,7 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	}
 
 	res = append(res, cc.NewReply(t, fields...))
-	return res, err
+	return res
 }
 
 // HandleSetFileInfo updates a file or folder Name and/or comment from the Get Info window
@@ -424,54 +244,52 @@ func HandleGetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 // * 211	File new Name	Optional
 // * 210	File comment	Optional
 // Fields used in the reply:	None
-func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction) {
 	fileName := t.GetField(FieldFileName).Data
 	filePath := t.GetField(FieldFilePath).Data
 
 	fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	fi, err := cc.Server.FS.Stat(fullFilePath)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	hlFile, err := newFileWrapper(cc.Server.FS, fullFilePath, 0)
 	if err != nil {
-		return res, err
+		return res
 	}
 	if t.GetField(FieldFileComment).Data != nil {
 		switch mode := fi.Mode(); {
 		case mode.IsDir():
 			if !cc.Authorize(accessSetFolderComment) {
-				res = append(res, cc.NewErrReply(t, "You are not allowed to set comments for folders."))
-				return res, err
+				return cc.NewErrReply(t, "You are not allowed to set comments for folders.")
 			}
 		case mode.IsRegular():
 			if !cc.Authorize(accessSetFileComment) {
-				res = append(res, cc.NewErrReply(t, "You are not allowed to set comments for files."))
-				return res, err
+				return cc.NewErrReply(t, "You are not allowed to set comments for files.")
 			}
 		}
 
 		if err := hlFile.ffo.FlatFileInformationFork.setComment(t.GetField(FieldFileComment).Data); err != nil {
-			return res, err
+			return res
 		}
 		w, err := hlFile.infoForkWriter()
 		if err != nil {
-			return res, err
+			return res
 		}
 		_, err = io.Copy(w, &hlFile.ffo.FlatFileInformationFork)
 		if err != nil {
-			return res, err
+			return res
 		}
 	}
 
 	fullNewFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, t.GetField(FieldFileNewName).Data)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 
 	fileNewName := t.GetField(FieldFileNewName).Data
@@ -480,41 +298,38 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		switch mode := fi.Mode(); {
 		case mode.IsDir():
 			if !cc.Authorize(accessRenameFolder) {
-				res = append(res, cc.NewErrReply(t, "You are not allowed to rename folders."))
-				return res, err
+				return cc.NewErrReply(t, "You are not allowed to rename folders.")
 			}
 			err = os.Rename(fullFilePath, fullNewFilePath)
 			if os.IsNotExist(err) {
-				res = append(res, cc.NewErrReply(t, "Cannot rename folder "+string(fileName)+" because it does not exist or cannot be found."))
-				return res, err
+				return cc.NewErrReply(t, "Cannot rename folder "+string(fileName)+" because it does not exist or cannot be found.")
+
 			}
 		case mode.IsRegular():
 			if !cc.Authorize(accessRenameFile) {
-				res = append(res, cc.NewErrReply(t, "You are not allowed to rename files."))
-				return res, err
+				return cc.NewErrReply(t, "You are not allowed to rename files.")
 			}
 			fileDir, err := readPath(cc.Server.Config.FileRoot, filePath, []byte{})
 			if err != nil {
-				return nil, err
+				return nil
 			}
 			hlFile.name, err = txtDecoder.String(string(fileNewName))
 			if err != nil {
-				return res, fmt.Errorf("invalid filepath encoding: %w", err)
+				return res
 			}
 
 			err = hlFile.move(fileDir)
 			if os.IsNotExist(err) {
-				res = append(res, cc.NewErrReply(t, "Cannot rename file "+string(fileName)+" because it does not exist or cannot be found."))
-				return res, err
+				return cc.NewErrReply(t, "Cannot rename file "+string(fileName)+" because it does not exist or cannot be found.")
 			}
 			if err != nil {
-				return res, err
+				return res
 			}
 		}
 	}
 
 	res = append(res, cc.NewReply(t))
-	return res, err
+	return res
 }
 
 // HandleDeleteFile deletes a file or folder
@@ -522,98 +337,91 @@ func HandleSetFileInfo(cc *ClientConn, t *Transaction) (res []Transaction, err e
 // * 201	File Name
 // * 202	File path
 // Fields used in the reply: none
-func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleDeleteFile(cc *ClientConn, t *Transaction) (res []Transaction) {
 	fileName := t.GetField(FieldFileName).Data
 	filePath := t.GetField(FieldFilePath).Data
 
 	fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	hlFile, err := newFileWrapper(cc.Server.FS, fullFilePath, 0)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	fi, err := hlFile.dataFile()
 	if err != nil {
-		res = append(res, cc.NewErrReply(t, "Cannot delete file "+string(fileName)+" because it does not exist or cannot be found."))
-		return res, nil
+		return cc.NewErrReply(t, "Cannot delete file "+string(fileName)+" because it does not exist or cannot be found.")
 	}
 
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
 		if !cc.Authorize(accessDeleteFolder) {
-			res = append(res, cc.NewErrReply(t, "You are not allowed to delete folders."))
-			return res, err
+			return cc.NewErrReply(t, "You are not allowed to delete folders.")
 		}
 	case mode.IsRegular():
 		if !cc.Authorize(accessDeleteFile) {
-			res = append(res, cc.NewErrReply(t, "You are not allowed to delete files."))
-			return res, err
+			return cc.NewErrReply(t, "You are not allowed to delete files.")
 		}
 	}
 
 	if err := hlFile.delete(); err != nil {
-		return res, err
+		return res
 	}
 
 	res = append(res, cc.NewReply(t))
-	return res, err
+	return res
 }
 
 // HandleMoveFile moves files or folders. Note: seemingly not documented
-func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleMoveFile(cc *ClientConn, t *Transaction) (res []Transaction) {
 	fileName := string(t.GetField(FieldFileName).Data)
 
 	filePath, err := readPath(cc.Server.Config.FileRoot, t.GetField(FieldFilePath).Data, t.GetField(FieldFileName).Data)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	fileNewPath, err := readPath(cc.Server.Config.FileRoot, t.GetField(FieldFileNewPath).Data, nil)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	cc.logger.Info("Move file", "src", filePath+"/"+fileName, "dst", fileNewPath+"/"+fileName)
 
 	hlFile, err := newFileWrapper(cc.Server.FS, filePath, 0)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	fi, err := hlFile.dataFile()
 	if err != nil {
-		res = append(res, cc.NewErrReply(t, "Cannot delete file "+fileName+" because it does not exist or cannot be found."))
-		return res, err
+		return cc.NewErrReply(t, "Cannot delete file "+fileName+" because it does not exist or cannot be found.")
 	}
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
 		if !cc.Authorize(accessMoveFolder) {
-			res = append(res, cc.NewErrReply(t, "You are not allowed to move folders."))
-			return res, err
+			return cc.NewErrReply(t, "You are not allowed to move folders.")
 		}
 	case mode.IsRegular():
 		if !cc.Authorize(accessMoveFile) {
-			res = append(res, cc.NewErrReply(t, "You are not allowed to move files."))
-			return res, err
+			return cc.NewErrReply(t, "You are not allowed to move files.")
 		}
 	}
 	if err := hlFile.move(fileNewPath); err != nil {
-		return res, err
+		return res
 	}
 	// TODO: handle other possible errors; e.g. fileWrapper delete fails due to fileWrapper permission issue
 
 	res = append(res, cc.NewReply(t))
-	return res, err
+	return res
 }
 
-func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessCreateFolder) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to create folders."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to create folders.")
 	}
 	folderName := string(t.GetField(FieldFileName).Data)
 
@@ -626,7 +434,7 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err err
 		var newFp FilePath
 		_, err := newFp.Write(t.GetField(FieldFilePath).Data)
 		if err != nil {
-			return nil, err
+			return res
 		}
 
 		for _, pathItem := range newFp.Items {
@@ -634,31 +442,30 @@ func HandleNewFolder(cc *ClientConn, t *Transaction) (res []Transaction, err err
 		}
 	}
 	newFolderPath := path.Join(cc.Server.Config.FileRoot, subPath, folderName)
-	newFolderPath, err = txtDecoder.String(newFolderPath)
+	newFolderPath, err := txtDecoder.String(newFolderPath)
 	if err != nil {
-		return res, fmt.Errorf("invalid filepath encoding: %w", err)
+		return res
 	}
 
 	// TODO: check path and folder Name lengths
 
 	if _, err := cc.Server.FS.Stat(newFolderPath); !os.IsNotExist(err) {
 		msg := fmt.Sprintf("Cannot create folder \"%s\" because there is already a file or folder with that Name.", folderName)
-		return []Transaction{cc.NewErrReply(t, msg)}, nil
+		return cc.NewErrReply(t, msg)
 	}
 
 	if err := cc.Server.FS.Mkdir(newFolderPath, 0777); err != nil {
 		msg := fmt.Sprintf("Cannot create folder \"%s\" because an error occurred.", folderName)
-		return []Transaction{cc.NewErrReply(t, msg)}, nil
+		return cc.NewErrReply(t, msg)
 	}
 
 	res = append(res, cc.NewReply(t))
-	return res, err
+	return res
 }
 
-func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessModifyUser) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to modify accounts."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to modify accounts.")
 	}
 
 	login := string(encodeString(t.GetField(FieldUserLogin).Data))
@@ -668,7 +475,7 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 
 	account := cc.Server.Accounts[login]
 	if account == nil {
-		return append(res, cc.NewErrReply(t, "Account not found.")), nil
+		return cc.NewErrReply(t, "Account not found.")
 	}
 	account.Name = userName
 	copy(account.Access[:], newAccessLvl)
@@ -685,33 +492,30 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 
 	out, err := yaml.Marshal(&account)
 	if err != nil {
-		return res, err
+		return res
 	}
 	if err := os.WriteFile(filepath.Join(cc.Server.ConfigDir, "Users", login+".yaml"), out, 0666); err != nil {
-		return res, err
+		return res
 	}
 
 	// Notify connected clients logged in as the user of the new access level
 	for _, c := range cc.Server.Clients {
 		if c.Account.Login == login {
-			// Note: comment out these two lines to test server-side deny messages
 			newT := NewTransaction(TranUserAccess, c.ID, NewField(FieldUserAccess, newAccessLvl))
-			res = append(res, *newT)
+			res = append(res, newT)
 
-			flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(c.Flags)))
 			if c.Authorize(accessDisconUser) {
-				flagBitmap.SetBit(flagBitmap, UserFlagAdmin, 1)
+				c.Flags.Set(UserFlagAdmin, 1)
 			} else {
-				flagBitmap.SetBit(flagBitmap, UserFlagAdmin, 0)
+				c.Flags.Set(UserFlagAdmin, 0)
 			}
-			binary.BigEndian.PutUint16(c.Flags, uint16(flagBitmap.Int64()))
 
 			c.Account.Access = account.Access
 
 			cc.sendAll(
 				TranNotifyChangeUser,
-				NewField(FieldUserID, *c.ID),
-				NewField(FieldUserFlags, c.Flags),
+				NewField(FieldUserID, c.ID[:]),
+				NewField(FieldUserFlags, c.Flags[:]),
 				NewField(FieldUserName, c.UserName),
 				NewField(FieldUserIconID, c.Icon),
 			)
@@ -719,19 +523,17 @@ func HandleSetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 	}
 
 	res = append(res, cc.NewReply(t))
-	return res, err
+	return res
 }
 
-func HandleGetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleGetUser(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessOpenUser) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to view accounts."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to view accounts.")
 	}
 
 	account := cc.Server.Accounts[string(t.GetField(FieldUserLogin).Data)]
 	if account == nil {
-		res = append(res, cc.NewErrReply(t, "Account does not exist."))
-		return res, err
+		return cc.NewErrReply(t, "Account does not exist.")
 	}
 
 	res = append(res, cc.NewReply(t,
@@ -740,13 +542,12 @@ func HandleGetUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 		NewField(FieldUserPassword, []byte(account.Password)),
 		NewField(FieldUserAccess, account.Access[:]),
 	))
-	return res, err
+	return res
 }
 
-func HandleListUsers(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleListUsers(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessOpenUser) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to view accounts."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to view accounts.")
 	}
 
 	var userFields []Field
@@ -754,14 +555,14 @@ func HandleListUsers(cc *ClientConn, t *Transaction) (res []Transaction, err err
 		accCopy := *acc
 		b, err := io.ReadAll(&accCopy)
 		if err != nil {
-			return res, err
+			return res
 		}
 
 		userFields = append(userFields, NewField(FieldData, b))
 	}
 
 	res = append(res, cc.NewReply(t, userFields...))
-	return res, err
+	return res
 }
 
 // HandleUpdateUser is used by the v1.5+ multi-user editor to perform account editing for multiple users at a time.
@@ -773,7 +574,7 @@ func HandleListUsers(cc *ClientConn, t *Transaction) (res []Transaction, err err
 // The Transaction sent by the client includes one data field per user that was modified.  This data field in turn
 // contains another data field encoded in its payload with a varying number of sub fields depending on which action is
 // performed.  This seems to be the only place in the Hotline protocol where a data field contains another data field.
-func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction) {
 	for _, field := range t.Fields {
 		var subFields []Field
 
@@ -786,7 +587,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 			var field Field
 			if _, err := field.Write(scanner.Bytes()); err != nil {
-				return res, fmt.Errorf("error reading field: %w", err)
+				return res
 			}
 			subFields = append(subFields, field)
 		}
@@ -794,15 +595,14 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 		// If there's only one subfield, that indicates this is a delete operation for the login in FieldData
 		if len(subFields) == 1 {
 			if !cc.Authorize(accessDeleteUser) {
-				res = append(res, cc.NewErrReply(t, "You are not allowed to delete accounts."))
-				return res, err
+				return cc.NewErrReply(t, "You are not allowed to delete accounts.")
 			}
 
 			login := string(encodeString(getField(FieldData, &subFields).Data))
 			cc.logger.Info("DeleteUser", "login", login)
 
 			if err := cc.Server.DeleteUser(login); err != nil {
-				return res, err
+				return res
 			}
 			continue
 		}
@@ -832,8 +632,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 			// account exists, so this is an update action
 			if !cc.Authorize(accessModifyUser) {
-				res = append(res, cc.NewErrReply(t, "You are not allowed to modify accounts."))
-				return res, nil
+				return cc.NewErrReply(t, "You are not allowed to modify accounts.")
 			}
 
 			// This part is a bit tricky. There are three possibilities:
@@ -856,7 +655,7 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 				copy(acc.Access[:], getField(FieldUserAccess, &subFields).Data)
 			}
 
-			err = cc.Server.UpdateUser(
+			err := cc.Server.UpdateUser(
 				string(encodeString(getField(FieldData, &subFields).Data)),
 				string(encodeString(getField(FieldUserLogin, &subFields).Data)),
 				string(getField(FieldUserName, &subFields).Data),
@@ -864,12 +663,11 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 				acc.Access,
 			)
 			if err != nil {
-				return res, err
+				return res
 			}
 		} else {
 			if !cc.Authorize(accessCreateUser) {
-				res = append(res, cc.NewErrReply(t, "You are not allowed to create new accounts."))
-				return res, nil
+				return cc.NewErrReply(t, "You are not allowed to create new accounts.")
 			}
 
 			cc.logger.Info("CreateUser", "login", userLogin)
@@ -881,35 +679,32 @@ func HandleUpdateUser(cc *ClientConn, t *Transaction) (res []Transaction, err er
 			for i := 0; i < 64; i++ {
 				if newAccess.IsSet(i) {
 					if !cc.Authorize(i) {
-						return append(res, cc.NewErrReply(t, "Cannot create account with more access than yourself.")), nil
+						return cc.NewErrReply(t, "Cannot create account with more access than yourself.")
 					}
 				}
 			}
 
-			err = cc.Server.NewUser(userLogin, string(getField(FieldUserName, &subFields).Data), string(getField(FieldUserPassword, &subFields).Data), newAccess)
+			err := cc.Server.NewUser(userLogin, string(getField(FieldUserName, &subFields).Data), string(getField(FieldUserPassword, &subFields).Data), newAccess)
 			if err != nil {
-				return append(res, cc.NewErrReply(t, "Cannot create account because there is already an account with that login.")), nil
+				return cc.NewErrReply(t, "Cannot create account because there is already an account with that login.")
 			}
 		}
 	}
 
-	res = append(res, cc.NewReply(t))
-	return res, err
+	return append(res, cc.NewReply(t))
 }
 
 // HandleNewUser creates a new user account
-func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessCreateUser) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to create new accounts."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to create new accounts.")
 	}
 
 	login := string(encodeString(t.GetField(FieldUserLogin).Data))
 
 	// If the account already dataFile, reply with an error
 	if _, ok := cc.Server.Accounts[login]; ok {
-		res = append(res, cc.NewErrReply(t, "Cannot create account "+login+" because there is already an account with that login."))
-		return res, err
+		return cc.NewErrReply(t, "Cannot create account "+login+" because there is already an account with that login.")
 	}
 
 	newAccess := accessBitmap{}
@@ -919,52 +714,45 @@ func HandleNewUser(cc *ClientConn, t *Transaction) (res []Transaction, err error
 	for i := 0; i < 64; i++ {
 		if newAccess.IsSet(i) {
 			if !cc.Authorize(i) {
-				res = append(res, cc.NewErrReply(t, "Cannot create account with more access than yourself."))
-				return res, err
+				return cc.NewErrReply(t, "Cannot create account with more access than yourself.")
 			}
 		}
 	}
 
 	if err := cc.Server.NewUser(login, string(t.GetField(FieldUserName).Data), string(t.GetField(FieldUserPassword).Data), newAccess); err != nil {
-		res = append(res, cc.NewErrReply(t, "Cannot create account because there is already an account with that login."))
-		return res, err
+		return cc.NewErrReply(t, "Cannot create account because there is already an account with that login.")
 	}
 
-	res = append(res, cc.NewReply(t))
-	return res, err
+	return append(res, cc.NewReply(t))
 }
 
-func HandleDeleteUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleDeleteUser(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessDeleteUser) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to delete accounts."))
-		return res, nil
+		return cc.NewErrReply(t, "You are not allowed to delete accounts.")
 	}
 
 	login := string(encodeString(t.GetField(FieldUserLogin).Data))
 
 	if err := cc.Server.DeleteUser(login); err != nil {
-		return res, err
+		return res
 	}
 
-	res = append(res, cc.NewReply(t))
-	return res, err
+	return append(res, cc.NewReply(t))
 }
 
 // HandleUserBroadcast sends an Administrator Message to all connected clients of the server
-func HandleUserBroadcast(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleUserBroadcast(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessBroadcast) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to send broadcast messages."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to send broadcast messages.")
 	}
 
 	cc.sendAll(
 		TranServerMsg,
-		NewField(FieldData, t.GetField(TranGetMsgs).Data),
+		NewField(FieldData, t.GetField(FieldData).Data),
 		NewField(FieldChatOptions, []byte{0}),
 	)
 
-	res = append(res, cc.NewReply(t))
-	return res, err
+	return append(res, cc.NewReply(t))
 }
 
 // HandleGetClientInfoText returns user information for the specific user.
@@ -975,31 +763,30 @@ func HandleUserBroadcast(cc *ClientConn, t *Transaction) (res []Transaction, err
 // Fields used in the reply:
 // 102	User Name
 // 101	Data		User info text string
-func HandleGetClientInfoText(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleGetClientInfoText(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessGetClientInfo) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to get client info."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to get client info.")
 	}
 
-	clientID, _ := byteToInt(t.GetField(FieldUserID).Data)
+	clientID := t.GetField(FieldUserID).Data
 
-	clientConn := cc.Server.Clients[uint16(clientID)]
+	clientConn := cc.Server.Clients[[2]byte(clientID)]
 	if clientConn == nil {
-		return append(res, cc.NewErrReply(t, "User not found.")), err
+		return cc.NewErrReply(t, "User not found.")
 	}
 
 	res = append(res, cc.NewReply(t,
 		NewField(FieldData, []byte(clientConn.String())),
 		NewField(FieldUserName, clientConn.UserName),
 	))
-	return res, err
+	return res
 }
 
-func HandleGetUserNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	return []Transaction{cc.NewReply(t, cc.Server.connectedUsers()...)}, nil
+func HandleGetUserNameList(cc *ClientConn, t *Transaction) (res []Transaction) {
+	return []Transaction{cc.NewReply(t, cc.Server.connectedUsers()...)}
 }
 
-func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if t.GetField(FieldUserName).Data != nil {
 		if cc.Authorize(accessAnyName) {
 			cc.UserName = t.GetField(FieldUserName).Data
@@ -1016,54 +803,46 @@ func HandleTranAgreed(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	options := t.GetField(FieldOptions).Data
 	optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
 
-	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(cc.Flags)))
-
 	// Check refuse private PM option
-	if optBitmap.Bit(UserOptRefusePM) == 1 {
-		flagBitmap.SetBit(flagBitmap, UserFlagRefusePM, 1)
-		binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
-	}
+
+	cc.flagsMU.Lock()
+	defer cc.flagsMU.Unlock()
+	cc.Flags.Set(UserFlagRefusePM, optBitmap.Bit(UserOptRefusePM))
 
 	// Check refuse private chat option
-	if optBitmap.Bit(UserOptRefuseChat) == 1 {
-		flagBitmap.SetBit(flagBitmap, UserFlagRefusePChat, 1)
-		binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
-	}
+	cc.Flags.Set(UserFlagRefusePChat, optBitmap.Bit(UserOptRefuseChat))
 
 	// Check auto response
 	if optBitmap.Bit(UserOptAutoResponse) == 1 {
 		cc.AutoReply = t.GetField(FieldAutomaticResponse).Data
-	} else {
-		cc.AutoReply = []byte{}
 	}
 
 	trans := cc.notifyOthers(
-		*NewTransaction(
-			TranNotifyChangeUser, nil,
+		NewTransaction(
+			TranNotifyChangeUser, [2]byte{0, 0},
 			NewField(FieldUserName, cc.UserName),
-			NewField(FieldUserID, *cc.ID),
+			NewField(FieldUserID, cc.ID[:]),
 			NewField(FieldUserIconID, cc.Icon),
-			NewField(FieldUserFlags, cc.Flags),
+			NewField(FieldUserFlags, cc.Flags[:]),
 		),
 	)
 	res = append(res, trans...)
 
 	if cc.Server.Config.BannerFile != "" {
-		res = append(res, *NewTransaction(TranServerBanner, cc.ID, NewField(FieldBannerType, []byte("JPEG"))))
+		res = append(res, NewTransaction(TranServerBanner, cc.ID, NewField(FieldBannerType, []byte("JPEG"))))
 	}
 
 	res = append(res, cc.NewReply(t))
 
-	return res, err
+	return res
 }
 
 // HandleTranOldPostNews updates the flat news
 // Fields used in this request:
 // 101	Data
-func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessNewsPostArt) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to post news."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to post news.")
 	}
 
 	cc.Server.flatNewsMux.Lock()
@@ -1087,7 +866,7 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 
 	// update news on disk
 	if err := cc.Server.FS.WriteFile(filepath.Join(cc.Server.ConfigDir, "MessageBoard.txt"), cc.Server.FlatNews, 0644); err != nil {
-		return res, err
+		return res
 	}
 
 	// Notify all clients of updated news
@@ -1097,20 +876,18 @@ func HandleTranOldPostNews(cc *ClientConn, t *Transaction) (res []Transaction, e
 	)
 
 	res = append(res, cc.NewReply(t))
-	return res, err
+	return res
 }
 
-func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessDisconUser) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to disconnect users."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to disconnect users.")
 	}
 
-	clientConn := cc.Server.Clients[binary.BigEndian.Uint16(t.GetField(FieldUserID).Data)]
+	clientConn := cc.Server.Clients[[2]byte(t.GetField(FieldUserID).Data)]
 
 	if clientConn.Authorize(accessCannotBeDiscon) {
-		res = append(res, cc.NewErrReply(t, clientConn.Account.Login+" is not allowed to be disconnected."))
-		return res, err
+		return cc.NewErrReply(t, clientConn.Account.Login+" is not allowed to be disconnected.")
 	}
 
 	// If FieldOptions is set, then the client IP is banned in addition to disconnected.
@@ -1122,7 +899,7 @@ func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, er
 			// send message: "You are temporarily banned on this server"
 			cc.logger.Info("Disconnect & temporarily ban " + string(clientConn.UserName))
 
-			res = append(res, *NewTransaction(
+			res = append(res, NewTransaction(
 				TranServerMsg,
 				clientConn.ID,
 				NewField(FieldData, []byte("You are temporarily banned on this server")),
@@ -1135,7 +912,7 @@ func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, er
 			// send message: "You are permanently banned on this server"
 			cc.logger.Info("Disconnect & ban " + string(clientConn.UserName))
 
-			res = append(res, *NewTransaction(
+			res = append(res, NewTransaction(
 				TranServerMsg,
 				clientConn.ID,
 				NewField(FieldData, []byte("You are permanently banned on this server")),
@@ -1147,7 +924,7 @@ func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, er
 
 		err := cc.Server.writeBanList()
 		if err != nil {
-			return res, err
+			return res
 		}
 	}
 
@@ -1157,16 +934,15 @@ func HandleDisconnectUser(cc *ClientConn, t *Transaction) (res []Transaction, er
 		clientConn.Disconnect()
 	}()
 
-	return append(res, cc.NewReply(t)), err
+	return append(res, cc.NewReply(t))
 }
 
 // HandleGetNewsCatNameList returns a list of news categories for a path
 // Fields used in the request:
 // 325	News path	(Optional)
-func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessNewsReadArt) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to read news."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to read news.")
 	}
 
 	pathStrs := ReadNewsPath(t.GetField(FieldNewsPath).Data)
@@ -1184,21 +960,19 @@ func HandleGetNewsCatNameList(cc *ClientConn, t *Transaction) (res []Transaction
 	var fieldData []Field
 	for _, k := range keys {
 		cat := cats[k]
-		b, _ := cat.MarshalBinary()
-		fieldData = append(fieldData, NewField(
-			FieldNewsCatListData15,
-			b,
-		))
+
+		b, _ := io.ReadAll(&cat)
+
+		fieldData = append(fieldData, NewField(FieldNewsCatListData15, b))
 	}
 
 	res = append(res, cc.NewReply(t, fieldData...))
-	return res, err
+	return res
 }
 
-func HandleNewNewsCat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleNewNewsCat(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessNewsCreateCat) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to create news categories."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to create news categories.")
 	}
 
 	name := string(t.GetField(FieldNewsCatName).Data)
@@ -1213,19 +987,18 @@ func HandleNewNewsCat(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	}
 
 	if err := cc.Server.writeThreadedNews(); err != nil {
-		return res, err
+		return res
 	}
 	res = append(res, cc.NewReply(t))
-	return res, err
+	return res
 }
 
 // Fields used in the request:
 // 322	News category Name
 // 325	News path
-func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessNewsCreateFldr) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to create news folders."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to create news folders.")
 	}
 
 	name := string(t.GetField(FieldFileName).Data)
@@ -1239,10 +1012,10 @@ func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction, err e
 		SubCats:  make(map[string]NewsCategoryListData15),
 	}
 	if err := cc.Server.writeThreadedNews(); err != nil {
-		return res, err
+		return res
 	}
 	res = append(res, cc.NewReply(t))
-	return res, err
+	return res
 }
 
 // HandleGetNewsArtData gets the list of article names at the specified news path.
@@ -1252,10 +1025,9 @@ func HandleNewNewsFldr(cc *ClientConn, t *Transaction) (res []Transaction, err e
 
 // Fields used in the reply:
 // 321	News article list data	Optional
-func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessNewsReadArt) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to read news."))
-		return res, nil
+		return cc.NewErrReply(t, "You are not allowed to read news.")
 	}
 
 	pathStrs := ReadNewsPath(t.GetField(FieldNewsPath).Data)
@@ -1272,11 +1044,11 @@ func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction
 
 	b, err := io.ReadAll(&nald)
 	if err != nil {
-		return res, fmt.Errorf("error loading news articles: %w", err)
+		return res
 	}
 
 	res = append(res, cc.NewReply(t, NewField(FieldNewsArtListData, b)))
-	return res, nil
+	return res
 }
 
 // HandleGetNewsArtData requests information about the specific news article.
@@ -1297,10 +1069,9 @@ func HandleGetNewsArtNameList(cc *ClientConn, t *Transaction) (res []Transaction
 // 336	First child article ID
 // 327	News article data flavor	"Should be “text/plain”
 // 333	News article data	Optional (if data flavor is “text/plain”)
-func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessNewsReadArt) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to read news."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to read news.")
 	}
 
 	var cat NewsCategoryListData15
@@ -1315,13 +1086,12 @@ func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, er
 	// some third party clients such as Frogblast and Heildrun will always send 4 bytes
 	convertedID, err := byteToInt(t.GetField(FieldNewsArtID).Data)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	art := cat.Articles[uint32(convertedID)]
 	if art == nil {
-		res = append(res, cc.NewReply(t))
-		return res, err
+		return append(res, cc.NewReply(t))
 	}
 
 	res = append(res, cc.NewReply(t,
@@ -1335,7 +1105,7 @@ func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, er
 		NewField(FieldNewsArtDataFlav, []byte("text/plain")),
 		NewField(FieldNewsArtData, []byte(art.Data)),
 	))
-	return res, err
+	return res
 }
 
 // HandleDelNewsItem deletes an existing threaded news folder or category from the server.
@@ -1343,7 +1113,7 @@ func HandleGetNewsArtData(cc *ClientConn, t *Transaction) (res []Transaction, er
 // 325	News path
 // Fields used in the reply:
 // None
-func HandleDelNewsItem(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleDelNewsItem(cc *ClientConn, t *Transaction) (res []Transaction) {
 	pathStrs := ReadNewsPath(t.GetField(FieldNewsPath).Data)
 
 	cats := cc.Server.ThreadedNews.Categories
@@ -1356,27 +1126,27 @@ func HandleDelNewsItem(cc *ClientConn, t *Transaction) (res []Transaction, err e
 
 	if cats[delName].Type == [2]byte{0, 3} {
 		if !cc.Authorize(accessNewsDeleteCat) {
-			return append(res, cc.NewErrReply(t, "You are not allowed to delete news categories.")), nil
+			return cc.NewErrReply(t, "You are not allowed to delete news categories.")
 		}
 	} else {
 		if !cc.Authorize(accessNewsDeleteFldr) {
-			return append(res, cc.NewErrReply(t, "You are not allowed to delete news folders.")), nil
+			return cc.NewErrReply(t, "You are not allowed to delete news folders.")
 		}
 	}
 
 	delete(cats, delName)
 
 	if err := cc.Server.writeThreadedNews(); err != nil {
-		return res, err
+		return res
 	}
 
-	return append(res, cc.NewReply(t)), nil
+	return append(res, cc.NewReply(t))
 }
 
-func HandleDelNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleDelNewsArt(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessNewsDeleteArt) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to delete news articles."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to delete news articles.")
+
 	}
 
 	// Request Fields
@@ -1386,7 +1156,7 @@ func HandleDelNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	pathStrs := ReadNewsPath(t.GetField(FieldNewsPath).Data)
 	ID, err := byteToInt(t.GetField(FieldNewsArtID).Data)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	// TODO: Delete recursive
@@ -1399,11 +1169,11 @@ func HandleDelNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	cats[catName] = cat
 	if err := cc.Server.writeThreadedNews(); err != nil {
-		return res, err
+		return res
 	}
 
 	res = append(res, cc.NewReply(t))
-	return res, err
+	return res
 }
 
 // Request fields
@@ -1413,10 +1183,9 @@ func HandleDelNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err er
 // 334	News article flags
 // 327	News article data flavor		Currently “text/plain”
 // 333	News article data
-func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessNewsPostArt) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to post news articles."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to post news articles.")
 	}
 
 	pathStrs := ReadNewsPath(t.GetField(FieldNewsPath).Data)
@@ -1427,7 +1196,7 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 
 	artID, err := byteToInt(t.GetField(FieldNewsArtID).Data)
 	if err != nil {
-		return res, err
+		return res
 	}
 	convertedArtID := uint32(artID)
 	bs := make([]byte, 4)
@@ -1437,15 +1206,12 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 	defer cc.Server.mux.Unlock()
 
 	newArt := NewsArtData{
-		Title:         string(t.GetField(FieldNewsArtTitle).Data),
-		Poster:        string(cc.UserName),
-		Date:          toHotlineTime(time.Now()),
-		PrevArt:       [4]byte{},
-		NextArt:       [4]byte{},
-		ParentArt:     [4]byte(bs),
-		FirstChildArt: [4]byte{},
-		DataFlav:      []byte("text/plain"),
-		Data:          string(t.GetField(FieldNewsArtData).Data),
+		Title:     string(t.GetField(FieldNewsArtTitle).Data),
+		Poster:    string(cc.UserName),
+		Date:      toHotlineTime(time.Now()),
+		ParentArt: [4]byte(bs),
+		DataFlav:  []byte("text/plain"),
+		Data:      string(t.GetField(FieldNewsArtData).Data),
 	}
 
 	var keys []int
@@ -1479,29 +1245,26 @@ func HandlePostNewsArt(cc *ClientConn, t *Transaction) (res []Transaction, err e
 
 	cats[catName] = cat
 	if err := cc.Server.writeThreadedNews(); err != nil {
-		return res, err
+		return res
 	}
 
-	res = append(res, cc.NewReply(t))
-	return res, err
+	return append(res, cc.NewReply(t))
 }
 
 // HandleGetMsgs returns the flat news data
-func HandleGetMsgs(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleGetMsgs(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessNewsReadArt) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to read news."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to read news.")
 	}
 
 	res = append(res, cc.NewReply(t, NewField(FieldData, cc.Server.FlatNews)))
 
-	return res, err
+	return res
 }
 
-func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessDownloadFile) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to download files."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to download files.")
 	}
 
 	fileName := t.GetField(FieldFileName).Data
@@ -1512,7 +1275,7 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 	var frd FileResumeData
 	if resumeData != nil {
 		if err := frd.UnmarshalBinary(t.GetField(FieldFileResumeData).Data); err != nil {
-			return res, err
+			return res
 		}
 		// TODO: handle rsrc fork offset
 		dataOffset = int64(binary.BigEndian.Uint32(frd.ForkInfoList[0].DataSize[:]))
@@ -1520,12 +1283,12 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 
 	fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	hlFile, err := newFileWrapper(cc.Server.FS, fullFilePath, dataOffset)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	xferSize := hlFile.ffo.TransferSize(0)
@@ -1536,7 +1299,7 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 	if resumeData != nil {
 		var frd FileResumeData
 		if err := frd.UnmarshalBinary(t.GetField(FieldFileResumeData).Data); err != nil {
-			return res, err
+			return res
 		}
 		ft.fileResumeData = &frd
 	}
@@ -1556,45 +1319,45 @@ func HandleDownloadFile(cc *ClientConn, t *Transaction) (res []Transaction, err 
 		NewField(FieldFileSize, hlFile.ffo.FlatFileDataForkHeader.DataSize[:]),
 	))
 
-	return res, err
+	return res
 }
 
 // Download all files from the specified folder and sub-folders
-func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessDownloadFile) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to download folders."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to download folders.")
 	}
 
 	fullFilePath, err := readPath(cc.Server.Config.FileRoot, t.GetField(FieldFilePath).Data, t.GetField(FieldFileName).Data)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	transferSize, err := CalcTotalSize(fullFilePath)
 	if err != nil {
-		return res, err
+		return res
 	}
 	itemCount, err := CalcItemCount(fullFilePath)
 	if err != nil {
-		return res, err
+		return res
 	}
+	spew.Dump(itemCount)
 
 	fileTransfer := cc.newFileTransfer(FolderDownload, t.GetField(FieldFileName).Data, t.GetField(FieldFilePath).Data, transferSize)
 
 	var fp FilePath
 	_, err = fp.Write(t.GetField(FieldFilePath).Data)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	res = append(res, cc.NewReply(t,
-		NewField(FieldRefNum, fileTransfer.ReferenceNumber),
+		NewField(FieldRefNum, fileTransfer.refNum[:]),
 		NewField(FieldTransferSize, transferSize),
 		NewField(FieldFolderItemCount, itemCount),
 		NewField(FieldWaitingCount, []byte{0x00, 0x00}), // TODO: Implement waiting count
 	))
-	return res, err
+	return res
 }
 
 // Upload all files from the local folder and its subfolders to the specified path on the server
@@ -1604,19 +1367,18 @@ func HandleDownloadFolder(cc *ClientConn, t *Transaction) (res []Transaction, er
 // 108	transfer size	Total size of all items in the folder
 // 220	Folder item count
 // 204	File transfer options	"Optional Currently set to 1" (TODO: ??)
-func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction) {
 	var fp FilePath
 	if t.GetField(FieldFilePath).Data != nil {
-		if _, err = fp.Write(t.GetField(FieldFilePath).Data); err != nil {
-			return res, err
+		if _, err := fp.Write(t.GetField(FieldFilePath).Data); err != nil {
+			return res
 		}
 	}
 
 	// Handle special cases for Upload and Drop Box folders
 	if !cc.Authorize(accessUploadAnywhere) {
 		if !fp.IsUploadDir() && !fp.IsDropbox() {
-			res = append(res, cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload of the folder \"%v\" because you are only allowed to upload to the \"Uploads\" folder.", string(t.GetField(FieldFileName).Data))))
-			return res, err
+			return cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload of the folder \"%v\" because you are only allowed to upload to the \"Uploads\" folder.", string(t.GetField(FieldFileName).Data)))
 		}
 	}
 
@@ -1628,8 +1390,7 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err 
 
 	fileTransfer.FolderItemCount = t.GetField(FieldFolderItemCount).Data
 
-	res = append(res, cc.NewReply(t, NewField(FieldRefNum, fileTransfer.ReferenceNumber)))
-	return res, err
+	return append(res, cc.NewReply(t, NewField(FieldRefNum, fileTransfer.refNum[:])))
 }
 
 // HandleUploadFile
@@ -1639,10 +1400,9 @@ func HandleUploadFolder(cc *ClientConn, t *Transaction) (res []Transaction, err 
 // 204	File transfer options	"Optional
 // Used only to resume download, currently has value 2"
 // 108	File transfer size	"Optional used if download is not resumed"
-func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessUploadFile) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to upload files."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to upload files.")
 	}
 
 	fileName := t.GetField(FieldFileName).Data
@@ -1652,37 +1412,35 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 
 	var fp FilePath
 	if filePath != nil {
-		if _, err = fp.Write(filePath); err != nil {
-			return res, err
+		if _, err := fp.Write(filePath); err != nil {
+			return res
 		}
 	}
 
 	// Handle special cases for Upload and Drop Box folders
 	if !cc.Authorize(accessUploadAnywhere) {
 		if !fp.IsUploadDir() && !fp.IsDropbox() {
-			res = append(res, cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload of the file \"%v\" because you are only allowed to upload to the \"Uploads\" folder.", string(fileName))))
-			return res, err
+			return cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload of the file \"%v\" because you are only allowed to upload to the \"Uploads\" folder.", string(fileName)))
 		}
 	}
 	fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	if _, err := cc.Server.FS.Stat(fullFilePath); err == nil {
-		res = append(res, cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload because there is already a file named \"%v\".  Try choosing a different Name.", string(fileName))))
-		return res, err
+		return cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload because there is already a file named \"%v\".  Try choosing a different Name.", string(fileName)))
 	}
 
 	ft := cc.newFileTransfer(FileUpload, fileName, filePath, transferSize)
 
-	replyT := cc.NewReply(t, NewField(FieldRefNum, ft.ReferenceNumber))
+	replyT := cc.NewReply(t, NewField(FieldRefNum, ft.refNum[:]))
 
 	// client has requested to resume a partially transferred file
 	if transferOptions != nil {
 		fileInfo, err := cc.Server.FS.Stat(fullFilePath + incompleteFileSuffix)
 		if err != nil {
-			return res, err
+			return res
 		}
 
 		offset := make([]byte, 4)
@@ -1700,10 +1458,10 @@ func HandleUploadFile(cc *ClientConn, t *Transaction) (res []Transaction, err er
 	}
 
 	res = append(res, replyT)
-	return res, err
+	return res
 }
 
-func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if len(t.GetField(FieldUserIconID).Data) == 4 {
 		cc.Icon = t.GetField(FieldUserIconID).Data[2:]
 	} else {
@@ -1713,17 +1471,20 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction,
 		cc.UserName = t.GetField(FieldUserName).Data
 	}
 
+	cc.flagsMU.Lock()
+	defer cc.flagsMU.Unlock()
+
 	// the options field is only passed by the client versions > 1.2.3.
 	options := t.GetField(FieldOptions).Data
 	if options != nil {
 		optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
-		flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(cc.Flags)))
+		flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(cc.Flags[:])))
 
 		flagBitmap.SetBit(flagBitmap, UserFlagRefusePM, optBitmap.Bit(UserOptRefusePM))
-		binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
+		binary.BigEndian.PutUint16(cc.Flags[:], uint16(flagBitmap.Int64()))
 
 		flagBitmap.SetBit(flagBitmap, UserFlagRefusePChat, optBitmap.Bit(UserOptRefuseChat))
-		binary.BigEndian.PutUint16(cc.Flags, uint16(flagBitmap.Int64()))
+		binary.BigEndian.PutUint16(cc.Flags[:], uint16(flagBitmap.Int64()))
 
 		// Check auto response
 		if optBitmap.Bit(UserOptAutoResponse) == 1 {
@@ -1733,60 +1494,59 @@ func HandleSetClientUserInfo(cc *ClientConn, t *Transaction) (res []Transaction,
 		}
 	}
 
-	for _, c := range sortedClients(cc.Server.Clients) {
-		res = append(res, *NewTransaction(
+	for _, c := range cc.Server.Clients {
+		res = append(res, NewTransaction(
 			TranNotifyChangeUser,
 			c.ID,
-			NewField(FieldUserID, *cc.ID),
+			NewField(FieldUserID, cc.ID[:]),
 			NewField(FieldUserIconID, cc.Icon),
-			NewField(FieldUserFlags, cc.Flags),
+			NewField(FieldUserFlags, cc.Flags[:]),
 			NewField(FieldUserName, cc.UserName),
 		))
 	}
 
-	return res, err
+	return res
 }
 
 // HandleKeepAlive responds to keepalive transactions with an empty reply
 // * HL 1.9.2 Client sends keepalive msg every 3 minutes
 // * HL 1.2.3 Client doesn't send keepalives
-func HandleKeepAlive(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleKeepAlive(cc *ClientConn, t *Transaction) (res []Transaction) {
 	res = append(res, cc.NewReply(t))
 
-	return res, err
+	return res
 }
 
-func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction) {
 	fullPath, err := readPath(
 		cc.Server.Config.FileRoot,
 		t.GetField(FieldFilePath).Data,
 		nil,
 	)
 	if err != nil {
-		return res, fmt.Errorf("error reading file path: %w", err)
+		return res
 	}
 
 	var fp FilePath
 	if t.GetField(FieldFilePath).Data != nil {
 		if _, err = fp.Write(t.GetField(FieldFilePath).Data); err != nil {
-			return res, fmt.Errorf("error writing file path: %w", err)
+			return res
 		}
 	}
 
 	// Handle special case for drop box folders
 	if fp.IsDropbox() && !cc.Authorize(accessViewDropBoxes) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to view drop boxes."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to view drop boxes.")
 	}
 
 	fileNames, err := getFileNameList(fullPath, cc.Server.Config.IgnoreFiles)
 	if err != nil {
-		return res, fmt.Errorf("getFileNameList: %w", err)
+		return res
 	}
 
 	res = append(res, cc.NewReply(t, fileNames...))
 
-	return res, err
+	return res
 }
 
 // =================================
@@ -1802,10 +1562,9 @@ func HandleGetFileNameList(cc *ClientConn, t *Transaction) (res []Transaction, e
 // 1. ClientB sends TranJoinChat with FieldChatID
 
 // HandleInviteNewChat invites users to new private chat
-func HandleInviteNewChat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleInviteNewChat(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessOpenChat) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to request private chat."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to request private chat.")
 	}
 
 	// Client to Invite
@@ -1813,99 +1572,88 @@ func HandleInviteNewChat(cc *ClientConn, t *Transaction) (res []Transaction, err
 	newChatID := cc.Server.NewPrivateChat(cc)
 
 	// Check if target user has "Refuse private chat" flag
-	binary.BigEndian.Uint16(targetID)
-	targetClient := cc.Server.Clients[binary.BigEndian.Uint16(targetID)]
-
-	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(targetClient.Flags)))
+	targetClient := cc.Server.Clients[[2]byte(targetID)]
+	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(targetClient.Flags[:])))
 	if flagBitmap.Bit(UserFlagRefusePChat) == 1 {
 		res = append(res,
-			*NewTransaction(
+			NewTransaction(
 				TranServerMsg,
 				cc.ID,
 				NewField(FieldData, []byte(string(targetClient.UserName)+" does not accept private chats.")),
 				NewField(FieldUserName, targetClient.UserName),
-				NewField(FieldUserID, *targetClient.ID),
+				NewField(FieldUserID, targetClient.ID[:]),
 				NewField(FieldOptions, []byte{0, 2}),
 			),
 		)
 	} else {
 		res = append(res,
-			*NewTransaction(
+			NewTransaction(
 				TranInviteToChat,
-				&targetID,
-				NewField(FieldChatID, newChatID),
+				[2]byte(targetID),
+				NewField(FieldChatID, newChatID[:]),
 				NewField(FieldUserName, cc.UserName),
-				NewField(FieldUserID, *cc.ID),
+				NewField(FieldUserID, cc.ID[:]),
 			),
 		)
 	}
 
 	res = append(res,
 		cc.NewReply(t,
-			NewField(FieldChatID, newChatID),
+			NewField(FieldChatID, newChatID[:]),
 			NewField(FieldUserName, cc.UserName),
-			NewField(FieldUserID, *cc.ID),
+			NewField(FieldUserID, cc.ID[:]),
 			NewField(FieldUserIconID, cc.Icon),
-			NewField(FieldUserFlags, cc.Flags),
+			NewField(FieldUserFlags, cc.Flags[:]),
 		),
 	)
 
-	return res, err
+	return res
 }
 
-func HandleInviteToChat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleInviteToChat(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessOpenChat) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to request private chat."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to request private chat.")
 	}
 
 	// Client to Invite
 	targetID := t.GetField(FieldUserID).Data
 	chatID := t.GetField(FieldChatID).Data
 
-	res = append(res,
-		*NewTransaction(
+	return []Transaction{
+		NewTransaction(
 			TranInviteToChat,
-			&targetID,
+			[2]byte(targetID),
 			NewField(FieldChatID, chatID),
 			NewField(FieldUserName, cc.UserName),
-			NewField(FieldUserID, *cc.ID),
+			NewField(FieldUserID, cc.ID[:]),
 		),
-	)
-	res = append(res,
 		cc.NewReply(
 			t,
 			NewField(FieldChatID, chatID),
 			NewField(FieldUserName, cc.UserName),
-			NewField(FieldUserID, *cc.ID),
+			NewField(FieldUserID, cc.ID[:]),
 			NewField(FieldUserIconID, cc.Icon),
-			NewField(FieldUserFlags, cc.Flags),
+			NewField(FieldUserFlags, cc.Flags[:]),
 		),
-	)
-
-	return res, err
+	}
 }
 
-func HandleRejectChatInvite(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
-	chatID := t.GetField(FieldChatID).Data
-	chatInt := binary.BigEndian.Uint32(chatID)
+func HandleRejectChatInvite(cc *ClientConn, t *Transaction) (res []Transaction) {
+	chatID := [4]byte(t.GetField(FieldChatID).Data)
+	privChat := cc.Server.PrivateChats[chatID]
 
-	privChat := cc.Server.PrivateChats[chatInt]
-
-	resMsg := append(cc.UserName, []byte(" declined invitation to chat")...)
-
-	for _, c := range sortedClients(privChat.ClientConn) {
+	for _, c := range privChat.ClientConn {
 		res = append(res,
-			*NewTransaction(
+			NewTransaction(
 				TranChatMsg,
 				c.ID,
-				NewField(FieldChatID, chatID),
-				NewField(FieldData, resMsg),
+				NewField(FieldChatID, chatID[:]),
+				NewField(FieldData, append(cc.UserName, []byte(" declined invitation to chat")...)),
 			),
 		)
 	}
 
-	return res, err
+	return res
 }
 
 // HandleJoinChat is sent from a v1.8+ Hotline client when the joins a private chat
@@ -1913,45 +1661,44 @@ func HandleRejectChatInvite(cc *ClientConn, t *Transaction) (res []Transaction, 
 // * 115	Chat subject
 // * 300	User Name with info (Optional)
 // * 300 	(more user names with info)
-func HandleJoinChat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleJoinChat(cc *ClientConn, t *Transaction) (res []Transaction) {
 	chatID := t.GetField(FieldChatID).Data
-	chatInt := binary.BigEndian.Uint32(chatID)
 
-	privChat := cc.Server.PrivateChats[chatInt]
+	privChat := cc.Server.PrivateChats[[4]byte(chatID)]
 
 	// Send TranNotifyChatChangeUser to current members of the chat to inform of new user
-	for _, c := range sortedClients(privChat.ClientConn) {
+	for _, c := range privChat.ClientConn {
 		res = append(res,
-			*NewTransaction(
+			NewTransaction(
 				TranNotifyChatChangeUser,
 				c.ID,
 				NewField(FieldChatID, chatID),
 				NewField(FieldUserName, cc.UserName),
-				NewField(FieldUserID, *cc.ID),
+				NewField(FieldUserID, cc.ID[:]),
 				NewField(FieldUserIconID, cc.Icon),
-				NewField(FieldUserFlags, cc.Flags),
+				NewField(FieldUserFlags, cc.Flags[:]),
 			),
 		)
 	}
 
-	privChat.ClientConn[cc.uint16ID()] = cc
+	privChat.ClientConn[cc.ID] = cc
 
 	replyFields := []Field{NewField(FieldChatSubject, []byte(privChat.Subject))}
-	for _, c := range sortedClients(privChat.ClientConn) {
+	for _, c := range privChat.ClientConn {
 		b, err := io.ReadAll(&User{
-			ID:    *c.ID,
+			ID:    c.ID,
 			Icon:  c.Icon,
-			Flags: c.Flags,
+			Flags: c.Flags[:],
 			Name:  string(c.UserName),
 		})
 		if err != nil {
-			return res, nil
+			return res
 		}
 		replyFields = append(replyFields, NewField(FieldUsernameWithInfo, b))
 	}
 
 	res = append(res, cc.NewReply(t, replyFields...))
-	return res, err
+	return res
 }
 
 // HandleLeaveChat is sent from a v1.8+ Hotline client when the user exits a private chat
@@ -1959,30 +1706,29 @@ func HandleJoinChat(cc *ClientConn, t *Transaction) (res []Transaction, err erro
 //   - 114	FieldChatID
 //
 // Reply is not expected.
-func HandleLeaveChat(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleLeaveChat(cc *ClientConn, t *Transaction) (res []Transaction) {
 	chatID := t.GetField(FieldChatID).Data
-	chatInt := binary.BigEndian.Uint32(chatID)
 
-	privChat, ok := cc.Server.PrivateChats[chatInt]
+	privChat, ok := cc.Server.PrivateChats[[4]byte(chatID)]
 	if !ok {
-		return res, nil
+		return res
 	}
 
-	delete(privChat.ClientConn, cc.uint16ID())
+	delete(privChat.ClientConn, cc.ID)
 
 	// Notify members of the private chat that the user has left
-	for _, c := range sortedClients(privChat.ClientConn) {
+	for _, c := range privChat.ClientConn {
 		res = append(res,
-			*NewTransaction(
+			NewTransaction(
 				TranNotifyChatDeleteUser,
 				c.ID,
 				NewField(FieldChatID, chatID),
-				NewField(FieldUserID, *cc.ID),
+				NewField(FieldUserID, cc.ID[:]),
 			),
 		)
 	}
 
-	return res, err
+	return res
 }
 
 // HandleSetChatSubject is sent from a v1.8+ Hotline client when the user sets a private chat subject
@@ -1990,16 +1736,15 @@ func HandleLeaveChat(cc *ClientConn, t *Transaction) (res []Transaction, err err
 // * 114	Chat ID
 // * 115	Chat subject
 // Reply is not expected.
-func HandleSetChatSubject(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleSetChatSubject(cc *ClientConn, t *Transaction) (res []Transaction) {
 	chatID := t.GetField(FieldChatID).Data
-	chatInt := binary.BigEndian.Uint32(chatID)
 
-	privChat := cc.Server.PrivateChats[chatInt]
+	privChat := cc.Server.PrivateChats[[4]byte(chatID)]
 	privChat.Subject = string(t.GetField(FieldChatSubject).Data)
 
-	for _, c := range sortedClients(privChat.ClientConn) {
+	for _, c := range privChat.ClientConn {
 		res = append(res,
-			*NewTransaction(
+			NewTransaction(
 				TranNotifyChatSubject,
 				c.ID,
 				NewField(FieldChatID, chatID),
@@ -2008,7 +1753,7 @@ func HandleSetChatSubject(cc *ClientConn, t *Transaction) (res []Transaction, er
 		)
 	}
 
-	return res, err
+	return res
 }
 
 // HandleMakeAlias makes a file alias using the specified path.
@@ -2019,10 +1764,9 @@ func HandleSetChatSubject(cc *ClientConn, t *Transaction) (res []Transaction, er
 //
 // Fields used in the reply:
 // None
-func HandleMakeAlias(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleMakeAlias(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessMakeAlias) {
-		res = append(res, cc.NewErrReply(t, "You are not allowed to make aliases."))
-		return res, err
+		return cc.NewErrReply(t, "You are not allowed to make aliases.")
 	}
 	fileName := t.GetField(FieldFileName).Data
 	filePath := t.GetField(FieldFilePath).Data
@@ -2030,23 +1774,22 @@ func HandleMakeAlias(cc *ClientConn, t *Transaction) (res []Transaction, err err
 
 	fullFilePath, err := readPath(cc.Server.Config.FileRoot, filePath, fileName)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	fullNewFilePath, err := readPath(cc.Server.Config.FileRoot, fileNewPath, fileName)
 	if err != nil {
-		return res, err
+		return res
 	}
 
 	cc.logger.Debug("Make alias", "src", fullFilePath, "dst", fullNewFilePath)
 
 	if err := cc.Server.FS.Symlink(fullFilePath, fullNewFilePath); err != nil {
-		res = append(res, cc.NewErrReply(t, "Error creating alias"))
-		return res, nil
+		return cc.NewErrReply(t, "Error creating alias")
 	}
 
 	res = append(res, cc.NewReply(t))
-	return res, err
+	return res
 }
 
 // HandleDownloadBanner handles requests for a new banner from the server
@@ -2055,12 +1798,12 @@ func HandleMakeAlias(cc *ClientConn, t *Transaction) (res []Transaction, err err
 // Fields used in the reply:
 // 107	FieldRefNum			Used later for transfer
 // 108	FieldTransferSize	Size of data to be downloaded
-func HandleDownloadBanner(cc *ClientConn, t *Transaction) (res []Transaction, err error) {
+func HandleDownloadBanner(cc *ClientConn, t *Transaction) (res []Transaction) {
 	ft := cc.newFileTransfer(bannerDownload, []byte{}, []byte{}, make([]byte, 4))
 	binary.BigEndian.PutUint32(ft.TransferSize, uint32(len(cc.Server.banner)))
 
 	return append(res, cc.NewReply(t,
 		NewField(FieldRefNum, ft.refNum[:]),
 		NewField(FieldTransferSize, ft.TransferSize),
-	)), err
+	))
 }

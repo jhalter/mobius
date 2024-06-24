@@ -2,7 +2,6 @@ package hotline
 
 import (
 	"errors"
-	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"io"
@@ -10,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -17,13 +17,12 @@ import (
 func TestHandleSetChatSubject(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
-		name    string
-		args    args
-		want    []Transaction
-		wantErr bool
+		name string
+		args args
+		want []Transaction
 	}{
 		{
 			name: "sends chat subject to private chat members",
@@ -31,42 +30,42 @@ func TestHandleSetChatSubject(t *testing.T) {
 				cc: &ClientConn{
 					UserName: []byte{0x00, 0x01},
 					Server: &Server{
-						PrivateChats: map[uint32]*PrivateChat{
-							uint32(1): {
+						PrivateChats: map[[4]byte]*PrivateChat{
+							[4]byte{0, 0, 0, 1}: {
 								Subject: "unset",
-								ClientConn: map[uint16]*ClientConn{
-									uint16(1): {
+								ClientConn: map[[2]byte]*ClientConn{
+									[2]byte{0, 1}: {
 										Account: &Account{
 											Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 										},
-										ID: &[]byte{0, 1},
+										ID: [2]byte{0, 1},
 									},
-									uint16(2): {
+									[2]byte{0, 2}: {
 										Account: &Account{
 											Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 										},
-										ID: &[]byte{0, 2},
+										ID: [2]byte{0, 2},
 									},
 								},
 							},
 						},
-						Clients: map[uint16]*ClientConn{
-							uint16(1): {
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 1}: {
 								Account: &Account{
 									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
-								ID: &[]byte{0, 1},
+								ID: [2]byte{0, 1},
 							},
-							uint16(2): {
+							[2]byte{0, 2}: {
 								Account: &Account{
 									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
-								ID: &[]byte{0, 2},
+								ID: [2]byte{0, 2},
 							},
 						},
 					},
 				},
-				t: &Transaction{
+				t: Transaction{
 					Type: [2]byte{0, 0x6a},
 					ID:   [4]byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -77,7 +76,7 @@ func TestHandleSetChatSubject(t *testing.T) {
 			},
 			want: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					Type:     [2]byte{0, 0x77},
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0, 0, 0, 1}),
@@ -85,7 +84,7 @@ func TestHandleSetChatSubject(t *testing.T) {
 					},
 				},
 				{
-					clientID: &[]byte{0, 2},
+					clientID: [2]byte{0, 2},
 					Type:     [2]byte{0, 0x77},
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0, 0, 0, 1}),
@@ -93,16 +92,11 @@ func TestHandleSetChatSubject(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := HandleSetChatSubject(tt.args.cc, tt.args.t)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("HandleSetChatSubject() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
+			got := HandleSetChatSubject(tt.args.cc, &tt.args.t)
 			if !tranAssertEqual(t, tt.want, got) {
 				t.Errorf("HandleSetChatSubject() got = %v, want %v", got, tt.want)
 			}
@@ -113,61 +107,58 @@ func TestHandleSetChatSubject(t *testing.T) {
 func TestHandleLeaveChat(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
-		name    string
-		args    args
-		want    []Transaction
-		wantErr bool
+		name string
+		args args
+		want []Transaction
 	}{
 		{
 			name: "returns expected transactions",
 			args: args{
 				cc: &ClientConn{
-					ID: &[]byte{0, 2},
+					ID: [2]byte{0, 2},
 					Server: &Server{
-						PrivateChats: map[uint32]*PrivateChat{
-							uint32(1): {
-								ClientConn: map[uint16]*ClientConn{
-									uint16(1): {
+						PrivateChats: map[[4]byte]*PrivateChat{
+							[4]byte{0, 0, 0, 1}: {
+								ClientConn: map[[2]byte]*ClientConn{
+									[2]byte{0, 1}: {
 										Account: &Account{
 											Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 										},
-										ID: &[]byte{0, 1},
+										ID: [2]byte{0, 1},
 									},
-									uint16(2): {
+									[2]byte{0, 2}: {
 										Account: &Account{
 											Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 										},
-										ID: &[]byte{0, 2},
+										ID: [2]byte{0, 2},
 									},
 								},
 							},
 						},
-						Clients: map[uint16]*ClientConn{
-							uint16(1): {
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 1}: {
 								Account: &Account{
 									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
-								ID: &[]byte{0, 1},
+								ID: [2]byte{0, 1},
 							},
-							uint16(2): {
+							[2]byte{0, 2}: {
 								Account: &Account{
 									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
-								ID: &[]byte{0, 2},
+								ID: [2]byte{0, 2},
 							},
 						},
 					},
 				},
-				t: NewTransaction(TranDeleteUser, nil, NewField(FieldChatID, []byte{0, 0, 0, 1})),
+				t: NewTransaction(TranDeleteUser, [2]byte{}, NewField(FieldChatID, []byte{0, 0, 0, 1})),
 			},
 			want: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
-					Flags:    0x00,
-					IsReply:  0x00,
+					clientID: [2]byte{0, 1},
 					Type:     [2]byte{0, 0x76},
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0, 0, 0, 1}),
@@ -175,16 +166,11 @@ func TestHandleLeaveChat(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := HandleLeaveChat(tt.args.cc, tt.args.t)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("HandleLeaveChat() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
+			got := HandleLeaveChat(tt.args.cc, &tt.args.t)
 			if !tranAssertEqual(t, tt.want, got) {
 				t.Errorf("HandleLeaveChat() got = %v, want %v", got, tt.want)
 			}
@@ -195,42 +181,40 @@ func TestHandleLeaveChat(t *testing.T) {
 func TestHandleGetUserNameList(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
-		name    string
-		args    args
-		want    []Transaction
-		wantErr bool
+		name string
+		args args
+		want []Transaction
 	}{
 		{
 			name: "replies with userlist transaction",
 			args: args{
 				cc: &ClientConn{
-
-					ID: &[]byte{1, 1},
+					ID: [2]byte{0, 1},
 					Server: &Server{
-						Clients: map[uint16]*ClientConn{
-							uint16(1): {
-								ID:       &[]byte{0, 1},
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 1}: {
+								ID:       [2]byte{0, 1},
 								Icon:     []byte{0, 2},
-								Flags:    []byte{0, 3},
+								Flags:    [2]byte{0, 3},
 								UserName: []byte{0, 4},
 							},
-							uint16(2): {
-								ID:       &[]byte{0, 2},
+							[2]byte{0, 2}: {
+								ID:       [2]byte{0, 2},
 								Icon:     []byte{0, 2},
-								Flags:    []byte{0, 3},
+								Flags:    [2]byte{0, 3},
 								UserName: []byte{0, 4},
 							},
 						},
 					},
 				},
-				t: &Transaction{},
+				t: Transaction{},
 			},
 			want: []Transaction{
 				{
-					clientID: &[]byte{1, 1},
+					clientID: [2]byte{0, 1},
 					IsReply:  0x01,
 					Fields: []Field{
 						NewField(
@@ -244,16 +228,11 @@ func TestHandleGetUserNameList(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := HandleGetUserNameList(tt.args.cc, tt.args.t)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("HandleGetUserNameList() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
+			got := HandleGetUserNameList(tt.args.cc, &tt.args.t)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -262,13 +241,12 @@ func TestHandleGetUserNameList(t *testing.T) {
 func TestHandleChatSend(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
-		name    string
-		args    args
-		want    []Transaction
-		wantErr bool
+		name string
+		args args
+		want []Transaction
 	}{
 		{
 			name: "sends chat msg transaction to all clients",
@@ -283,23 +261,23 @@ func TestHandleChatSend(t *testing.T) {
 					},
 					UserName: []byte{0x00, 0x01},
 					Server: &Server{
-						Clients: map[uint16]*ClientConn{
-							uint16(1): {
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 1}: {
 								Account: &Account{
 									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
-								ID: &[]byte{0, 1},
+								ID: [2]byte{0, 1},
 							},
-							uint16(2): {
+							[2]byte{0, 2}: {
 								Account: &Account{
 									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
-								ID: &[]byte{0, 2},
+								ID: [2]byte{0, 2},
 							},
 						},
 					},
 				},
-				t: &Transaction{
+				t: Transaction{
 					Fields: []Field{
 						NewField(FieldData, []byte("hai")),
 					},
@@ -307,7 +285,7 @@ func TestHandleChatSend(t *testing.T) {
 			},
 			want: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					Flags:    0x00,
 					IsReply:  0x00,
 					Type:     [2]byte{0, 0x6a},
@@ -316,7 +294,7 @@ func TestHandleChatSend(t *testing.T) {
 					},
 				},
 				{
-					clientID: &[]byte{0, 2},
+					clientID: [2]byte{0, 2},
 					Flags:    0x00,
 					IsReply:  0x00,
 					Type:     [2]byte{0, 0x6a},
@@ -325,7 +303,6 @@ func TestHandleChatSend(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name: "treats Chat ID 00 00 00 00 as a public chat message",
@@ -340,23 +317,23 @@ func TestHandleChatSend(t *testing.T) {
 					},
 					UserName: []byte{0x00, 0x01},
 					Server: &Server{
-						Clients: map[uint16]*ClientConn{
-							uint16(1): {
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 1}: {
 								Account: &Account{
 									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
-								ID: &[]byte{0, 1},
+								ID: [2]byte{0, 1},
 							},
-							uint16(2): {
+							[2]byte{0, 2}: {
 								Account: &Account{
 									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
-								ID: &[]byte{0, 2},
+								ID: [2]byte{0, 2},
 							},
 						},
 					},
 				},
-				t: &Transaction{
+				t: Transaction{
 					Fields: []Field{
 						NewField(FieldData, []byte("hai")),
 						NewField(FieldChatID, []byte{0, 0, 0, 0}),
@@ -365,21 +342,20 @@ func TestHandleChatSend(t *testing.T) {
 			},
 			want: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldData, []byte{0x0d, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x01, 0x3a, 0x20, 0x20, 0x68, 0x61, 0x69}),
 					},
 				},
 				{
-					clientID: &[]byte{0, 2},
+					clientID: [2]byte{0, 2},
 					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldData, []byte{0x0d, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x01, 0x3a, 0x20, 0x20, 0x68, 0x61, 0x69}),
 					},
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name: "when user does not have required permission",
@@ -396,7 +372,7 @@ func TestHandleChatSend(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranChatSend, &[]byte{0, 1},
+					TranChatSend, [2]byte{0, 1},
 					NewField(FieldData, []byte("hai")),
 				),
 			},
@@ -409,7 +385,6 @@ func TestHandleChatSend(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name: "sends chat msg as emote if FieldChatOptions is set to 1",
@@ -424,23 +399,23 @@ func TestHandleChatSend(t *testing.T) {
 					},
 					UserName: []byte("Testy McTest"),
 					Server: &Server{
-						Clients: map[uint16]*ClientConn{
-							uint16(1): {
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 1}: {
 								Account: &Account{
 									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
-								ID: &[]byte{0, 1},
+								ID: [2]byte{0, 1},
 							},
-							uint16(2): {
+							[2]byte{0, 2}: {
 								Account: &Account{
 									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
-								ID: &[]byte{0, 2},
+								ID: [2]byte{0, 2},
 							},
 						},
 					},
 				},
-				t: &Transaction{
+				t: Transaction{
 					Fields: []Field{
 						NewField(FieldData, []byte("performed action")),
 						NewField(FieldChatOptions, []byte{0x00, 0x01}),
@@ -449,7 +424,7 @@ func TestHandleChatSend(t *testing.T) {
 			},
 			want: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					Flags:    0x00,
 					IsReply:  0x00,
 					Type:     [2]byte{0, 0x6a},
@@ -458,7 +433,7 @@ func TestHandleChatSend(t *testing.T) {
 					},
 				},
 				{
-					clientID: &[]byte{0, 2},
+					clientID: [2]byte{0, 2},
 					Flags:    0x00,
 					IsReply:  0x00,
 					Type:     [2]byte{0, 0x6a},
@@ -467,7 +442,6 @@ func TestHandleChatSend(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name: "does not send chat msg as emote if FieldChatOptions is set to 0",
@@ -482,23 +456,23 @@ func TestHandleChatSend(t *testing.T) {
 					},
 					UserName: []byte("Testy McTest"),
 					Server: &Server{
-						Clients: map[uint16]*ClientConn{
-							uint16(1): {
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 1}: {
 								Account: &Account{
 									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
-								ID: &[]byte{0, 1},
+								ID: [2]byte{0, 1},
 							},
-							uint16(2): {
+							[2]byte{0, 2}: {
 								Account: &Account{
 									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
-								ID: &[]byte{0, 2},
+								ID: [2]byte{0, 2},
 							},
 						},
 					},
 				},
-				t: &Transaction{
+				t: Transaction{
 					Fields: []Field{
 						NewField(FieldData, []byte("hello")),
 						NewField(FieldChatOptions, []byte{0x00, 0x00}),
@@ -507,21 +481,20 @@ func TestHandleChatSend(t *testing.T) {
 			},
 			want: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldData, []byte("\r Testy McTest:  hello")),
 					},
 				},
 				{
-					clientID: &[]byte{0, 2},
+					clientID: [2]byte{0, 2},
 					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldData, []byte("\r Testy McTest:  hello")),
 					},
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name: "only sends chat msg to clients with accessReadChat permission",
@@ -536,26 +509,26 @@ func TestHandleChatSend(t *testing.T) {
 					},
 					UserName: []byte{0x00, 0x01},
 					Server: &Server{
-						Clients: map[uint16]*ClientConn{
-							uint16(1): {
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 1}: {
 								Account: &Account{
 									Access: func() accessBitmap {
 										var bits accessBitmap
 										bits.Set(accessReadChat)
 										return bits
 									}()},
-								ID: &[]byte{0, 1},
+								ID: [2]byte{0, 1},
 							},
-							uint16(2): {
+							[2]byte{0, 2}: {
 								Account: &Account{
 									Access: accessBitmap{0, 0, 0, 0, 0, 0, 0, 0},
 								},
-								ID: &[]byte{0, 2},
+								ID: [2]byte{0, 2},
 							},
 						},
 					},
 				},
-				t: &Transaction{
+				t: Transaction{
 					Fields: []Field{
 						NewField(FieldData, []byte("hai")),
 					},
@@ -563,14 +536,13 @@ func TestHandleChatSend(t *testing.T) {
 			},
 			want: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldData, []byte{0x0d, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x01, 0x3a, 0x20, 0x20, 0x68, 0x61, 0x69}),
 					},
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name: "only sends private chat msg to members of private chat",
@@ -585,41 +557,41 @@ func TestHandleChatSend(t *testing.T) {
 					},
 					UserName: []byte{0x00, 0x01},
 					Server: &Server{
-						PrivateChats: map[uint32]*PrivateChat{
-							uint32(1): {
-								ClientConn: map[uint16]*ClientConn{
-									uint16(1): {
-										ID: &[]byte{0, 1},
+						PrivateChats: map[[4]byte]*PrivateChat{
+							[4]byte{0, 0, 0, 1}: {
+								ClientConn: map[[2]byte]*ClientConn{
+									[2]byte{0, 1}: {
+										ID: [2]byte{0, 1},
 									},
-									uint16(2): {
-										ID: &[]byte{0, 2},
+									[2]byte{0, 2}: {
+										ID: [2]byte{0, 2},
 									},
 								},
 							},
 						},
-						Clients: map[uint16]*ClientConn{
-							uint16(1): {
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 1}: {
 								Account: &Account{
 									Access: accessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 								},
-								ID: &[]byte{0, 1},
+								ID: [2]byte{0, 1},
 							},
-							uint16(2): {
+							[2]byte{0, 2}: {
 								Account: &Account{
 									Access: accessBitmap{0, 0, 0, 0, 0, 0, 0, 0},
 								},
-								ID: &[]byte{0, 2},
+								ID: [2]byte{0, 2},
 							},
-							uint16(3): {
+							[2]byte{0, 3}: {
 								Account: &Account{
 									Access: accessBitmap{0, 0, 0, 0, 0, 0, 0, 0},
 								},
-								ID: &[]byte{0, 3},
+								ID: [2]byte{0, 3},
 							},
 						},
 					},
 				},
-				t: &Transaction{
+				t: Transaction{
 					Fields: []Field{
 						NewField(FieldData, []byte("hai")),
 						NewField(FieldChatID, []byte{0, 0, 0, 1}),
@@ -628,7 +600,7 @@ func TestHandleChatSend(t *testing.T) {
 			},
 			want: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0, 0, 0, 1}),
@@ -636,7 +608,7 @@ func TestHandleChatSend(t *testing.T) {
 					},
 				},
 				{
-					clientID: &[]byte{0, 2},
+					clientID: [2]byte{0, 2},
 					Type:     [2]byte{0, 0x6a},
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0, 0, 0, 1}),
@@ -644,17 +616,11 @@ func TestHandleChatSend(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := HandleChatSend(tt.args.cc, tt.args.t)
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("HandleChatSend() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
+			got := HandleChatSend(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.want, got)
 		})
 	}
@@ -663,19 +629,18 @@ func TestHandleChatSend(t *testing.T) {
 func TestHandleGetFileInfo(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr bool
 	}{
 		{
 			name: "returns expected fields when a valid file is requested",
 			args: args{
 				cc: &ClientConn{
-					ID: &[]byte{0x00, 0x01},
+					ID: [2]byte{0x00, 0x01},
 					Server: &Server{
 						FS: &OSFileStore{},
 						Config: &Config{
@@ -687,14 +652,14 @@ func TestHandleGetFileInfo(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranGetFileInfo, nil,
+					TranGetFileInfo, [2]byte{},
 					NewField(FieldFileName, []byte("testfile.txt")),
 					NewField(FieldFilePath, []byte{0x00, 0x00}),
 				),
 			},
 			wantRes: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					IsReply:  0x01,
 					Type:     [2]byte{0, 0},
 					Fields: []Field{
@@ -708,18 +673,13 @@ func TestHandleGetFileInfo(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleGetFileInfo(tt.args.cc, tt.args.t)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("HandleGetFileInfo() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
+			gotRes := HandleGetFileInfo(tt.args.cc, &tt.args.t)
 
-			// Clear the fileWrapper timestamp fields to work around problems running the tests in multiple timezones
+			// Clear the file timestamp fields to work around problems running the tests in multiple timezones
 			// TODO: revisit how to test this by mocking the stat calls
 			gotRes[0].Fields[4].Data = make([]byte, 8)
 			gotRes[0].Fields[5].Data = make([]byte, 8)
@@ -734,13 +694,12 @@ func TestHandleGetFileInfo(t *testing.T) {
 func TestHandleNewFolder(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr bool
 	}{
 		{
 			name: "without required permission",
@@ -754,8 +713,8 @@ func TestHandleNewFolder(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					accessCreateFolder,
-					&[]byte{0, 0},
+					TranNewFolder,
+					[2]byte{0, 0},
 				),
 			},
 			wantRes: []Transaction{
@@ -767,7 +726,6 @@ func TestHandleNewFolder(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name: "when path is nested",
@@ -780,7 +738,7 @@ func TestHandleNewFolder(t *testing.T) {
 							return bits
 						}(),
 					},
-					ID: &[]byte{0, 1},
+					ID: [2]byte{0, 1},
 					Server: &Server{
 						Config: &Config{
 							FileRoot: "/Files/",
@@ -794,7 +752,7 @@ func TestHandleNewFolder(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranNewFolder, &[]byte{0, 1},
+					TranNewFolder, [2]byte{0, 1},
 					NewField(FieldFileName, []byte("testFolder")),
 					NewField(FieldFilePath, []byte{
 						0x00, 0x01,
@@ -806,11 +764,10 @@ func TestHandleNewFolder(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					IsReply:  0x01,
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name: "when path is not nested",
@@ -823,7 +780,7 @@ func TestHandleNewFolder(t *testing.T) {
 							return bits
 						}(),
 					},
-					ID: &[]byte{0, 1},
+					ID: [2]byte{0, 1},
 					Server: &Server{
 						Config: &Config{
 							FileRoot: "/Files",
@@ -837,17 +794,16 @@ func TestHandleNewFolder(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranNewFolder, &[]byte{0, 1},
+					TranNewFolder, [2]byte{0, 1},
 					NewField(FieldFileName, []byte("testFolder")),
 				),
 			},
 			wantRes: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					IsReply:  0x01,
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name: "when Write returns an err",
@@ -860,7 +816,7 @@ func TestHandleNewFolder(t *testing.T) {
 							return bits
 						}(),
 					},
-					ID: &[]byte{0, 1},
+					ID: [2]byte{0, 1},
 					Server: &Server{
 						Config: &Config{
 							FileRoot: "/Files/",
@@ -874,7 +830,7 @@ func TestHandleNewFolder(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranNewFolder, &[]byte{0, 1},
+					TranNewFolder, [2]byte{0, 1},
 					NewField(FieldFileName, []byte("testFolder")),
 					NewField(FieldFilePath, []byte{
 						0x00,
@@ -882,7 +838,6 @@ func TestHandleNewFolder(t *testing.T) {
 				),
 			},
 			wantRes: []Transaction{},
-			wantErr: true,
 		},
 		{
 			name: "FieldFileName does not allow directory traversal",
@@ -895,7 +850,7 @@ func TestHandleNewFolder(t *testing.T) {
 							return bits
 						}(),
 					},
-					ID: &[]byte{0, 1},
+					ID: [2]byte{0, 1},
 					Server: &Server{
 						Config: &Config{
 							FileRoot: "/Files/",
@@ -909,16 +864,16 @@ func TestHandleNewFolder(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranNewFolder, &[]byte{0, 1},
+					TranNewFolder, [2]byte{0, 1},
 					NewField(FieldFileName, []byte("../../testFolder")),
 				),
 			},
 			wantRes: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					IsReply:  0x01,
 				},
-			}, wantErr: false,
+			},
 		},
 		{
 			name: "FieldFilePath does not allow directory traversal",
@@ -931,7 +886,7 @@ func TestHandleNewFolder(t *testing.T) {
 							return bits
 						}(),
 					},
-					ID: &[]byte{0, 1},
+					ID: [2]byte{0, 1},
 					Server: &Server{
 						Config: &Config{
 							FileRoot: "/Files/",
@@ -945,7 +900,7 @@ func TestHandleNewFolder(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranNewFolder, &[]byte{0, 1},
+					TranNewFolder, [2]byte{0, 1},
 					NewField(FieldFileName, []byte("testFolder")),
 					NewField(FieldFilePath, []byte{
 						0x00, 0x02,
@@ -960,19 +915,15 @@ func TestHandleNewFolder(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					IsReply:  0x01,
 				},
-			}, wantErr: false,
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleNewFolder(tt.args.cc, tt.args.t)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("HandleNewFolder() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
+			gotRes := HandleNewFolder(tt.args.cc, &tt.args.t)
 
 			if !tranAssertEqual(t, tt.wantRes, gotRes) {
 				t.Errorf("HandleNewFolder() gotRes = %v, want %v", gotRes, tt.wantRes)
@@ -984,13 +935,12 @@ func TestHandleNewFolder(t *testing.T) {
 func TestHandleUploadFile(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr bool
 	}{
 		{
 			name: "when request is valid and user has Upload Anywhere permission",
@@ -1015,7 +965,7 @@ func TestHandleUploadFile(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranUploadFile, &[]byte{0, 1},
+					TranUploadFile, [2]byte{0, 1},
 					NewField(FieldFileName, []byte("testFile")),
 					NewField(FieldFilePath, []byte{
 						0x00, 0x01,
@@ -1033,7 +983,6 @@ func TestHandleUploadFile(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name: "when user does not have required access",
@@ -1047,7 +996,7 @@ func TestHandleUploadFile(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranUploadFile, &[]byte{0, 1},
+					TranUploadFile, [2]byte{0, 1},
 					NewField(FieldFileName, []byte("testFile")),
 					NewField(FieldFilePath, []byte{
 						0x00, 0x01,
@@ -1066,17 +1015,11 @@ func TestHandleUploadFile(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleUploadFile(tt.args.cc, tt.args.t)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("HandleUploadFile() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
+			gotRes := HandleUploadFile(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -1085,13 +1028,12 @@ func TestHandleUploadFile(t *testing.T) {
 func TestHandleMakeAlias(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr bool
 	}{
 		{
 			name: "with valid input and required permissions",
@@ -1126,7 +1068,7 @@ func TestHandleMakeAlias(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranMakeFileAlias, &[]byte{0, 1},
+					TranMakeFileAlias, [2]byte{0, 1},
 					NewField(FieldFileName, []byte("testFile")),
 					NewField(FieldFilePath, EncodeFilePath(strings.Join([]string{"foo"}, "/"))),
 					NewField(FieldFileNewPath, EncodeFilePath(strings.Join([]string{"bar"}, "/"))),
@@ -1138,7 +1080,6 @@ func TestHandleMakeAlias(t *testing.T) {
 					Fields:  []Field(nil),
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name: "when symlink returns an error",
@@ -1173,7 +1114,7 @@ func TestHandleMakeAlias(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranMakeFileAlias, &[]byte{0, 1},
+					TranMakeFileAlias, [2]byte{0, 1},
 					NewField(FieldFileName, []byte("testFile")),
 					NewField(FieldFilePath, EncodeFilePath(strings.Join([]string{"foo"}, "/"))),
 					NewField(FieldFileNewPath, EncodeFilePath(strings.Join([]string{"bar"}, "/"))),
@@ -1188,7 +1129,6 @@ func TestHandleMakeAlias(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name: "when user does not have required permission",
@@ -1211,7 +1151,7 @@ func TestHandleMakeAlias(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranMakeFileAlias, &[]byte{0, 1},
+					TranMakeFileAlias, [2]byte{0, 1},
 					NewField(FieldFileName, []byte("testFile")),
 					NewField(FieldFilePath, []byte{
 						0x00, 0x01,
@@ -1236,17 +1176,11 @@ func TestHandleMakeAlias(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleMakeAlias(tt.args.cc, tt.args.t)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("HandleMakeAlias(%v, %v)", tt.args.cc, tt.args.t)
-				return
-			}
-
+			gotRes := HandleMakeAlias(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -1255,13 +1189,12 @@ func TestHandleMakeAlias(t *testing.T) {
 func TestHandleGetUser(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when account is valid",
@@ -1286,7 +1219,7 @@ func TestHandleGetUser(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranGetUser, &[]byte{0, 1},
+					TranGetUser, [2]byte{0, 1},
 					NewField(FieldUserLogin, []byte("guest")),
 				),
 			},
@@ -1301,7 +1234,6 @@ func TestHandleGetUser(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when user does not have required permission",
@@ -1318,7 +1250,7 @@ func TestHandleGetUser(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranGetUser, &[]byte{0, 1},
+					TranGetUser, [2]byte{0, 1},
 					NewField(FieldUserLogin, []byte("nonExistentUser")),
 				),
 			},
@@ -1331,7 +1263,6 @@ func TestHandleGetUser(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when account does not exist",
@@ -1349,7 +1280,7 @@ func TestHandleGetUser(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranGetUser, &[]byte{0, 1},
+					TranGetUser, [2]byte{0, 1},
 					NewField(FieldUserLogin, []byte("nonExistentUser")),
 				),
 			},
@@ -1364,16 +1295,11 @@ func TestHandleGetUser(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleGetUser(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleGetUser(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
-
+			gotRes := HandleGetUser(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -1382,13 +1308,12 @@ func TestHandleGetUser(t *testing.T) {
 func TestHandleDeleteUser(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when user dataFile",
@@ -1418,7 +1343,7 @@ func TestHandleDeleteUser(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranDeleteUser, &[]byte{0, 1},
+					TranDeleteUser, [2]byte{0, 1},
 					NewField(FieldUserLogin, encodeString([]byte("testuser"))),
 				),
 			},
@@ -1430,7 +1355,6 @@ func TestHandleDeleteUser(t *testing.T) {
 					Fields:  []Field(nil),
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when user does not have required permission",
@@ -1447,7 +1371,7 @@ func TestHandleDeleteUser(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranDeleteUser, &[]byte{0, 1},
+					TranDeleteUser, [2]byte{0, 1},
 					NewField(FieldUserLogin, encodeString([]byte("testuser"))),
 				),
 			},
@@ -1460,16 +1384,11 @@ func TestHandleDeleteUser(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleDeleteUser(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleDeleteUser(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
-
+			gotRes := HandleDeleteUser(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -1478,13 +1397,12 @@ func TestHandleDeleteUser(t *testing.T) {
 func TestHandleGetMsgs(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "returns news data",
@@ -1502,7 +1420,7 @@ func TestHandleGetMsgs(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranGetMsgs, &[]byte{0, 1},
+					TranGetMsgs, [2]byte{0, 1},
 				),
 			},
 			wantRes: []Transaction{
@@ -1513,7 +1431,6 @@ func TestHandleGetMsgs(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when user does not have required permission",
@@ -1530,7 +1447,7 @@ func TestHandleGetMsgs(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranGetMsgs, &[]byte{0, 1},
+					TranGetMsgs, [2]byte{0, 1},
 				),
 			},
 			wantRes: []Transaction{
@@ -1542,16 +1459,11 @@ func TestHandleGetMsgs(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleGetMsgs(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleGetMsgs(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
-
+			gotRes := HandleGetMsgs(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -1560,13 +1472,12 @@ func TestHandleGetMsgs(t *testing.T) {
 func TestHandleNewUser(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when user does not have required permission",
@@ -1583,7 +1494,7 @@ func TestHandleNewUser(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranNewUser, &[]byte{0, 1},
+					TranNewUser, [2]byte{0, 1},
 				),
 			},
 			wantRes: []Transaction{
@@ -1595,7 +1506,6 @@ func TestHandleNewUser(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when user attempts to create account with greater access",
@@ -1613,7 +1523,7 @@ func TestHandleNewUser(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranNewUser, &[]byte{0, 1},
+					TranNewUser, [2]byte{0, 1},
 					NewField(FieldUserLogin, []byte("userB")),
 					NewField(
 						FieldUserAccess,
@@ -1634,16 +1544,11 @@ func TestHandleNewUser(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleNewUser(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleNewUser(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
-
+			gotRes := HandleNewUser(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -1652,13 +1557,12 @@ func TestHandleNewUser(t *testing.T) {
 func TestHandleListUsers(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when user does not have required permission",
@@ -1675,7 +1579,7 @@ func TestHandleListUsers(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranNewUser, &[]byte{0, 1},
+					TranNewUser, [2]byte{0, 1},
 				),
 			},
 			wantRes: []Transaction{
@@ -1687,7 +1591,6 @@ func TestHandleListUsers(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when user has required permission",
@@ -1712,7 +1615,7 @@ func TestHandleListUsers(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranGetClientInfoText, &[]byte{0, 1},
+					TranGetClientInfoText, [2]byte{0, 1},
 					NewField(FieldUserID, []byte{0, 1}),
 				),
 			},
@@ -1728,15 +1631,11 @@ func TestHandleListUsers(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleListUsers(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleListUsers(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
+			gotRes := HandleListUsers(tt.args.cc, &tt.args.t)
 
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
@@ -1746,13 +1645,12 @@ func TestHandleListUsers(t *testing.T) {
 func TestHandleDownloadFile(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when user does not have required permission",
@@ -1766,7 +1664,7 @@ func TestHandleDownloadFile(t *testing.T) {
 					},
 					Server: &Server{},
 				},
-				t: NewTransaction(TranDownloadFile, &[]byte{0, 1}),
+				t: NewTransaction(TranDownloadFile, [2]byte{0, 1}),
 			},
 			wantRes: []Transaction{
 				{
@@ -1777,7 +1675,6 @@ func TestHandleDownloadFile(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "with a valid file",
@@ -1803,8 +1700,8 @@ func TestHandleDownloadFile(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					accessDownloadFile,
-					&[]byte{0, 1},
+					TranDownloadFile,
+					[2]byte{0, 1},
 					NewField(FieldFileName, []byte("testfile.txt")),
 					NewField(FieldFilePath, []byte{0x0, 0x00}),
 				),
@@ -1820,7 +1717,6 @@ func TestHandleDownloadFile(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when client requests to resume 1k test file at offset 256",
@@ -1863,30 +1759,23 @@ func TestHandleDownloadFile(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					accessDownloadFile,
-					&[]byte{0, 1},
+					TranDownloadFile,
+					[2]byte{0, 1},
 					NewField(FieldFileName, []byte("testfile-1k")),
 					NewField(FieldFilePath, []byte{0x00, 0x00}),
 					NewField(
 						FieldFileResumeData,
 						func() []byte {
 							frd := FileResumeData{
-								Format:    [4]byte{},
-								Version:   [2]byte{},
-								RSVD:      [34]byte{},
 								ForkCount: [2]byte{0, 2},
 								ForkInfoList: []ForkInfoList{
 									{
 										Fork:     [4]byte{0x44, 0x41, 0x54, 0x41}, // "DATA"
 										DataSize: [4]byte{0, 0, 0x01, 0x00},       // request offset 256
-										RSVDA:    [4]byte{},
-										RSVDB:    [4]byte{},
 									},
 									{
 										Fork:     [4]byte{0x4d, 0x41, 0x43, 0x52}, // "MACR"
 										DataSize: [4]byte{0, 0, 0, 0},
-										RSVDA:    [4]byte{},
-										RSVDB:    [4]byte{},
 									},
 								},
 							}
@@ -1907,16 +1796,11 @@ func TestHandleDownloadFile(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleDownloadFile(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleDownloadFile(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
-
+			gotRes := HandleDownloadFile(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -1925,13 +1809,12 @@ func TestHandleDownloadFile(t *testing.T) {
 func TestHandleUpdateUser(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when action is create user without required permission",
@@ -1950,7 +1833,7 @@ func TestHandleUpdateUser(t *testing.T) {
 				},
 				t: NewTransaction(
 					TranUpdateUser,
-					&[]byte{0, 0},
+					[2]byte{0, 0},
 					NewField(FieldData, []byte{
 						0x00, 0x04, // field count
 
@@ -1981,7 +1864,6 @@ func TestHandleUpdateUser(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when action is modify user without required permission",
@@ -2003,7 +1885,7 @@ func TestHandleUpdateUser(t *testing.T) {
 				},
 				t: NewTransaction(
 					TranUpdateUser,
-					&[]byte{0, 0},
+					[2]byte{0, 0},
 					NewField(FieldData, []byte{
 						0x00, 0x04, // field count
 
@@ -2034,7 +1916,6 @@ func TestHandleUpdateUser(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when action is delete user without required permission",
@@ -2055,7 +1936,7 @@ func TestHandleUpdateUser(t *testing.T) {
 				},
 				t: NewTransaction(
 					TranUpdateUser,
-					&[]byte{0, 0},
+					[2]byte{0, 0},
 					NewField(FieldData, []byte{
 						0x00, 0x01,
 						0x00, 0x65,
@@ -2073,16 +1954,11 @@ func TestHandleUpdateUser(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleUpdateUser(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleUpdateUser(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
-
+			gotRes := HandleUpdateUser(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -2091,13 +1967,12 @@ func TestHandleUpdateUser(t *testing.T) {
 func TestHandleDelNewsArt(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "without required permission",
@@ -2112,7 +1987,7 @@ func TestHandleDelNewsArt(t *testing.T) {
 				},
 				t: NewTransaction(
 					TranDelNewsArt,
-					&[]byte{0, 0},
+					[2]byte{0, 0},
 				),
 			},
 			wantRes: []Transaction{
@@ -2124,15 +1999,11 @@ func TestHandleDelNewsArt(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleDelNewsArt(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleDelNewsArt(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
+			gotRes := HandleDelNewsArt(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -2141,13 +2012,12 @@ func TestHandleDelNewsArt(t *testing.T) {
 func TestHandleDisconnectUser(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "without required permission",
@@ -2162,7 +2032,7 @@ func TestHandleDisconnectUser(t *testing.T) {
 				},
 				t: NewTransaction(
 					TranDelNewsArt,
-					&[]byte{0, 0},
+					[2]byte{0, 0},
 				),
 			},
 			wantRes: []Transaction{
@@ -2174,15 +2044,14 @@ func TestHandleDisconnectUser(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when target user has 'cannot be disconnected' priv",
 			args: args{
 				cc: &ClientConn{
 					Server: &Server{
-						Clients: map[uint16]*ClientConn{
-							uint16(1): {
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 1}: {
 								Account: &Account{
 									Login: "unnamed",
 									Access: func() accessBitmap {
@@ -2204,7 +2073,7 @@ func TestHandleDisconnectUser(t *testing.T) {
 				},
 				t: NewTransaction(
 					TranDelNewsArt,
-					&[]byte{0, 0},
+					[2]byte{0, 0},
 					NewField(FieldUserID, []byte{0, 1}),
 				),
 			},
@@ -2217,15 +2086,11 @@ func TestHandleDisconnectUser(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleDisconnectUser(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleDisconnectUser(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
+			gotRes := HandleDisconnectUser(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -2234,13 +2099,12 @@ func TestHandleDisconnectUser(t *testing.T) {
 func TestHandleSendInstantMsg(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "without required permission",
@@ -2255,7 +2119,7 @@ func TestHandleSendInstantMsg(t *testing.T) {
 				},
 				t: NewTransaction(
 					TranDelNewsArt,
-					&[]byte{0, 0},
+					[2]byte{0, 0},
 				),
 			},
 			wantRes: []Transaction{
@@ -2267,7 +2131,6 @@ func TestHandleSendInstantMsg(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.Error,
 		},
 		{
 			name: "when client 1 sends a message to client 2",
@@ -2280,40 +2143,39 @@ func TestHandleSendInstantMsg(t *testing.T) {
 							return bits
 						}(),
 					},
-					ID:       &[]byte{0, 1},
+					ID:       [2]byte{0, 1},
 					UserName: []byte("User1"),
 					Server: &Server{
-						Clients: map[uint16]*ClientConn{
-							uint16(2): {
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 2}: {
 								AutoReply: []byte(nil),
-								Flags:     []byte{0, 0},
+								Flags:     [2]byte{0, 0},
 							},
 						},
 					},
 				},
 				t: NewTransaction(
 					TranSendInstantMsg,
-					&[]byte{0, 1},
+					[2]byte{0, 1},
 					NewField(FieldData, []byte("hai")),
 					NewField(FieldUserID, []byte{0, 2}),
 				),
 			},
 			wantRes: []Transaction{
-				*NewTransaction(
+				NewTransaction(
 					TranServerMsg,
-					&[]byte{0, 2},
+					[2]byte{0, 2},
 					NewField(FieldData, []byte("hai")),
 					NewField(FieldUserName, []byte("User1")),
 					NewField(FieldUserID, []byte{0, 1}),
 					NewField(FieldOptions, []byte{0, 1}),
 				),
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					IsReply:  0x01,
 					Fields:   []Field(nil),
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when client 2 has autoreply enabled",
@@ -2326,13 +2188,13 @@ func TestHandleSendInstantMsg(t *testing.T) {
 							return bits
 						}(),
 					},
-					ID:       &[]byte{0, 1},
+					ID:       [2]byte{0, 1},
 					UserName: []byte("User1"),
 					Server: &Server{
-						Clients: map[uint16]*ClientConn{
-							uint16(2): {
-								Flags:     []byte{0, 0},
-								ID:        &[]byte{0, 2},
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 2}: {
+								Flags:     [2]byte{0, 0},
+								ID:        [2]byte{0, 2},
 								UserName:  []byte("User2"),
 								AutoReply: []byte("autohai"),
 							},
@@ -2341,35 +2203,34 @@ func TestHandleSendInstantMsg(t *testing.T) {
 				},
 				t: NewTransaction(
 					TranSendInstantMsg,
-					&[]byte{0, 1},
+					[2]byte{0, 1},
 					NewField(FieldData, []byte("hai")),
 					NewField(FieldUserID, []byte{0, 2}),
 				),
 			},
 			wantRes: []Transaction{
-				*NewTransaction(
+				NewTransaction(
 					TranServerMsg,
-					&[]byte{0, 2},
+					[2]byte{0, 2},
 					NewField(FieldData, []byte("hai")),
 					NewField(FieldUserName, []byte("User1")),
 					NewField(FieldUserID, []byte{0, 1}),
 					NewField(FieldOptions, []byte{0, 1}),
 				),
-				*NewTransaction(
+				NewTransaction(
 					TranServerMsg,
-					&[]byte{0, 1},
+					[2]byte{0, 1},
 					NewField(FieldData, []byte("autohai")),
 					NewField(FieldUserName, []byte("User2")),
 					NewField(FieldUserID, []byte{0, 2}),
 					NewField(FieldOptions, []byte{0, 1}),
 				),
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					IsReply:  0x01,
 					Fields:   []Field(nil),
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when client 2 has refuse private messages enabled",
@@ -2382,13 +2243,13 @@ func TestHandleSendInstantMsg(t *testing.T) {
 							return bits
 						}(),
 					},
-					ID:       &[]byte{0, 1},
+					ID:       [2]byte{0, 1},
 					UserName: []byte("User1"),
 					Server: &Server{
-						Clients: map[uint16]*ClientConn{
-							uint16(2): {
-								Flags:    []byte{255, 255},
-								ID:       &[]byte{0, 2},
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 2}: {
+								Flags:    [2]byte{255, 255},
+								ID:       [2]byte{0, 2},
 								UserName: []byte("User2"),
 							},
 						},
@@ -2396,36 +2257,31 @@ func TestHandleSendInstantMsg(t *testing.T) {
 				},
 				t: NewTransaction(
 					TranSendInstantMsg,
-					&[]byte{0, 1},
+					[2]byte{0, 1},
 					NewField(FieldData, []byte("hai")),
 					NewField(FieldUserID, []byte{0, 2}),
 				),
 			},
 			wantRes: []Transaction{
-				*NewTransaction(
+				NewTransaction(
 					TranServerMsg,
-					&[]byte{0, 1},
+					[2]byte{0, 1},
 					NewField(FieldData, []byte("User2 does not accept private messages.")),
 					NewField(FieldUserName, []byte("User2")),
 					NewField(FieldUserID, []byte{0, 2}),
 					NewField(FieldOptions, []byte{0, 2}),
 				),
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					IsReply:  0x01,
 					Fields:   []Field(nil),
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleSendInstantMsg(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleSendInstantMsg(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
-
+			gotRes := HandleSendInstantMsg(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -2434,13 +2290,12 @@ func TestHandleSendInstantMsg(t *testing.T) {
 func TestHandleDeleteFile(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when user does not have required permission to delete a folder",
@@ -2477,7 +2332,7 @@ func TestHandleDeleteFile(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranDeleteFile, &[]byte{0, 1},
+					TranDeleteFile, [2]byte{0, 1},
 					NewField(FieldFileName, []byte("testfile")),
 					NewField(FieldFilePath, []byte{
 						0x00, 0x01,
@@ -2496,7 +2351,6 @@ func TestHandleDeleteFile(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "deletes all associated metadata files",
@@ -2539,7 +2393,7 @@ func TestHandleDeleteFile(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranDeleteFile, &[]byte{0, 1},
+					TranDeleteFile, [2]byte{0, 1},
 					NewField(FieldFileName, []byte("testfile")),
 					NewField(FieldFilePath, []byte{
 						0x00, 0x01,
@@ -2555,16 +2409,11 @@ func TestHandleDeleteFile(t *testing.T) {
 					Fields:  []Field(nil),
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleDeleteFile(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleDeleteFile(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
-
+			gotRes := HandleDeleteFile(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 
 			tt.args.cc.Server.FS.(*MockFileStore).AssertExpectations(t)
@@ -2575,13 +2424,12 @@ func TestHandleDeleteFile(t *testing.T) {
 func TestHandleGetFileNameList(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when FieldFilePath is a drop box, but user does not have accessViewDropBoxes ",
@@ -2604,7 +2452,7 @@ func TestHandleGetFileNameList(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranGetFileNameList, &[]byte{0, 1},
+					TranGetFileNameList, [2]byte{0, 1},
 					NewField(FieldFilePath, []byte{
 						0x00, 0x01,
 						0x00, 0x00,
@@ -2622,7 +2470,6 @@ func TestHandleGetFileNameList(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "with file root",
@@ -2638,7 +2485,7 @@ func TestHandleGetFileNameList(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranGetFileNameList, &[]byte{0, 1},
+					TranGetFileNameList, [2]byte{0, 1},
 					NewField(FieldFilePath, []byte{
 						0x00, 0x00,
 						0x00, 0x00,
@@ -2670,16 +2517,11 @@ func TestHandleGetFileNameList(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleGetFileNameList(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleGetFileNameList(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
-
+			gotRes := HandleGetFileNameList(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -2688,13 +2530,12 @@ func TestHandleGetFileNameList(t *testing.T) {
 func TestHandleGetClientInfoText(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when user does not have required permission",
@@ -2711,7 +2552,7 @@ func TestHandleGetClientInfoText(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranGetClientInfoText, &[]byte{0, 1},
+					TranGetClientInfoText, [2]byte{0, 1},
 					NewField(FieldUserID, []byte{0, 1}),
 				),
 			},
@@ -2724,7 +2565,6 @@ func TestHandleGetClientInfoText(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "with a valid user",
@@ -2743,8 +2583,8 @@ func TestHandleGetClientInfoText(t *testing.T) {
 					},
 					Server: &Server{
 						Accounts: map[string]*Account{},
-						Clients: map[uint16]*ClientConn{
-							uint16(1): {
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 1}: {
 								UserName:   []byte("Testy McTest"),
 								RemoteAddr: "1.2.3.4:12345",
 								Account: &Account{
@@ -2767,7 +2607,7 @@ func TestHandleGetClientInfoText(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranGetClientInfoText, &[]byte{0, 1},
+					TranGetClientInfoText, [2]byte{0, 1},
 					NewField(FieldUserID, []byte{0, 1}),
 				),
 			},
@@ -2807,15 +2647,11 @@ None.
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleGetClientInfoText(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleGetClientInfoText(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
+			gotRes := HandleGetClientInfoText(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -2824,13 +2660,12 @@ None.
 func TestHandleTranAgreed(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "normal request flow",
@@ -2844,9 +2679,9 @@ func TestHandleTranAgreed(t *testing.T) {
 							return bits
 						}()},
 					Icon:    []byte{0, 1},
-					Flags:   []byte{0, 1},
+					Flags:   [2]byte{0, 1},
 					Version: []byte{0, 1},
-					ID:      &[]byte{0, 1},
+					ID:      [2]byte{0, 1},
 					logger:  NewTestLogger(),
 					Server: &Server{
 						Config: &Config{
@@ -2855,7 +2690,7 @@ func TestHandleTranAgreed(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranAgreed, nil,
+					TranAgreed, [2]byte{},
 					NewField(FieldUserName, []byte("username")),
 					NewField(FieldUserIconID, []byte{0, 1}),
 					NewField(FieldOptions, []byte{0, 0}),
@@ -2863,27 +2698,23 @@ func TestHandleTranAgreed(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					Type:     [2]byte{0, 0x7a},
 					Fields: []Field{
 						NewField(FieldBannerType, []byte("JPEG")),
 					},
 				},
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					IsReply:  0x01,
 					Fields:   []Field{},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleTranAgreed(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleTranAgreed(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
+			gotRes := HandleTranAgreed(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -2892,13 +2723,12 @@ func TestHandleTranAgreed(t *testing.T) {
 func TestHandleSetClientUserInfo(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when client does not have accessAnyName",
@@ -2910,26 +2740,26 @@ func TestHandleSetClientUserInfo(t *testing.T) {
 							return bits
 						}(),
 					},
-					ID:       &[]byte{0, 1},
+					ID:       [2]byte{0, 1},
 					UserName: []byte("Guest"),
-					Flags:    []byte{0, 1},
+					Flags:    [2]byte{0, 1},
 					Server: &Server{
-						Clients: map[uint16]*ClientConn{
-							uint16(1): {
-								ID: &[]byte{0, 1},
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 1}: {
+								ID: [2]byte{0, 1},
 							},
 						},
 					},
 				},
 				t: NewTransaction(
-					TranSetClientUserInfo, nil,
+					TranSetClientUserInfo, [2]byte{},
 					NewField(FieldUserIconID, []byte{0, 1}),
 					NewField(FieldUserName, []byte("NOPE")),
 				),
 			},
 			wantRes: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					Type:     [2]byte{0x01, 0x2d},
 					Fields: []Field{
 						NewField(FieldUserID, []byte{0, 1}),
@@ -2938,16 +2768,11 @@ func TestHandleSetClientUserInfo(t *testing.T) {
 						NewField(FieldUserName, []byte("Guest"))},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleSetClientUserInfo(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleSetClientUserInfo(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
-
+			gotRes := HandleSetClientUserInfo(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -2956,13 +2781,12 @@ func TestHandleSetClientUserInfo(t *testing.T) {
 func TestHandleDelNewsItem(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when user does not have permission to delete a news category",
@@ -2971,7 +2795,7 @@ func TestHandleDelNewsItem(t *testing.T) {
 					Account: &Account{
 						Access: accessBitmap{},
 					},
-					ID: &[]byte{0, 1},
+					ID: [2]byte{0, 1},
 					Server: &Server{
 						ThreadedNews: &ThreadedNews{Categories: map[string]NewsCategoryListData15{
 							"test": {
@@ -2982,7 +2806,7 @@ func TestHandleDelNewsItem(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranDelNewsItem, nil,
+					TranDelNewsItem, [2]byte{},
 					NewField(FieldNewsPath,
 						[]byte{
 							0, 1,
@@ -2995,7 +2819,7 @@ func TestHandleDelNewsItem(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
+					clientID:  [2]byte{0, 1},
 					IsReply:   0x01,
 					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -3003,7 +2827,6 @@ func TestHandleDelNewsItem(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when user does not have permission to delete a news folder",
@@ -3012,7 +2835,7 @@ func TestHandleDelNewsItem(t *testing.T) {
 					Account: &Account{
 						Access: accessBitmap{},
 					},
-					ID: &[]byte{0, 1},
+					ID: [2]byte{0, 1},
 					Server: &Server{
 						ThreadedNews: &ThreadedNews{Categories: map[string]NewsCategoryListData15{
 							"testcat": {
@@ -3023,7 +2846,7 @@ func TestHandleDelNewsItem(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranDelNewsItem, nil,
+					TranDelNewsItem, [2]byte{},
 					NewField(FieldNewsPath,
 						[]byte{
 							0, 1,
@@ -3036,7 +2859,7 @@ func TestHandleDelNewsItem(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID:  &[]byte{0, 1},
+					clientID:  [2]byte{0, 1},
 					IsReply:   0x01,
 					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []Field{
@@ -3044,7 +2867,6 @@ func TestHandleDelNewsItem(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when user deletes a news folder",
@@ -3057,7 +2879,7 @@ func TestHandleDelNewsItem(t *testing.T) {
 							return bits
 						}(),
 					},
-					ID: &[]byte{0, 1},
+					ID: [2]byte{0, 1},
 					Server: &Server{
 						ConfigDir: "/fakeConfigRoot",
 						FS: func() *MockFileStore {
@@ -3074,7 +2896,7 @@ func TestHandleDelNewsItem(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranDelNewsItem, nil,
+					TranDelNewsItem, [2]byte{},
 					NewField(FieldNewsPath,
 						[]byte{
 							0, 1,
@@ -3087,20 +2909,17 @@ func TestHandleDelNewsItem(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					IsReply:  0x01,
 					Fields:   []Field{},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleDelNewsItem(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleDelNewsItem(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
+			gotRes := HandleDelNewsItem(tt.args.cc, &tt.args.t)
+
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -3109,13 +2928,12 @@ func TestHandleDelNewsItem(t *testing.T) {
 func TestHandleTranOldPostNews(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when user does not have required permission",
@@ -3129,7 +2947,7 @@ func TestHandleTranOldPostNews(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranOldPostNews, &[]byte{0, 1},
+					TranOldPostNews, [2]byte{0, 1},
 					NewField(FieldData, []byte("hai")),
 				),
 			},
@@ -3142,7 +2960,6 @@ func TestHandleTranOldPostNews(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when user posts news update",
@@ -3166,7 +2983,7 @@ func TestHandleTranOldPostNews(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranOldPostNews, &[]byte{0, 1},
+					TranOldPostNews, [2]byte{0, 1},
 					NewField(FieldData, []byte("hai")),
 				),
 			},
@@ -3175,15 +2992,11 @@ func TestHandleTranOldPostNews(t *testing.T) {
 					IsReply: 0x01,
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleTranOldPostNews(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleTranOldPostNews(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
+			gotRes := HandleTranOldPostNews(tt.args.cc, &tt.args.t)
 
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
@@ -3193,13 +3006,12 @@ func TestHandleTranOldPostNews(t *testing.T) {
 func TestHandleInviteNewChat(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when user does not have required permission",
@@ -3212,7 +3024,7 @@ func TestHandleInviteNewChat(t *testing.T) {
 						}(),
 					},
 				},
-				t: NewTransaction(TranInviteNewChat, &[]byte{0, 1}),
+				t: NewTransaction(TranInviteNewChat, [2]byte{0, 1}),
 			},
 			wantRes: []Transaction{
 				{
@@ -3223,13 +3035,12 @@ func TestHandleInviteNewChat(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when userA invites userB to new private chat",
 			args: args{
 				cc: &ClientConn{
-					ID: &[]byte{0, 1},
+					ID: [2]byte{0, 1},
 					Account: &Account{
 						Access: func() accessBitmap {
 							var bits accessBitmap
@@ -3239,26 +3050,25 @@ func TestHandleInviteNewChat(t *testing.T) {
 					},
 					UserName: []byte("UserA"),
 					Icon:     []byte{0, 1},
-					Flags:    []byte{0, 0},
+					Flags:    [2]byte{0, 0},
 					Server: &Server{
-						Clients: map[uint16]*ClientConn{
-							uint16(2): {
-								ID:       &[]byte{0, 2},
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 2}: {
+								ID:       [2]byte{0, 2},
 								UserName: []byte("UserB"),
-								Flags:    []byte{0, 0},
 							},
 						},
-						PrivateChats: make(map[uint32]*PrivateChat),
+						PrivateChats: make(map[[4]byte]*PrivateChat),
 					},
 				},
 				t: NewTransaction(
-					TranInviteNewChat, &[]byte{0, 1},
+					TranInviteNewChat, [2]byte{0, 1},
 					NewField(FieldUserID, []byte{0, 2}),
 				),
 			},
 			wantRes: []Transaction{
 				{
-					clientID: &[]byte{0, 2},
+					clientID: [2]byte{0, 2},
 					Type:     [2]byte{0, 0x71},
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0x52, 0xfd, 0xfc, 0x07}),
@@ -3268,7 +3078,7 @@ func TestHandleInviteNewChat(t *testing.T) {
 				},
 
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					IsReply:  0x01,
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0x52, 0xfd, 0xfc, 0x07}),
@@ -3279,13 +3089,12 @@ func TestHandleInviteNewChat(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when userA invites userB to new private chat, but UserB has refuse private chat enabled",
 			args: args{
 				cc: &ClientConn{
-					ID: &[]byte{0, 1},
+					ID: [2]byte{0, 1},
 					Account: &Account{
 						Access: func() accessBitmap {
 							var bits accessBitmap
@@ -3295,26 +3104,26 @@ func TestHandleInviteNewChat(t *testing.T) {
 					},
 					UserName: []byte("UserA"),
 					Icon:     []byte{0, 1},
-					Flags:    []byte{0, 0},
+					Flags:    [2]byte{0, 0},
 					Server: &Server{
-						Clients: map[uint16]*ClientConn{
-							uint16(2): {
-								ID:       &[]byte{0, 2},
+						Clients: map[[2]byte]*ClientConn{
+							[2]byte{0, 2}: {
+								ID:       [2]byte{0, 2},
 								UserName: []byte("UserB"),
-								Flags:    []byte{255, 255},
+								Flags:    [2]byte{255, 255},
 							},
 						},
-						PrivateChats: make(map[uint32]*PrivateChat),
+						PrivateChats: make(map[[4]byte]*PrivateChat),
 					},
 				},
 				t: NewTransaction(
-					TranInviteNewChat, &[]byte{0, 1},
+					TranInviteNewChat, [2]byte{0, 1},
 					NewField(FieldUserID, []byte{0, 2}),
 				),
 			},
 			wantRes: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					Type:     [2]byte{0, 0x68},
 					Fields: []Field{
 						NewField(FieldData, []byte("UserB does not accept private chats.")),
@@ -3324,7 +3133,7 @@ func TestHandleInviteNewChat(t *testing.T) {
 					},
 				},
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					IsReply:  0x01,
 					Fields: []Field{
 						NewField(FieldChatID, []byte{0x52, 0xfd, 0xfc, 0x07}),
@@ -3335,15 +3144,12 @@ func TestHandleInviteNewChat(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleInviteNewChat(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleInviteNewChat(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
+			gotRes := HandleInviteNewChat(tt.args.cc, &tt.args.t)
+
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -3352,13 +3158,12 @@ func TestHandleInviteNewChat(t *testing.T) {
 func TestHandleGetNewsArtData(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when user does not have required permission",
@@ -3375,7 +3180,7 @@ func TestHandleGetNewsArtData(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranGetNewsArtData, &[]byte{0, 1},
+					TranGetNewsArtData, [2]byte{0, 1},
 				),
 			},
 			wantRes: []Transaction{
@@ -3387,15 +3192,11 @@ func TestHandleGetNewsArtData(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleGetNewsArtData(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleGetNewsArtData(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
+			gotRes := HandleGetNewsArtData(tt.args.cc, &tt.args.t)
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -3404,13 +3205,12 @@ func TestHandleGetNewsArtData(t *testing.T) {
 func TestHandleGetNewsArtNameList(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when user does not have required permission",
@@ -3427,7 +3227,7 @@ func TestHandleGetNewsArtNameList(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranGetNewsArtNameList, &[]byte{0, 1},
+					TranGetNewsArtNameList, [2]byte{0, 1},
 				),
 			},
 			wantRes: []Transaction{
@@ -3441,7 +3241,6 @@ func TestHandleGetNewsArtNameList(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "when user has required access",
@@ -3487,7 +3286,7 @@ func TestHandleGetNewsArtNameList(t *testing.T) {
 				},
 				t: NewTransaction(
 					TranGetNewsArtNameList,
-					&[]byte{0, 1},
+					[2]byte{0, 1},
 					//  00000000  00 01 00 00 10 45 78 61  6d 70 6c 65 20 43 61 74  |.....Example Cat|
 					//  00000010  65 67 6f 72 79                                    |egory|
 					NewField(FieldNewsPath, []byte{
@@ -3510,15 +3309,12 @@ func TestHandleGetNewsArtNameList(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleGetNewsArtNameList(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleGetNewsArtNameList(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
+			gotRes := HandleGetNewsArtNameList(tt.args.cc, &tt.args.t)
+
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -3527,13 +3323,12 @@ func TestHandleGetNewsArtNameList(t *testing.T) {
 func TestHandleNewNewsFldr(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		{
 			name: "when user does not have required permission",
@@ -3550,7 +3345,7 @@ func TestHandleNewNewsFldr(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranGetNewsArtNameList, &[]byte{0, 1},
+					TranGetNewsArtNameList, [2]byte{0, 1},
 				),
 			},
 			wantRes: []Transaction{
@@ -3564,7 +3359,6 @@ func TestHandleNewNewsFldr(t *testing.T) {
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		{
 			name: "with a valid request",
@@ -3578,7 +3372,7 @@ func TestHandleNewNewsFldr(t *testing.T) {
 						}(),
 					},
 					logger: NewTestLogger(),
-					ID:     &[]byte{0, 1},
+					ID:     [2]byte{0, 1},
 					Server: &Server{
 						ConfigDir: "/fakeConfigRoot",
 						FS: func() *MockFileStore {
@@ -3596,7 +3390,7 @@ func TestHandleNewNewsFldr(t *testing.T) {
 					},
 				},
 				t: NewTransaction(
-					TranGetNewsArtNameList, &[]byte{0, 1},
+					TranGetNewsArtNameList, [2]byte{0, 1},
 					NewField(FieldFileName, []byte("testFolder")),
 					NewField(FieldNewsPath,
 						[]byte{
@@ -3610,12 +3404,11 @@ func TestHandleNewNewsFldr(t *testing.T) {
 			},
 			wantRes: []Transaction{
 				{
-					clientID: &[]byte{0, 1},
+					clientID: [2]byte{0, 1},
 					IsReply:  0x01,
 					Fields:   []Field{},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 		//{
 		//	Name: "when there is an error writing the threaded news file",
@@ -3629,7 +3422,7 @@ func TestHandleNewNewsFldr(t *testing.T) {
 		//				}(),
 		//			},
 		//			logger: NewTestLogger(),
-		//			ID:     &[]byte{0, 1},
+		//			ID:     [2]byte{0, 1},
 		//			Server: &Server{
 		//				ConfigDir: "/fakeConfigRoot",
 		//				FS: func() *MockFileStore {
@@ -3649,7 +3442,7 @@ func TestHandleNewNewsFldr(t *testing.T) {
 		//			},
 		//		},
 		//		t: NewTransaction(
-		//			TranGetNewsArtNameList, &[]byte{0, 1},
+		//			TranGetNewsArtNameList, [2]byte{0, 1},
 		//			NewField(FieldFileName, []byte("testFolder")),
 		//			NewField(FieldNewsPath,
 		//				[]byte{
@@ -3663,7 +3456,7 @@ func TestHandleNewNewsFldr(t *testing.T) {
 		//	},
 		//	wantRes: []Transaction{
 		//		{
-		//			clientID:  &[]byte{0, 1},
+		//			clientID:  [2]byte{0, 1},
 		//			Flags:     0x00,
 		//			IsReply:   0x01,
 		//			Type:      [2]byte{0, 0},
@@ -3673,15 +3466,11 @@ func TestHandleNewNewsFldr(t *testing.T) {
 		//			},
 		//		},
 		//	},
-		//	wantErr: assert.Error,
-		// },
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleNewNewsFldr(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleNewNewsFldr(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
+			gotRes := HandleNewNewsFldr(tt.args.cc, &tt.args.t)
+
 			tranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
@@ -3690,23 +3479,114 @@ func TestHandleNewNewsFldr(t *testing.T) {
 func TestHandleDownloadBanner(t *testing.T) {
 	type args struct {
 		cc *ClientConn
-		t  *Transaction
+		t  Transaction
 	}
 	tests := []struct {
 		name    string
 		args    args
 		wantRes []Transaction
-		wantErr assert.ErrorAssertionFunc
 	}{
 		// TODO: Add test cases.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := HandleDownloadBanner(tt.args.cc, tt.args.t)
-			if !tt.wantErr(t, err, fmt.Sprintf("HandleDownloadBanner(%v, %v)", tt.args.cc, tt.args.t)) {
-				return
-			}
-			assert.Equalf(t, tt.wantRes, gotRes, "HandleDownloadBanner(%v, %v)", tt.args.cc, tt.args.t)
+			gotRes := HandleDownloadBanner(tt.args.cc, &tt.args.t)
+
+			assert.Equalf(t, tt.wantRes, gotRes, "HandleDownloadBanner(%v, %v)", tt.args.cc, &tt.args.t)
+		})
+	}
+}
+
+func TestHandlePostNewsArt(t *testing.T) {
+	type args struct {
+		cc *ClientConn
+		t  Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []Transaction
+	}{
+		{
+			name: "without required permission",
+			args: args{
+				cc: &ClientConn{
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							return bits
+						}(),
+					},
+				},
+				t: NewTransaction(
+					TranPostNewsArt,
+					[2]byte{0, 0},
+				),
+			},
+			wantRes: []Transaction{
+				{
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []Field{
+						NewField(FieldError, []byte("You are not allowed to post news articles.")),
+					},
+				},
+			},
+		},
+		{
+			name: "with required permission",
+			args: args{
+				cc: &ClientConn{
+					Server: &Server{
+						FS: func() *MockFileStore {
+							mfs := &MockFileStore{}
+							mfs.On("WriteFile", "ThreadedNews.yaml", mock.Anything, mock.Anything).Return(nil, os.ErrNotExist)
+							return mfs
+						}(),
+						mux:             sync.Mutex{},
+						threadedNewsMux: sync.Mutex{},
+						ThreadedNews: &ThreadedNews{
+							Categories: map[string]NewsCategoryListData15{
+								"www": {
+									Type:       [2]byte{},
+									Name:       "www",
+									Articles:   map[uint32]*NewsArtData{},
+									SubCats:    nil,
+									GUID:       [16]byte{},
+									AddSN:      [4]byte{},
+									DeleteSN:   [4]byte{},
+									readOffset: 0,
+								},
+							},
+						},
+					},
+					Account: &Account{
+						Access: func() accessBitmap {
+							var bits accessBitmap
+							bits.Set(accessNewsPostArt)
+							return bits
+						}(),
+					},
+				},
+				t: NewTransaction(
+					TranPostNewsArt,
+					[2]byte{0, 0},
+					NewField(FieldNewsPath, []byte{0x00, 0x01, 0x00, 0x00, 0x03, 0x77, 0x77, 0x77}),
+					NewField(FieldNewsArtID, []byte{0x00, 0x00, 0x00, 0x00}),
+				),
+			},
+			wantRes: []Transaction{
+				{
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 0},
+					Fields:    []Field{},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tranAssertEqual(t, tt.wantRes, HandlePostNewsArt(tt.args.cc, &tt.args.t))
 		})
 	}
 }

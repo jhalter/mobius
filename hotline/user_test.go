@@ -28,7 +28,7 @@ func TestReadUser(t *testing.T) {
 				},
 			},
 			want: &User{
-				ID: []byte{
+				ID: [2]byte{
 					0x00, 0x01,
 				},
 				Icon: []byte{

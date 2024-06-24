@@ -2,68 +2,71 @@ package hotline
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 	"slices"
 )
 
 // List of Hotline protocol field types taken from the official 1.9 protocol document
-const (
-	FieldError               = 100
-	FieldData                = 101
-	FieldUserName            = 102
-	FieldUserID              = 103
-	FieldUserIconID          = 104
-	FieldUserLogin           = 105
-	FieldUserPassword        = 106
-	FieldRefNum              = 107
-	FieldTransferSize        = 108
-	FieldChatOptions         = 109
-	FieldUserAccess          = 110
-	FieldUserAlias           = 111 // TODO: implement
-	FieldUserFlags           = 112
-	FieldOptions             = 113
-	FieldChatID              = 114
-	FieldChatSubject         = 115
-	FieldWaitingCount        = 116
-	FieldBannerType          = 152
-	FieldNoServerAgreement   = 152
-	FieldVersion             = 160
-	FieldCommunityBannerID   = 161
-	FieldServerName          = 162
-	FieldFileNameWithInfo    = 200
-	FieldFileName            = 201
-	FieldFilePath            = 202
-	FieldFileResumeData      = 203
-	FieldFileTransferOptions = 204
-	FieldFileTypeString      = 205
-	FieldFileCreatorString   = 206
-	FieldFileSize            = 207
-	FieldFileCreateDate      = 208
-	FieldFileModifyDate      = 209
-	FieldFileComment         = 210
-	FieldFileNewName         = 211
-	FieldFileNewPath         = 212
-	FieldFileType            = 213
-	FieldQuotingMsg          = 214
-	FieldAutomaticResponse   = 215
-	FieldFolderItemCount     = 220
-	FieldUsernameWithInfo    = 300
-	FieldNewsArtListData     = 321
-	FieldNewsCatName         = 322
-	FieldNewsCatListData15   = 323
-	FieldNewsPath            = 325
-	FieldNewsArtID           = 326
-	FieldNewsArtDataFlav     = 327
-	FieldNewsArtTitle        = 328
-	FieldNewsArtPoster       = 329
-	FieldNewsArtDate         = 330
-	FieldNewsArtPrevArt      = 331
-	FieldNewsArtNextArt      = 332
-	FieldNewsArtData         = 333
-	FieldNewsArtFlags        = 334 // TODO: what is this used for?
-	FieldNewsArtParentArt    = 335
-	FieldNewsArt1stChildArt  = 336
-	FieldNewsArtRecurseDel   = 337 // TODO: implement news article recusive deletion
+var (
+	FieldError               = [2]byte{0x00, 0x64} // 100
+	FieldData                = [2]byte{0x00, 0x65} // 101
+	FieldUserName            = [2]byte{0x00, 0x66} // 102
+	FieldUserID              = [2]byte{0x00, 0x67} // 103
+	FieldUserIconID          = [2]byte{0x00, 0x68} // 104
+	FieldUserLogin           = [2]byte{0x00, 0x69} // 105
+	FieldUserPassword        = [2]byte{0x00, 0x6A} // 106
+	FieldRefNum              = [2]byte{0x00, 0x6B} // 107
+	FieldTransferSize        = [2]byte{0x00, 0x6C} // 108
+	FieldChatOptions         = [2]byte{0x00, 0x6D} // 109
+	FieldUserAccess          = [2]byte{0x00, 0x6E} // 110
+	FieldUserFlags           = [2]byte{0x00, 0x70} // 112
+	FieldOptions             = [2]byte{0x00, 0x71} // 113
+	FieldChatID              = [2]byte{0x00, 0x72} // 114
+	FieldChatSubject         = [2]byte{0x00, 0x73} // 115
+	FieldWaitingCount        = [2]byte{0x00, 0x74} // 116
+	FieldBannerType          = [2]byte{0x00, 0x98} // 152
+	FieldNoServerAgreement   = [2]byte{0x00, 0x98} // 152
+	FieldVersion             = [2]byte{0x00, 0xA0} // 160
+	FieldCommunityBannerID   = [2]byte{0x00, 0xA1} // 161
+	FieldServerName          = [2]byte{0x00, 0xA2} // 162
+	FieldFileNameWithInfo    = [2]byte{0x00, 0xC8} // 200
+	FieldFileName            = [2]byte{0x00, 0xC9} // 201
+	FieldFilePath            = [2]byte{0x00, 0xCA} // 202
+	FieldFileResumeData      = [2]byte{0x00, 0xCB} // 203
+	FieldFileTransferOptions = [2]byte{0x00, 0xCC} // 204
+	FieldFileTypeString      = [2]byte{0x00, 0xCD} // 205
+	FieldFileCreatorString   = [2]byte{0x00, 0xCE} // 206
+	FieldFileSize            = [2]byte{0x00, 0xCF} // 207
+	FieldFileCreateDate      = [2]byte{0x00, 0xD0} // 208
+	FieldFileModifyDate      = [2]byte{0x00, 0xD1} // 209
+	FieldFileComment         = [2]byte{0x00, 0xD2} // 210
+	FieldFileNewName         = [2]byte{0x00, 0xD3} // 211
+	FieldFileNewPath         = [2]byte{0x00, 0xD4} // 212
+	FieldFileType            = [2]byte{0x00, 0xD5} // 213
+	FieldQuotingMsg          = [2]byte{0x00, 0xD6} // 214
+	FieldAutomaticResponse   = [2]byte{0x00, 0xD7} // 215
+	FieldFolderItemCount     = [2]byte{0x00, 0xDC} // 220
+	FieldUsernameWithInfo    = [2]byte{0x01, 0x2C} // 300
+	FieldNewsArtListData     = [2]byte{0x01, 0x41} // 321
+	FieldNewsCatName         = [2]byte{0x01, 0x42} // 322
+	FieldNewsCatListData15   = [2]byte{0x01, 0x43} // 323
+	FieldNewsPath            = [2]byte{0x01, 0x45} // 325
+	FieldNewsArtID           = [2]byte{0x01, 0x46} // 326
+	FieldNewsArtDataFlav     = [2]byte{0x01, 0x47} // 327
+	FieldNewsArtTitle        = [2]byte{0x01, 0x48} // 328
+	FieldNewsArtPoster       = [2]byte{0x01, 0x49} // 329
+	FieldNewsArtDate         = [2]byte{0x01, 0x4A} // 330
+	FieldNewsArtPrevArt      = [2]byte{0x01, 0x4B} // 331
+	FieldNewsArtNextArt      = [2]byte{0x01, 0x4C} // 332
+	FieldNewsArtData         = [2]byte{0x01, 0x4D} // 333
+	FieldNewsArtParentArt    = [2]byte{0x01, 0x4F} // 335
+	FieldNewsArt1stChildArt  = [2]byte{0x01, 0x50} // 336
+
+	// These fields are documented, but seemingly unused.
+	// FieldUserAlias           = [2]byte{0x00, 0x6F} // 111
+	// FieldNewsArtFlags        = [2]byte{0x01, 0x4E} // 334
+	// FieldNewsArtRecurseDel   = [2]byte{0x01, 0x51} // 337
 )
 
 type Field struct {
@@ -74,16 +77,16 @@ type Field struct {
 	readOffset int // Internal offset to track read progress
 }
 
-type requiredField struct {
-	ID     int
-	minLen int
-}
+func NewField(id [2]byte, data []byte) Field {
+	f := Field{
+		ID:   id,
+		Data: make([]byte, len(data)),
+	}
 
-func NewField(id uint16, data []byte) Field {
-	f := Field{Data: data}
-	binary.BigEndian.PutUint16(f.ID[:], id)
+	// Copy instead of assigning to avoid data race when the field is read in another go routine.
+	copy(f.Data, data)
+
 	binary.BigEndian.PutUint16(f.FieldSize[:], uint16(len(data)))
-
 	return f
 }
 
@@ -93,7 +96,7 @@ func fieldScanner(data []byte, _ bool) (advance int, token []byte, err error) {
 		return 0, nil, nil
 	}
 
-	// tranLen represents the length of bytes that are part of the transaction
+	// neededSize represents the length of bytes that are part of the field token.
 	neededSize := minFieldLen + int(binary.BigEndian.Uint16(data[2:4]))
 	if neededSize > len(data) {
 		return 0, nil, nil
@@ -118,18 +121,27 @@ func (f *Field) Read(p []byte) (int, error) {
 
 // Write implements io.Writer for Field
 func (f *Field) Write(p []byte) (int, error) {
-	f.ID = [2]byte(p[0:2])
-	f.FieldSize = [2]byte(p[2:4])
+	if len(p) < minFieldLen {
+		return 0, errors.New("input slice too short")
+	}
 
-	i := int(binary.BigEndian.Uint16(f.FieldSize[:]))
-	f.Data = p[4 : 4+i]
+	copy(f.ID[:], p[0:2])
+	copy(f.FieldSize[:], p[2:4])
 
-	return minFieldLen + i, nil
+	dataSize := int(binary.BigEndian.Uint16(f.FieldSize[:]))
+	if len(p) < minFieldLen+dataSize {
+		return 0, errors.New("input slice too short for data size")
+	}
+
+	f.Data = make([]byte, dataSize)
+	copy(f.Data, p[4:4+dataSize])
+
+	return minFieldLen + dataSize, nil
 }
 
-func getField(id int, fields *[]Field) *Field {
+func getField(id [2]byte, fields *[]Field) *Field {
 	for _, field := range *fields {
-		if id == int(binary.BigEndian.Uint16(field.ID[:])) {
+		if id == field.ID {
 			return &field
 		}
 	}

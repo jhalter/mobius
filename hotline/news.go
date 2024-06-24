@@ -1,7 +1,6 @@
 package hotline
 
 import (
-	"bytes"
 	"encoding/binary"
 	"io"
 	"slices"
@@ -29,6 +28,8 @@ type NewsCategoryListData15 struct {
 	GUID     [16]byte                          `yaml:"-"` // What does this do?  Undocumented and seeming unused.
 	AddSN    [4]byte                           `yaml:"-"` // What does this do?  Undocumented and seeming unused.
 	DeleteSN [4]byte                           `yaml:"-"` // What does this do?  Undocumented and seeming unused.
+
+	readOffset int // Internal offset to track read progress
 }
 
 func (newscat *NewsCategoryListData15) GetNewsArtListData() NewsArtListData {
@@ -165,7 +166,7 @@ func (nal *NewsArtList) Read(p []byte) (int, error) {
 		nal.TimeStamp[:],
 		nal.ParentID[:],
 		nal.Flags[:],
-		[]byte{0, 1}, // Flavor Count
+		[]byte{0, 1}, // Flavor Count TODO: make this not hardcoded
 		[]byte{uint8(len(nal.Title))},
 		nal.Title,
 		[]byte{uint8(len(nal.Poster))},
@@ -191,23 +192,33 @@ type NewsFlavorList struct {
 	// Article size	2
 }
 
-func (newscat *NewsCategoryListData15) MarshalBinary() (data []byte, err error) {
+func (newscat *NewsCategoryListData15) Read(p []byte) (int, error) {
 	count := make([]byte, 2)
 	binary.BigEndian.PutUint16(count, uint16(len(newscat.Articles)+len(newscat.SubCats)))
 
-	out := append(newscat.Type[:], count...)
+	out := slices.Concat(
+		newscat.Type[:],
+		count,
+	)
 
 	// If type is category
-	if bytes.Equal(newscat.Type[:], []byte{0, 3}) {
-		out = append(out, newscat.GUID[:]...)     // GUID
-		out = append(out, newscat.AddSN[:]...)    // Add SN
-		out = append(out, newscat.DeleteSN[:]...) // Delete SN
+	if newscat.Type == [2]byte{0, 3} {
+		out = append(out, newscat.GUID[:]...)
+		out = append(out, newscat.AddSN[:]...)
+		out = append(out, newscat.DeleteSN[:]...)
 	}
 
 	out = append(out, newscat.nameLen()...)
 	out = append(out, []byte(newscat.Name)...)
 
-	return out, err
+	if newscat.readOffset >= len(out) {
+		return 0, io.EOF // All bytes have been read
+	}
+
+	n := copy(p, out)
+	newscat.readOffset = n
+
+	return n, nil
 }
 
 func (newscat *NewsCategoryListData15) nameLen() []byte {

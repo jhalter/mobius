@@ -16,7 +16,6 @@ type FileHeader struct {
 
 func NewFileHeader(fileName string, isDir bool) FileHeader {
 	fh := FileHeader{
-		Type:     [2]byte{0x00, 0x00},
 		FilePath: EncodeFilePath(fileName),
 	}
 	if isDir {

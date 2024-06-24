@@ -7,119 +7,189 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand"
 	"slices"
 )
 
-const (
-	TranError                = 0
-	TranGetMsgs              = 101
-	TranNewMsg               = 102
-	TranOldPostNews          = 103
-	TranServerMsg            = 104
-	TranChatSend             = 105
-	TranChatMsg              = 106
-	TranLogin                = 107
-	TranSendInstantMsg       = 108
-	TranShowAgreement        = 109
-	TranDisconnectUser       = 110
-	TranDisconnectMsg        = 111 // TODO: implement server initiated friendly disconnect
-	TranInviteNewChat        = 112
-	TranInviteToChat         = 113
-	TranRejectChatInvite     = 114
-	TranJoinChat             = 115
-	TranLeaveChat            = 116
-	TranNotifyChatChangeUser = 117
-	TranNotifyChatDeleteUser = 118
-	TranNotifyChatSubject    = 119
-	TranSetChatSubject       = 120
-	TranAgreed               = 121
-	TranServerBanner         = 122
-	TranGetFileNameList      = 200
-	TranDownloadFile         = 202
-	TranUploadFile           = 203
-	TranNewFolder            = 205
-	TranDeleteFile           = 204
-	TranGetFileInfo          = 206
-	TranSetFileInfo          = 207
-	TranMoveFile             = 208
-	TranMakeFileAlias        = 209
-	TranDownloadFldr         = 210
-	TranDownloadInfo         = 211 // TODO: implement file transfer queue
-	TranDownloadBanner       = 212
-	TranUploadFldr           = 213
-	TranGetUserNameList      = 300
-	TranNotifyChangeUser     = 301
-	TranNotifyDeleteUser     = 302
-	TranGetClientInfoText    = 303
-	TranSetClientUserInfo    = 304
-	TranListUsers            = 348
-	TranUpdateUser           = 349
-	TranNewUser              = 350
-	TranDeleteUser           = 351
-	TranGetUser              = 352
-	TranSetUser              = 353
-	TranUserAccess           = 354
-	TranUserBroadcast        = 355
-	TranGetNewsCatNameList   = 370
-	TranGetNewsArtNameList   = 371
-	TranDelNewsItem          = 380
-	TranNewNewsFldr          = 381
-	TranNewNewsCat           = 382
-	TranGetNewsArtData       = 400
-	TranPostNewsArt          = 410
-	TranDelNewsArt           = 411
-	TranKeepAlive            = 500
+var (
+	TranError                = [2]byte{0x00, 0x00} // 0
+	TranGetMsgs              = [2]byte{0x00, 0x65} // 101
+	TranNewMsg               = [2]byte{0x00, 0x66} // 102
+	TranOldPostNews          = [2]byte{0x00, 0x67} // 103
+	TranServerMsg            = [2]byte{0x00, 0x68} // 104
+	TranChatSend             = [2]byte{0x00, 0x69} // 105
+	TranChatMsg              = [2]byte{0x00, 0x6A} // 106
+	TranLogin                = [2]byte{0x00, 0x6B} // 107
+	TranSendInstantMsg       = [2]byte{0x00, 0x6C} // 108
+	TranShowAgreement        = [2]byte{0x00, 0x6D} // 109
+	TranDisconnectUser       = [2]byte{0x00, 0x6E} // 110
+	TranDisconnectMsg        = [2]byte{0x00, 0x6F} // 111
+	TranInviteNewChat        = [2]byte{0x00, 0x70} // 112
+	TranInviteToChat         = [2]byte{0x00, 0x71} // 113
+	TranRejectChatInvite     = [2]byte{0x00, 0x72} // 114
+	TranJoinChat             = [2]byte{0x00, 0x73} // 115
+	TranLeaveChat            = [2]byte{0x00, 0x74} // 116
+	TranNotifyChatChangeUser = [2]byte{0x00, 0x75} // 117
+	TranNotifyChatDeleteUser = [2]byte{0x00, 0x76} // 118
+	TranNotifyChatSubject    = [2]byte{0x00, 0x77} // 119
+	TranSetChatSubject       = [2]byte{0x00, 0x78} // 120
+	TranAgreed               = [2]byte{0x00, 0x79} // 121
+	TranServerBanner         = [2]byte{0x00, 0x7A} // 122
+	TranGetFileNameList      = [2]byte{0x00, 0xC8} // 200
+	TranDownloadFile         = [2]byte{0x00, 0xCA} // 202
+	TranUploadFile           = [2]byte{0x00, 0xCB} // 203
+	TranNewFolder            = [2]byte{0x00, 0xCD} // 205
+	TranDeleteFile           = [2]byte{0x00, 0xCC} // 204
+	TranGetFileInfo          = [2]byte{0x00, 0xCE} // 206
+	TranSetFileInfo          = [2]byte{0x00, 0xCF} // 207
+	TranMoveFile             = [2]byte{0x00, 0xD0} // 208
+	TranMakeFileAlias        = [2]byte{0x00, 0xD1} // 209
+	TranDownloadFldr         = [2]byte{0x00, 0xD2} // 210
+	TranDownloadInfo         = [2]byte{0x00, 0xD3} // 211
+	TranDownloadBanner       = [2]byte{0x00, 0xD4} // 212
+	TranUploadFldr           = [2]byte{0x00, 0xD5} // 213
+	TranGetUserNameList      = [2]byte{0x01, 0x2C} // 300
+	TranNotifyChangeUser     = [2]byte{0x01, 0x2D} // 301
+	TranNotifyDeleteUser     = [2]byte{0x01, 0x2E} // 302
+	TranGetClientInfoText    = [2]byte{0x01, 0x2F} // 303
+	TranSetClientUserInfo    = [2]byte{0x01, 0x30} // 304
+	TranListUsers            = [2]byte{0x01, 0x5C} // 348
+	TranUpdateUser           = [2]byte{0x01, 0x5D} // 349
+	TranNewUser              = [2]byte{0x01, 0x5E} // 350
+	TranDeleteUser           = [2]byte{0x01, 0x5F} // 351
+	TranGetUser              = [2]byte{0x01, 0x60} // 352
+	TranSetUser              = [2]byte{0x01, 0x61} // 353
+	TranUserAccess           = [2]byte{0x01, 0x62} // 354
+	TranUserBroadcast        = [2]byte{0x01, 0x63} // 355
+	TranGetNewsCatNameList   = [2]byte{0x01, 0x72} // 370
+	TranGetNewsArtNameList   = [2]byte{0x01, 0x73} // 371
+	TranDelNewsItem          = [2]byte{0x01, 0x7C} // 380
+	TranNewNewsFldr          = [2]byte{0x01, 0x7D} // 381
+	TranNewNewsCat           = [2]byte{0x01, 0x7E} // 382
+	TranGetNewsArtData       = [2]byte{0x01, 0x90} // 400
+	TranPostNewsArt          = [2]byte{0x01, 0x9A} // 410
+	TranDelNewsArt           = [2]byte{0x01, 0x9B} // 411
+	TranKeepAlive            = [2]byte{0x01, 0xF4} // 500
 )
 
 type Transaction struct {
-	Flags      byte    // Reserved (should be 0)
-	IsReply    byte    // Request (0) or reply (1)
-	Type       [2]byte // Requested operation (user defined)
-	ID         [4]byte // Unique transaction ID (must be != 0)
-	ErrorCode  [4]byte // Used in the reply (user defined, 0 = no error)
-	TotalSize  [4]byte // Total data size for the transaction (all parts)
-	DataSize   [4]byte // Size of data in this transaction part. This allows splitting large transactions into smaller parts.
-	ParamCount [2]byte // Number of the parameters for this transaction
+	Flags      byte     // Reserved (should be 0)
+	IsReply    byte     // Request (0) or reply (1)
+	Type       TranType // Requested operation (user defined)
+	ID         [4]byte  // Unique transaction ID (must be != 0)
+	ErrorCode  [4]byte  // Used in the reply (user defined, 0 = no error)
+	TotalSize  [4]byte  // Total data size for the fields in this transaction.
+	DataSize   [4]byte  // Size of data in this transaction part. This allows splitting large transactions into smaller parts.
+	ParamCount [2]byte  // Number of the parameters for this transaction
 	Fields     []Field
 
-	clientID   *[]byte // Internal identifier for target client
+	clientID   [2]byte // Internal identifier for target client
 	readOffset int     // Internal offset to track read progress
 }
 
-func NewTransaction(t int, clientID *[]byte, fields ...Field) *Transaction {
-	typeSlice := make([]byte, 2)
-	binary.BigEndian.PutUint16(typeSlice, uint16(t))
+type TranType [2]byte
 
-	idSlice := make([]byte, 4)
-	binary.BigEndian.PutUint32(idSlice, rand.Uint32())
-
-	return &Transaction{
-		clientID: clientID,
-		Type:     [2]byte(typeSlice),
-		ID:       [4]byte(idSlice),
-		Fields:   fields,
-	}
+var tranTypeNames = map[TranType]string{
+	TranChatMsg:            "Receive Chat",
+	TranNotifyChangeUser:   "TranNotifyChangeUser",
+	TranError:              "TranError",
+	TranShowAgreement:      "TranShowAgreement",
+	TranUserAccess:         "TranUserAccess",
+	TranNotifyDeleteUser:   "TranNotifyDeleteUser",
+	TranAgreed:             "TranAgreed",
+	TranChatSend:           "Send Chat",
+	TranDelNewsArt:         "TranDelNewsArt",
+	TranDelNewsItem:        "TranDelNewsItem",
+	TranDeleteFile:         "TranDeleteFile",
+	TranDeleteUser:         "TranDeleteUser",
+	TranDisconnectUser:     "TranDisconnectUser",
+	TranDownloadFile:       "TranDownloadFile",
+	TranDownloadFldr:       "TranDownloadFldr",
+	TranGetClientInfoText:  "TranGetClientInfoText",
+	TranGetFileInfo:        "TranGetFileInfo",
+	TranGetFileNameList:    "TranGetFileNameList",
+	TranGetMsgs:            "TranGetMsgs",
+	TranGetNewsArtData:     "TranGetNewsArtData",
+	TranGetNewsArtNameList: "TranGetNewsArtNameList",
+	TranGetNewsCatNameList: "TranGetNewsCatNameList",
+	TranGetUser:            "TranGetUser",
+	TranGetUserNameList:    "tranHandleGetUserNameList",
+	TranInviteNewChat:      "TranInviteNewChat",
+	TranInviteToChat:       "TranInviteToChat",
+	TranJoinChat:           "TranJoinChat",
+	TranKeepAlive:          "TranKeepAlive",
+	TranLeaveChat:          "TranJoinChat",
+	TranListUsers:          "TranListUsers",
+	TranMoveFile:           "TranMoveFile",
+	TranNewFolder:          "TranNewFolder",
+	TranNewNewsCat:         "TranNewNewsCat",
+	TranNewNewsFldr:        "TranNewNewsFldr",
+	TranNewUser:            "TranNewUser",
+	TranUpdateUser:         "TranUpdateUser",
+	TranOldPostNews:        "TranOldPostNews",
+	TranPostNewsArt:        "TranPostNewsArt",
+	TranRejectChatInvite:   "TranRejectChatInvite",
+	TranSendInstantMsg:     "TranSendInstantMsg",
+	TranSetChatSubject:     "TranSetChatSubject",
+	TranMakeFileAlias:      "TranMakeFileAlias",
+	TranSetClientUserInfo:  "TranSetClientUserInfo",
+	TranSetFileInfo:        "TranSetFileInfo",
+	TranSetUser:            "TranSetUser",
+	TranUploadFile:         "TranUploadFile",
+	TranUploadFldr:         "TranUploadFldr",
+	TranUserBroadcast:      "TranUserBroadcast",
+	TranDownloadBanner:     "TranDownloadBanner",
 }
 
-// Write implements io.Writer interface for Transaction
-func (t *Transaction) Write(p []byte) (n int, err error) {
-	totalSize := binary.BigEndian.Uint32(p[12:16])
+func (t TranType) LogValue() slog.Value {
+	return slog.StringValue(tranTypeNames[t])
+}
 
-	// the buf may include extra bytes that are not part of the transaction
-	// tranLen represents the length of bytes that are part of the transaction
-	tranLen := int(20 + totalSize)
-
-	if tranLen > len(p) {
-		return n, errors.New("buflen too small for tranLen")
+// NewTransaction creates a new Transaction with the specified type, client ID, and optional fields.
+func NewTransaction(t, clientID [2]byte, fields ...Field) Transaction {
+	transaction := Transaction{
+		Type:     t,
+		clientID: clientID,
+		Fields:   fields,
 	}
 
-	// Create a new scanner for parsing incoming bytes into transaction tokens
+	binary.BigEndian.PutUint32(transaction.ID[:], rand.Uint32())
+
+	return transaction
+}
+
+// Write implements io.Writer interface for Transaction.
+// Transactions read from the network are read as complete tokens with a bufio.Scanner, so
+// the arg p is guaranteed to have the full byte payload of a complete transaction.
+func (t *Transaction) Write(p []byte) (n int, err error) {
+	// Make sure we have the minimum number of bytes for a transaction.
+	if len(p) < 22 {
+		return 0, errors.New("buffer too small")
+	}
+
+	// Read the total size field.
+	totalSize := binary.BigEndian.Uint32(p[12:16])
+	tranLen := int(20 + totalSize)
+
+	paramCount := binary.BigEndian.Uint16(p[20:22])
+
+	t.Flags = p[0]
+	t.IsReply = p[1]
+	copy(t.Type[:], p[2:4])
+	copy(t.ID[:], p[4:8])
+	copy(t.ErrorCode[:], p[8:12])
+	copy(t.TotalSize[:], p[12:16])
+	copy(t.DataSize[:], p[16:20])
+	copy(t.ParamCount[:], p[20:22])
+
 	scanner := bufio.NewScanner(bytes.NewReader(p[22:tranLen]))
 	scanner.Split(fieldScanner)
 
-	for i := 0; i < int(binary.BigEndian.Uint16(p[20:22])); i++ {
-		scanner.Scan()
+	for i := 0; i < int(paramCount); i++ {
+		if !scanner.Scan() {
+			return 0, fmt.Errorf("error scanning field: %w", scanner.Err())
+		}
 
 		var field Field
 		if _, err := field.Write(scanner.Bytes()); err != nil {
@@ -128,16 +198,11 @@ func (t *Transaction) Write(p []byte) (n int, err error) {
 		t.Fields = append(t.Fields, field)
 	}
 
-	t.Flags = p[0]
-	t.IsReply = p[1]
-	t.Type = [2]byte(p[2:4])
-	t.ID = [4]byte(p[4:8])
-	t.ErrorCode = [4]byte(p[8:12])
-	t.TotalSize = [4]byte(p[12:16])
-	t.DataSize = [4]byte(p[16:20])
-	t.ParamCount = [2]byte(p[20:22])
+	if err := scanner.Err(); err != nil {
+		return 0, fmt.Errorf("scanner error: %w", err)
+	}
 
-	return len(p), err
+	return len(p), nil
 }
 
 const tranHeaderLen = 20 // fixed length of transaction fields before the variable length fields
@@ -253,16 +318,12 @@ func (t *Transaction) Size() []byte {
 	return bs
 }
 
-func (t *Transaction) GetField(id int) Field {
+func (t *Transaction) GetField(id [2]byte) Field {
 	for _, field := range t.Fields {
-		if id == int(binary.BigEndian.Uint16(field.ID[:])) {
+		if id == field.ID {
 			return field
 		}
 	}
 
 	return Field{}
-}
-
-func (t *Transaction) IsError() bool {
-	return t.ErrorCode == [4]byte{0, 0, 0, 1}
 }

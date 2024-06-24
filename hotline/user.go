@@ -3,26 +3,40 @@ package hotline
 import (
 	"encoding/binary"
 	"io"
+	"math/big"
 	"slices"
 )
 
 // User flags are stored as a 2 byte bitmap and represent various user states
 const (
-	UserFlagAway        = iota // User is away
-	UserFlagAdmin              // User is admin
-	UserFlagRefusePM           // User refuses private messages
-	UserFlagRefusePChat        // User refuses private chat
+	UserFlagAway        = 0 // User is away
+	UserFlagAdmin       = 1 // User is admin
+	UserFlagRefusePM    = 2 // User refuses private messages
+	UserFlagRefusePChat = 3 // User refuses private chat
 )
 
 // FieldOptions flags are sent from v1.5+ clients as part of TranAgreed
 const (
-	UserOptRefusePM     = iota // User has "Refuse private messages" pref set
-	UserOptRefuseChat          // User has "Refuse private chat" pref set
-	UserOptAutoResponse        // User has "Automatic response" pref set
+	UserOptRefusePM     = 0 // User has "Refuse private messages" pref set
+	UserOptRefuseChat   = 1 // User has "Refuse private chat" pref set
+	UserOptAutoResponse = 2 // User has "Automatic response" pref set
 )
 
+type UserFlags [2]byte
+
+func (flag *UserFlags) IsSet(i int) bool {
+	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(flag[:])))
+	return flagBitmap.Bit(i) == 1
+}
+
+func (flag *UserFlags) Set(i int, newVal uint) {
+	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(flag[:])))
+	flagBitmap.SetBit(flagBitmap, i, newVal)
+	binary.BigEndian.PutUint16(flag[:], uint16(flagBitmap.Int64()))
+}
+
 type User struct {
-	ID    []byte // Size 2
+	ID    [2]byte
 	Icon  []byte // Size 2
 	Flags []byte // Size 2
 	Name  string // Variable length user name
@@ -43,7 +57,7 @@ func (u *User) Read(p []byte) (int, error) {
 	}
 
 	b := slices.Concat(
-		u.ID,
+		u.ID[:],
 		u.Icon,
 		u.Flags,
 		nameLen,
@@ -55,13 +69,14 @@ func (u *User) Read(p []byte) (int, error) {
 	}
 
 	n := copy(p, b)
+	u.readOffset = n
 
-	return n, io.EOF
+	return n, nil
 }
 
 func (u *User) Write(p []byte) (int, error) {
 	namelen := int(binary.BigEndian.Uint16(p[6:8]))
-	u.ID = p[0:2]
+	u.ID = [2]byte(p[0:2])
 	u.Icon = p[2:4]
 	u.Flags = p[4:6]
 	u.Name = string(p[8 : 8+namelen])

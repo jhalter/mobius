@@ -3,12 +3,12 @@ package hotline
 import (
 	"bufio"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"slices"
 	"strconv"
-	"time"
 )
 
 // TrackerRegistration represents the payload a Hotline server sends to a Tracker to register
@@ -49,8 +49,20 @@ func (tr *TrackerRegistration) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-func register(tracker string, tr *TrackerRegistration) error {
-	conn, err := net.Dial("udp", tracker)
+// Dialer interface to abstract the dialing operation
+type Dialer interface {
+	Dial(network, address string) (net.Conn, error)
+}
+
+// RealDialer is the real implementation of the Dialer interface
+type RealDialer struct{}
+
+func (d *RealDialer) Dial(network, address string) (net.Conn, error) {
+	return net.Dial(network, address)
+}
+
+func register(dialer Dialer, tracker string, tr io.Reader) error {
+	conn, err := dialer.Dial("udp", tracker)
 	if err != nil {
 		return fmt.Errorf("failed to dial tracker: %w", err)
 	}
@@ -63,8 +75,6 @@ func register(tracker string, tr *TrackerRegistration) error {
 	return nil
 }
 
-const trackerTimeout = 5 * time.Second
-
 // All string values use 8-bit ASCII character set encoding.
 // Client Interface with Tracker
 // After establishing a connection with tracker, the following information is sent:
@@ -72,23 +82,20 @@ const trackerTimeout = 5 * time.Second
 // Magic number	4	‘HTRK’
 // Version	2	1 or 2	Old protocol (1) or new (2)
 
-// Reply received from the tracker starts with a header:
+// TrackerHeader is sent in reply Reply received from the tracker starts with a header:
 type TrackerHeader struct {
 	Protocol [4]byte // "HTRK" 0x4854524B
 	Version  [2]byte // Old protocol (1) or new (2)
 }
 
-// Message type			2	1	Sending list of servers
-// Message data size	2		Remaining size of this request
-// Number of servers	2		Number of servers in the server list
-// Number of servers	2		Same as previous field
 type ServerInfoHeader struct {
-	MsgType     [2]byte // always has value of 1
+	MsgType     [2]byte // Always has value of 1
 	MsgDataSize [2]byte // Remaining size of request
 	SrvCount    [2]byte // Number of servers in the server list
 	SrvCountDup [2]byte // Same as previous field ¯\_(ツ)_/¯
 }
 
+// ServerRecord is a tracker listing for a single server
 type ServerRecord struct {
 	IPAddr          [4]byte
 	Port            [2]byte
@@ -100,14 +107,10 @@ type ServerRecord struct {
 	Description     []byte
 }
 
-func GetListing(addr string) ([]ServerRecord, error) {
-	conn, err := net.DialTimeout("tcp", addr, trackerTimeout)
-	if err != nil {
-		return []ServerRecord{}, err
-	}
+func GetListing(conn io.ReadWriteCloser) ([]ServerRecord, error) {
 	defer func() { _ = conn.Close() }()
 
-	_, err = conn.Write(
+	_, err := conn.Write(
 		[]byte{
 			0x48, 0x54, 0x52, 0x4B, // HTRK
 			0x00, 0x01, // Version
@@ -189,9 +192,13 @@ func serverScanner(data []byte, _ bool) (advance int, token []byte, err error) {
 
 // Write implements io.Writer for ServerRecord
 func (s *ServerRecord) Write(b []byte) (n int, err error) {
+	if len(b) < 13 {
+		return 0, errors.New("too few bytes")
+	}
 	copy(s.IPAddr[:], b[0:4])
 	copy(s.Port[:], b[4:6])
 	copy(s.NumUsers[:], b[6:8])
+	s.NameSize = b[10]
 	nameLen := int(b[10])
 
 	s.Name = b[11 : 11+nameLen]

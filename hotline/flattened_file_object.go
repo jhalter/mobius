@@ -102,8 +102,10 @@ func (ffif *FlatFileInformationFork) Size() [4]byte {
 }
 
 func (ffo *flattenedFileObject) TransferSize(offset int64) []byte {
+	ffoCopy := *ffo
+
 	// get length of the flattenedFileObject, including the info fork
-	b, _ := io.ReadAll(ffo)
+	b, _ := io.ReadAll(&ffoCopy)
 	payloadSize := len(b)
 
 	// length of data fork

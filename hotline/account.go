@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"golang.org/x/crypto/bcrypt"
 	"io"
-	"log"
 	"slices"
 )
 
@@ -18,6 +17,15 @@ type Account struct {
 	Access   accessBitmap `yaml:"Access,flow"`
 
 	readOffset int // Internal offset to track read progress
+}
+
+func NewAccount(login, name, password string, access accessBitmap) *Account {
+	return &Account{
+		Login:    login,
+		Name:     name,
+		Password: hashAndSalt([]byte(password)),
+		Access:   access,
+	}
 }
 
 // Read implements io.Reader interface for Account
@@ -57,10 +65,7 @@ func (a *Account) Read(p []byte) (int, error) {
 
 // hashAndSalt generates a password hash from a users obfuscated plaintext password
 func hashAndSalt(pwd []byte) string {
-	hash, err := bcrypt.GenerateFromPassword(pwd, bcrypt.MinCost)
-	if err != nil {
-		log.Println(err)
-	}
+	hash, _ := bcrypt.GenerateFromPassword(pwd, bcrypt.MinCost)
 
 	return string(hash)
 }

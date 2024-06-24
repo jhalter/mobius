@@ -28,6 +28,7 @@ var logLevels = map[string]slog.Level{
 	"error": slog.LevelError,
 }
 
+// Values swapped in by go-releaser at build time
 var (
 	version = "dev"
 	commit  = "none"
@@ -35,22 +36,22 @@ var (
 )
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, _ := context.WithCancel(context.Background())
 
 	// TODO: implement graceful shutdown by closing context
-	// c := make(chan os.Signal, 1)
-	// signal.Notify(c, os.Interrupt)
-	// defer func() {
-	// 	signal.Stop(c)
-	// 	cancel()
-	// }()
-	// go func() {
-	// 	select {
-	// 	case <-c:
-	// 		cancel()
-	// 	case <-ctx.Done():
-	// 	}
-	// }()
+	//c := make(chan os.Signal, 1)
+	//signal.Notify(c, os.Interrupt)
+	//defer func() {
+	//	signal.Stop(c)
+	//	cancel()
+	//}()
+	//go func() {
+	//	select {
+	//	case <-c:
+	//		cancel()
+	//	case <-ctx.Done():
+	//	}
+	//}()
 
 	netInterface := flag.String("interface", "", "IP addr of interface to listen on.  Defaults to all interfaces.")
 	basePort := flag.Int("bind", defaultPort, "Base Hotline server port.  File transfer port is base port + 1.")
@@ -129,7 +130,7 @@ func main() {
 	)
 
 	// Serve Hotline requests until program exit
-	log.Fatal(srv.ListenAndServe(ctx, cancel))
+	log.Fatal(srv.ListenAndServe(ctx))
 }
 
 type statHandler struct {
@@ -166,7 +167,25 @@ func defaultConfigPath() string {
 	return cfgPath
 }
 
-// TODO: Simplify this mess.  Why is it so difficult to recursively copy a directory?
+// copyFile copies a file from src to dst. If dst does not exist, it is created.
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destinationFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destinationFile.Close()
+
+	_, err = io.Copy(destinationFile, sourceFile)
+	return err
+}
+
+// copyDir recursively copies a directory tree, attempting to preserve permissions.
 func copyDir(src, dst string) error {
 	entries, err := cfgTemplate.ReadDir(src)
 	if err != nil {

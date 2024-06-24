@@ -2,6 +2,7 @@ package hotline
 
 import (
 	"github.com/stretchr/testify/assert"
+	"io"
 	"testing"
 )
 
@@ -79,7 +80,7 @@ func TestNewsCategoryListData15_MarshalBinary(t *testing.T) {
 				DeleteSN: tt.fields.DeleteSN,
 				GUID:     tt.fields.GUID,
 			}
-			gotData, err := newscat.MarshalBinary()
+			gotData, err := io.ReadAll(newscat)
 			if newscat.Type == [2]byte{0, 3} {
 				// zero out the random GUID before comparison
 				for i := 4; i < 20; i++ {

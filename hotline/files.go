@@ -169,15 +169,19 @@ func CalcTotalSize(filePath string) ([]byte, error) {
 	return bs, nil
 }
 
+// CalcItemCount recurses through a file path and counts the number of non-hidden files.
 func CalcItemCount(filePath string) ([]byte, error) {
-	var itemcount uint16
+	var itemCount uint16
+
+	// Walk the directory and count items
 	err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
+		// Skip hidden files
 		if !strings.HasPrefix(info.Name(), ".") {
-			itemcount += 1
+			itemCount++
 		}
 
 		return nil
@@ -187,7 +191,7 @@ func CalcItemCount(filePath string) ([]byte, error) {
 	}
 
 	bs := make([]byte, 2)
-	binary.BigEndian.PutUint16(bs, itemcount-1)
+	binary.BigEndian.PutUint16(bs, itemCount-1)
 
 	return bs, nil
 }

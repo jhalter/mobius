@@ -30,7 +30,7 @@ func TestServer_handleFileTransfer(t *testing.T) {
 		Port          int
 		Accounts      map[string]*Account
 		Agreement     []byte
-		Clients       map[uint16]*ClientConn
+		Clients       map[[2]byte]*ClientConn
 		ThreadedNews  *ThreadedNews
 		fileTransfers map[[4]byte]*FileTransfer
 		Config        *Config
@@ -115,10 +115,10 @@ func TestServer_handleFileTransfer(t *testing.T) {
 				Stats:  &Stats{},
 				fileTransfers: map[[4]byte]*FileTransfer{
 					{0, 0, 0, 5}: {
-						ReferenceNumber: []byte{0, 0, 0, 5},
-						Type:            FileDownload,
-						FileName:        []byte("testfile-8b"),
-						FilePath:        []byte{},
+						refNum:   [4]byte{0, 0, 0, 5},
+						Type:     FileDownload,
+						FileName: []byte("testfile-8b"),
+						FilePath: []byte{},
 						ClientConn: &ClientConn{
 							Account: &Account{
 								Login: "foo",
@@ -187,6 +187,64 @@ func TestServer_handleFileTransfer(t *testing.T) {
 			tt.wantErr(t, s.handleFileTransfer(tt.args.ctx, tt.args.rwc), fmt.Sprintf("handleFileTransfer(%v, %v)", tt.args.ctx, tt.args.rwc))
 
 			assertTransferBytesEqual(t, tt.wantDump, tt.args.rwc.(mockReadWriter).WBuf.Bytes())
+		})
+	}
+}
+
+type TestData struct {
+	Name  string `yaml:"name"`
+	Value int    `yaml:"value"`
+}
+
+func TestLoadFromYAMLFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		fileName string
+		content  string
+		wantData TestData
+		wantErr  bool
+	}{
+		{
+			name:     "Valid YAML file",
+			fileName: "valid.yaml",
+			content:  "name: Test\nvalue: 123\n",
+			wantData: TestData{Name: "Test", Value: 123},
+			wantErr:  false,
+		},
+		{
+			name:     "File not found",
+			fileName: "nonexistent.yaml",
+			content:  "",
+			wantData: TestData{},
+			wantErr:  true,
+		},
+		{
+			name:     "Invalid YAML content",
+			fileName: "invalid.yaml",
+			content:  "name: Test\nvalue: invalid_int\n",
+			wantData: TestData{},
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup: Create a temporary file with the provided content if content is not empty
+			if tt.content != "" {
+				err := os.WriteFile(tt.fileName, []byte(tt.content), 0644)
+				assert.NoError(t, err)
+				defer os.Remove(tt.fileName) // Cleanup the file after the test
+			}
+
+			var data TestData
+			err := loadFromYAMLFile(tt.fileName, &data)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantData, data)
+			}
 		})
 	}
 }

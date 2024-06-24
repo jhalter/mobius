@@ -1,6 +1,7 @@
 package hotline
 
 import (
+	"sync"
 	"time"
 )
 
@@ -14,4 +15,6 @@ type Stats struct {
 	DownloadCounter     int
 	UploadCounter       int
 	Since               time.Time
+
+	sync.Mutex
 }

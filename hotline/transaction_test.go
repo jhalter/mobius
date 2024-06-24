@@ -301,7 +301,7 @@ func Test_transactionScanner(t *testing.T) {
 
 func TestTransaction_Read(t1 *testing.T) {
 	type fields struct {
-		clientID   *[]byte
+		clientID   [2]byte
 		Flags      byte
 		IsReply    byte
 		Type       [2]byte
@@ -405,6 +405,83 @@ func TestTransaction_Read(t1 *testing.T) {
 			}
 			assert.Equalf(t1, tt.want, got, "Read(%v)", tt.args.p)
 			assert.Equalf(t1, tt.wantBytes, tt.args.p[:got], "Read(%v)", tt.args.p)
+		})
+	}
+}
+
+func TestTransaction_Write(t1 *testing.T) {
+	type args struct {
+		p []byte
+	}
+	tests := []struct {
+		name            string
+		args            args
+		wantN           int
+		wantErr         assert.ErrorAssertionFunc
+		wantTransaction Transaction
+	}{
+		{
+			name: "returns error if arg p is too small",
+			args: args{p: []byte{
+				0x00, 0x00,
+			}},
+			wantN:           0,
+			wantErr:         assert.Error,
+			wantTransaction: Transaction{},
+		},
+		//{
+		//	name: "returns error if param data is invalid",
+		//	args: args{p: []byte{
+		//		0x00, 0x00, 0x00, 0x69, 0x00, 0x00, 0x15, 0x72,
+		//		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09,
+		//		0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x65,
+		//		0x00, 0x03, 0x68, 0x61, 0x69,
+		//	}},
+		//	wantN:           0,
+		//	wantErr:         assert.Error,
+		//	wantTransaction: Transaction{},
+		//},
+		{
+			name: "writes bytes to transaction",
+			args: args{p: []byte{
+				0x00, 0x00, 0x00, 0x69, 0x00, 0x00, 0x15, 0x72,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09,
+				0x00, 0x00, 0x00, 0x09, 0x00, 0x01, 0x00, 0x65,
+				0x00, 0x03, 0x68, 0x61, 0x69,
+			}},
+			wantN:   29,
+			wantErr: assert.NoError,
+			wantTransaction: Transaction{
+				Flags:      0,
+				IsReply:    0,
+				Type:       TranChatSend,
+				ID:         [4]byte{},
+				ErrorCode:  [4]byte{},
+				TotalSize:  [4]byte{0, 0, 0, 9},
+				DataSize:   [4]byte{0, 0, 0, 9},
+				ParamCount: [2]byte{0, 1},
+				Fields: []Field{
+					{
+						ID:        FieldData,
+						FieldSize: [2]byte{0, 3},
+						Data:      []byte("hai"),
+					},
+				},
+				clientID:   [2]byte{},
+				readOffset: 0,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t1.Run(tt.name, func(t1 *testing.T) {
+			t := &Transaction{}
+			gotN, err := t.Write(tt.args.p)
+			if !tt.wantErr(t1, err, fmt.Sprintf("Write(%v)", tt.args.p)) {
+				return
+			}
+			assert.Equalf(t1, tt.wantN, gotN, "Write(%v)", tt.args.p)
+
+			tranAssertEqual(t1, []Transaction{tt.wantTransaction}, []Transaction{*t})
 		})
 	}
 }

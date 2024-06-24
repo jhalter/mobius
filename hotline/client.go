@@ -29,23 +29,23 @@ type Client struct {
 	Connection  net.Conn
 	Logger      *slog.Logger
 	Pref        *ClientPrefs
-	Handlers    map[uint16]ClientHandler
-	activeTasks map[uint32]*Transaction
+	Handlers    map[[2]byte]ClientHandler
+	activeTasks map[[4]byte]*Transaction
 }
 
 type ClientHandler func(context.Context, *Client, *Transaction) ([]Transaction, error)
 
-func (c *Client) HandleFunc(transactionID uint16, handler ClientHandler) {
-	c.Handlers[transactionID] = handler
+func (c *Client) HandleFunc(tranType [2]byte, handler ClientHandler) {
+	c.Handlers[tranType] = handler
 }
 
 func NewClient(username string, logger *slog.Logger) *Client {
 	c := &Client{
 		Logger:      logger,
-		activeTasks: make(map[uint32]*Transaction),
-		Handlers:    make(map[uint16]ClientHandler),
+		activeTasks: make(map[[4]byte]*Transaction),
+		Handlers:    make(map[[2]byte]ClientHandler),
+		Pref:        &ClientPrefs{Username: username},
 	}
-	c.Pref = &ClientPrefs{Username: username}
 
 	return c
 }
@@ -79,8 +79,8 @@ func (c *Client) Connect(address, login, passwd string) (err error) {
 	// Authenticate (send TranLogin 107)
 
 	err = c.Send(
-		*NewTransaction(
-			TranLogin, nil,
+		NewTransaction(
+			TranLogin, [2]byte{0, 0},
 			NewField(FieldUserName, []byte(c.Pref.Username)),
 			NewField(FieldUserIconID, c.Pref.IconBytes()),
 			NewField(FieldUserLogin, encodeString([]byte(login))),
@@ -102,7 +102,7 @@ const keepaliveInterval = 300 * time.Second
 func (c *Client) keepalive() error {
 	for {
 		time.Sleep(keepaliveInterval)
-		_ = c.Send(*NewTransaction(TranKeepAlive, nil))
+		_ = c.Send(NewTransaction(TranKeepAlive, [2]byte{}))
 	}
 }
 
@@ -146,7 +146,7 @@ func (c *Client) Send(t Transaction) error {
 
 	// if transaction is NOT reply, add it to the list to transactions we're expecting a response for
 	if t.IsReply == 0 {
-		c.activeTasks[binary.BigEndian.Uint32(t.ID[:])] = &t
+		c.activeTasks[t.ID] = &t
 	}
 
 	n, err := io.Copy(c.Connection, &t)
@@ -165,16 +165,15 @@ func (c *Client) Send(t Transaction) error {
 func (c *Client) HandleTransaction(ctx context.Context, t *Transaction) error {
 	var origT Transaction
 	if t.IsReply == 1 {
-		requestID := binary.BigEndian.Uint32(t.ID[:])
-		origT = *c.activeTasks[requestID]
+		origT = *c.activeTasks[t.ID]
 		t.Type = origT.Type
 	}
 
-	if handler, ok := c.Handlers[binary.BigEndian.Uint16(t.Type[:])]; ok {
+	if handler, ok := c.Handlers[t.Type]; ok {
 		c.Logger.Debug(
 			"Received transaction",
 			"IsReply", t.IsReply,
-			"type", binary.BigEndian.Uint16(t.Type[:]),
+			"type", t.Type[:],
 		)
 		outT, err := handler(ctx, c, t)
 		if err != nil {
@@ -189,7 +188,7 @@ func (c *Client) HandleTransaction(ctx context.Context, t *Transaction) error {
 		c.Logger.Debug(
 			"Unimplemented transaction type",
 			"IsReply", t.IsReply,
-			"type", binary.BigEndian.Uint16(t.Type[:]),
+			"type", t.Type[:],
 		)
 	}
 
