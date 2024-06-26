@@ -13,7 +13,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
+	"path"
 	"runtime"
 )
 
@@ -82,14 +82,15 @@ func main() {
 		),
 	)
 
+	// It's important for Windows compatibility to use path.Join and not filepath.Join for the config dir initialization.
+	// https://github.com/golang/go/issues/44305
 	if *init {
-		if _, err := os.Stat(filepath.Join(*configDir, "/config.yaml")); os.IsNotExist(err) {
+		if _, err := os.Stat(path.Join(*configDir, "/config.yaml")); os.IsNotExist(err) {
 			if err := os.MkdirAll(*configDir, 0750); err != nil {
 				slogger.Error(fmt.Sprintf("error creating config dir: %s", err))
 				os.Exit(1)
 			}
-
-			if err := copyDir("mobius/config", *configDir); err != nil {
+			if err := copyDir(path.Join("mobius", "config"), *configDir); err != nil {
 				slogger.Error(fmt.Sprintf("error copying config dir: %s", err))
 				os.Exit(1)
 			}
@@ -193,19 +194,19 @@ func copyDir(src, dst string) error {
 	}
 	for _, dirEntry := range entries {
 		if dirEntry.IsDir() {
-			if err := os.MkdirAll(filepath.Join(dst, dirEntry.Name()), 0777); err != nil {
+			if err := os.MkdirAll(path.Join(dst, dirEntry.Name()), 0777); err != nil {
 				panic(err)
 			}
-			subdirEntries, _ := cfgTemplate.ReadDir(filepath.Join(src, dirEntry.Name()))
+			subdirEntries, _ := cfgTemplate.ReadDir(path.Join(src, dirEntry.Name()))
 			for _, subDirEntry := range subdirEntries {
-				f, err := os.Create(filepath.Join(dst, dirEntry.Name(), subDirEntry.Name()))
+				f, err := os.Create(path.Join(dst, dirEntry.Name(), subDirEntry.Name()))
 				if err != nil {
 					return err
 				}
 
-				srcFile, err := cfgTemplate.Open(filepath.Join(src, dirEntry.Name(), subDirEntry.Name()))
+				srcFile, err := cfgTemplate.Open(path.Join(src, dirEntry.Name(), subDirEntry.Name()))
 				if err != nil {
-					return err
+					return fmt.Errorf("error copying srcFile: %w", err)
 				}
 				_, err = io.Copy(f, srcFile)
 				if err != nil {
@@ -214,12 +215,12 @@ func copyDir(src, dst string) error {
 				f.Close()
 			}
 		} else {
-			f, err := os.Create(filepath.Join(dst, dirEntry.Name()))
+			f, err := os.Create(path.Join(dst, dirEntry.Name()))
 			if err != nil {
 				return err
 			}
 
-			srcFile, err := cfgTemplate.Open(filepath.Join(src, dirEntry.Name()))
+			srcFile, err := cfgTemplate.Open(path.Join(src, dirEntry.Name()))
 			if err != nil {
 				return err
 			}
