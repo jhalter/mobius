@@ -67,14 +67,18 @@ var TransactionHandlers = map[TranType]HandlerFunc{
 	TranDownloadBanner:     HandleDownloadBanner,
 }
 
+// The total size of a chat message data field is 8192 bytes.
+const chatMsgLimit = 8192
+
 func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if !cc.Authorize(accessSendChat) {
 		return cc.NewErrReply(t, "You are not allowed to participate in chat.")
 	}
 
 	// Truncate long usernames
-	trunc := fmt.Sprintf("%13s", cc.UserName)
-	formattedMsg := fmt.Sprintf("\r%.14s:  %s", trunc, t.GetField(FieldData).Data)
+	// %13.13s: This means a string that is right-aligned in a field of 13 characters.
+	// If the string is longer than 13 characters, it will be truncated to 13 characters.
+	formattedMsg := fmt.Sprintf("\r%13.13s:  %s", cc.UserName, t.GetField(FieldData).Data)
 
 	// By holding the option key, Hotline chat allows users to send /me formatted messages like:
 	// *** Halcyon does stuff
@@ -83,6 +87,9 @@ func HandleChatSend(cc *ClientConn, t *Transaction) (res []Transaction) {
 	if t.GetField(FieldChatOptions).Data != nil && bytes.Equal(t.GetField(FieldChatOptions).Data, []byte{0, 1}) {
 		formattedMsg = fmt.Sprintf("\r*** %s %s", cc.UserName, t.GetField(FieldData).Data)
 	}
+
+	// Truncate the message to the limit.  This does not handle the edge case of a string ending on multibyte character.
+	formattedMsg = formattedMsg[:min(len(formattedMsg), chatMsgLimit)]
 
 	// The ChatID field is used to identify messages as belonging to a private chat.
 	// All clients *except* Frogblast omit this field for public chat, but Frogblast sends a value of 00 00 00 00.
