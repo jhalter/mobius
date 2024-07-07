@@ -16,16 +16,37 @@ The goal of the Mobius client is to make it fun and easy to connect to multiple 
 
 ### Docker
 
-If you run Docker, you can quickly try out the Mobius server with the official image from Docker hub:
+### Docker
 
-    docker run --pull=always --rm -p 5500:5500 -p 5501:5501 jhalter/mobius-hotline-server:latest
+To quickly run a Hotline server with ports forwarded from the host OS to the container, run:
 
-This will start the Mobius server with the Hotline ports 5500 and 5501 exposed on localhost using a default configuration from the image.
+	docker run --rm -p 5500:5500 -p 5501:5501 ghcr.io/jhalter/mobius:latest
 
-To edit the configuration and serve files from your host OS, include the `-v` option to setup a Docker [bind mount](https://docs.docker.com/storage/bind-mounts/):
+You can now connect to localhost:5500 with your favorite Hotline client and play around, but all changes will be lost on container restart.
 
-	export HLFILES=/Users/foo/HotlineFiles #
- 	docker run --rm -p 5500:5500 -p 5501:5501 -v $HLFILES:/usr/local/var/mobius/config jhalter/mobius-hotline-server:latest -init
+To serve files from the host OS and persist configuration changes, you'll want to set up a [bind mount](https://docs.docker.com/storage/bind-mounts/) that maps a directory from the host into the container.
+
+To do this, create a directory in a location of your choice on the host OS.  For clarity, we'll assign the path to the `HLFILES` environment variable and re-use it:
+
+```
+export HLFILES=/home/myuser/hotline-files
+mdkir $HLFILES
+
+sudo docker run \
+    --pull=always \
+    --rm \
+    -p 5500:5500 \
+    -p 5501:5501 \
+    -v $HLFILES:/usr/local/var/mobius/config \
+    ghcr.io/jhalter/mobius:latest \
+    -init
+```
+
+It's a good security practice to run your server as a non-root user, which also happens to make editing the configuration files easier from the host OS.
+
+To do this, add the `--user` flag to the docker run arguments with a user ID and group ID of a user on the host OS.
+
+`--user 1001:1001`
 
 You'll now find a configuration directory on your host OS populated with a default configuration:
 
@@ -43,7 +64,6 @@ drwxr-xr-x   4 jhalter  staff   128 Jun 12 17:11 Users
 ```
 
 Edit `config.yaml` to get started personalizing your server.
-
 
 ### Mac OS
 
