@@ -16,8 +16,6 @@ The goal of the Mobius client is to make it fun and easy to connect to multiple 
 
 ### Docker
 
-### Docker
-
 To quickly run a Hotline server with ports forwarded from the host OS to the container, run:
 
 	docker run --rm -p 5500:5500 -p 5501:5501 ghcr.io/jhalter/mobius:latest
