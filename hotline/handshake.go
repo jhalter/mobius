@@ -19,14 +19,14 @@ import (
 //
 // The following information is sent to the server:
 // Description		Size 	Data	Note
-// Protocol ID		4		TRTP	0x54525450
-// Sub-protocol ID	4		HOTL	User defined
+// Protocol Type		4		TRTP	0x54525450
+// Sub-protocol Type	4		HOTL	User defined
 // VERSION			2		1		Currently 1
 // Sub-version		2		2		User defined
 //
 // The server replies with the following:
 // Description		Size 	Data	Note
-// Protocol ID		4		TRTP
+// Protocol Type		4		TRTP
 // Error code		4				Error code returned by the server (0 = no error)
 
 type handshake struct {
@@ -53,10 +53,10 @@ func (h *handshake) Valid() bool {
 }
 
 var (
-	// trtp represents the Protocol ID "TRTP" in hex
+	// trtp represents the Protocol Type "TRTP" in hex
 	trtp = [4]byte{0x54, 0x52, 0x54, 0x50}
 
-	// hotl represents the Sub-protocol ID "HOTL" in hex
+	// hotl represents the Sub-protocol Type "HOTL" in hex
 	hotl = [4]byte{0x48, 0x4F, 0x54, 0x4C}
 
 	// handshakeResponse represents the server's response after a successful handshake

@@ -64,7 +64,7 @@ func (d *RealDialer) Dial(network, address string) (net.Conn, error) {
 func register(dialer Dialer, tracker string, tr io.Reader) error {
 	conn, err := dialer.Dial("udp", tracker)
 	if err != nil {
-		return fmt.Errorf("failed to dial tracker: %w", err)
+		return fmt.Errorf("failed to dial tracker: %v", err)
 	}
 	defer conn.Close()
 

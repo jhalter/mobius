@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"sync"
 	"testing"
 )
 
@@ -27,21 +26,13 @@ func (mrw mockReadWriter) Write(p []byte) (n int, err error) {
 
 func TestServer_handleFileTransfer(t *testing.T) {
 	type fields struct {
-		Port          int
-		Accounts      map[string]*Account
-		Agreement     []byte
-		Clients       map[[2]byte]*ClientConn
-		ThreadedNews  *ThreadedNews
-		fileTransfers map[[4]byte]*FileTransfer
-		Config        *Config
-		ConfigDir     string
-		Logger        *slog.Logger
-		PrivateChats  map[uint32]*PrivateChat
-		NextGuestID   *uint16
-		TrackerPassID [4]byte
-		Stats         *Stats
-		FS            FileStore
-		FlatNews      []byte
+		ThreadedNews    *ThreadedNews
+		FileTransferMgr FileTransferMgr
+		Config          Config
+		ConfigDir       string
+		Stats           *Stats
+		Logger          *slog.Logger
+		FS              FileStore
 	}
 	type args struct {
 		ctx context.Context
@@ -79,7 +70,10 @@ func TestServer_handleFileTransfer(t *testing.T) {
 			wantErr: assert.Error,
 		},
 		{
-			name: "with invalid transfer ID",
+			name: "with invalid transfer Type",
+			fields: fields{
+				FileTransferMgr: NewMemFileTransferMgr(),
+			},
 			args: args{
 				ctx: func() context.Context {
 					ctx := context.Background()
@@ -106,31 +100,34 @@ func TestServer_handleFileTransfer(t *testing.T) {
 			name: "file download",
 			fields: fields{
 				FS: &OSFileStore{},
-				Config: &Config{
+				Config: Config{
 					FileRoot: func() string {
 						path, _ := os.Getwd()
 						return path + "/test/config/Files"
 					}()},
 				Logger: NewTestLogger(),
-				Stats:  &Stats{},
-				fileTransfers: map[[4]byte]*FileTransfer{
-					{0, 0, 0, 5}: {
-						refNum:   [4]byte{0, 0, 0, 5},
-						Type:     FileDownload,
-						FileName: []byte("testfile-8b"),
-						FilePath: []byte{},
-						ClientConn: &ClientConn{
-							Account: &Account{
-								Login: "foo",
-							},
-							transfersMU: sync.Mutex{},
-							transfers: map[int]map[[4]byte]*FileTransfer{
-								FileDownload: {
-									[4]byte{0, 0, 0, 5}: &FileTransfer{},
+				Stats:  NewStats(),
+				FileTransferMgr: &MemFileTransferMgr{
+					fileTransfers: map[FileTransferID]*FileTransfer{
+						{0, 0, 0, 5}: {
+							refNum:   [4]byte{0, 0, 0, 5},
+							Type:     FileDownload,
+							FileName: []byte("testfile-8b"),
+							FilePath: []byte{},
+							ClientConn: &ClientConn{
+								Account: &Account{
+									Login: "foo",
+								},
+								ClientFileTransferMgr: ClientFileTransferMgr{
+									transfers: map[FileTransferType]map[FileTransferID]*FileTransfer{
+										FileDownload: {
+											[4]byte{0, 0, 0, 5}: &FileTransfer{},
+										},
+									},
 								},
 							},
+							bytesSentCounter: &WriteCounter{},
 						},
-						bytesSentCounter: &WriteCounter{},
 					},
 				},
 			},
@@ -172,18 +169,14 @@ func TestServer_handleFileTransfer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Server{
-				Port:          tt.fields.Port,
-				Accounts:      tt.fields.Accounts,
-				Agreement:     tt.fields.Agreement,
-				Clients:       tt.fields.Clients,
-				ThreadedNews:  tt.fields.ThreadedNews,
-				fileTransfers: tt.fields.fileTransfers,
-				Config:        tt.fields.Config,
-				ConfigDir:     tt.fields.ConfigDir,
-				Logger:        tt.fields.Logger,
-				Stats:         tt.fields.Stats,
-				FS:            tt.fields.FS,
+				FileTransferMgr: tt.fields.FileTransferMgr,
+				Config:          tt.fields.Config,
+				ConfigDir:       tt.fields.ConfigDir,
+				Logger:          tt.fields.Logger,
+				Stats:           tt.fields.Stats,
+				FS:              tt.fields.FS,
 			}
+
 			tt.wantErr(t, s.handleFileTransfer(tt.args.ctx, tt.args.rwc), fmt.Sprintf("handleFileTransfer(%v, %v)", tt.args.ctx, tt.args.rwc))
 
 			assertTransferBytesEqual(t, tt.wantDump, tt.args.rwc.(mockReadWriter).WBuf.Bytes())

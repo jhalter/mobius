@@ -1,6 +1,8 @@
 package hotline
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -62,24 +64,24 @@ var (
 	FieldNewsArtData         = [2]byte{0x01, 0x4D} // 333
 	FieldNewsArtParentArt    = [2]byte{0x01, 0x4F} // 335
 	FieldNewsArt1stChildArt  = [2]byte{0x01, 0x50} // 336
+	FieldNewsArtRecurseDel   = [2]byte{0x01, 0x51} // 337
 
 	// These fields are documented, but seemingly unused.
 	// FieldUserAlias           = [2]byte{0x00, 0x6F} // 111
 	// FieldNewsArtFlags        = [2]byte{0x01, 0x4E} // 334
-	// FieldNewsArtRecurseDel   = [2]byte{0x01, 0x51} // 337
 )
 
 type Field struct {
-	ID        [2]byte // Type of field
-	FieldSize [2]byte // Size of the data part
-	Data      []byte  // Actual field content
+	Type      [2]byte // Type of field
+	FieldSize [2]byte // Size of the data field
+	Data      []byte  // Field data
 
 	readOffset int // Internal offset to track read progress
 }
 
-func NewField(id [2]byte, data []byte) Field {
+func NewField(fieldType [2]byte, data []byte) Field {
 	f := Field{
-		ID:   id,
+		Type: fieldType,
 		Data: make([]byte, len(data)),
 	}
 
@@ -105,9 +107,53 @@ func fieldScanner(data []byte, _ bool) (advance int, token []byte, err error) {
 	return neededSize, data[0:neededSize], nil
 }
 
+// DecodeInt decodes the field bytes to an int.
+// The official Hotline clients will send uint32s as 2 bytes if possible, but
+// some third party clients such as Frogblast and Heildrun will always send 4 bytes
+func (f *Field) DecodeInt() (int, error) {
+	switch len(f.Data) {
+	case 2:
+		return int(binary.BigEndian.Uint16(f.Data)), nil
+	case 4:
+		return int(binary.BigEndian.Uint32(f.Data)), nil
+	}
+
+	return 0, errors.New("unknown byte length")
+}
+
+func (f *Field) DecodeObfuscatedString() string {
+	return string(encodeString(f.Data))
+}
+
+// DecodeNewsPath decodes the field data to a news path.
+// Example News Path data for a Category nested under two Bundles:
+// 00000000  00 03 00 00 10 54 6f 70  20 4c 65 76 65 6c 20 42  |.....Top Level B|
+// 00000010  75 6e 64 6c 65 00 00 13  53 65 63 6f 6e 64 20 4c  |undle...Second L|
+// 00000020  65 76 65 6c 20 42 75 6e  64 6c 65 00 00 0f 4e 65  |evel Bundle...Ne|
+// 00000030  73 74 65 64 20 43 61 74  65 67 6f 72 79           |sted Category|
+func (f *Field) DecodeNewsPath() ([]string, error) {
+	if len(f.Data) == 0 {
+		return []string{}, nil
+	}
+
+	pathCount := binary.BigEndian.Uint16(f.Data[0:2])
+
+	scanner := bufio.NewScanner(bytes.NewReader(f.Data[2:]))
+	scanner.Split(newsPathScanner)
+
+	var paths []string
+
+	for i := uint16(0); i < pathCount; i++ {
+		scanner.Scan()
+		paths = append(paths, scanner.Text())
+	}
+
+	return paths, nil
+}
+
 // Read implements io.Reader for Field
 func (f *Field) Read(p []byte) (int, error) {
-	buf := slices.Concat(f.ID[:], f.FieldSize[:], f.Data)
+	buf := slices.Concat(f.Type[:], f.FieldSize[:], f.Data)
 
 	if f.readOffset >= len(buf) {
 		return 0, io.EOF // All bytes have been read
@@ -125,7 +171,7 @@ func (f *Field) Write(p []byte) (int, error) {
 		return 0, errors.New("input slice too short")
 	}
 
-	copy(f.ID[:], p[0:2])
+	copy(f.Type[:], p[0:2])
 	copy(f.FieldSize[:], p[2:4])
 
 	dataSize := int(binary.BigEndian.Uint16(f.FieldSize[:]))
@@ -141,7 +187,7 @@ func (f *Field) Write(p []byte) (int, error) {
 
 func getField(id [2]byte, fields *[]Field) *Field {
 	for _, field := range *fields {
-		if id == field.ID {
+		if id == field.Type {
 			return &field
 		}
 	}

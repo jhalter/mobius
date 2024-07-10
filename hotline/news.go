@@ -1,21 +1,29 @@
 package hotline
 
 import (
+	"cmp"
 	"encoding/binary"
 	"io"
 	"slices"
-	"sort"
 )
 
-const defaultNewsDateFormat = "Jan02 15:04" // Jun23 20:49
+var (
+	NewsBundle   = [2]byte{0, 2}
+	NewsCategory = [2]byte{0, 3}
+)
 
-const defaultNewsTemplate = `From %s (%s):
+type ThreadedNewsMgr interface {
+	ListArticles(newsPath []string) NewsArtListData
+	GetArticle(newsPath []string, articleID uint32) *NewsArtData
+	DeleteArticle(newsPath []string, articleID uint32, recursive bool) error
+	PostArticle(newsPath []string, parentArticleID uint32, article NewsArtData) error
+	CreateGrouping(newsPath []string, name string, t [2]byte) error
+	GetCategories(paths []string) []NewsCategoryListData15
+	NewsItem(newsPath []string) NewsCategoryListData15
+	DeleteNewsItem(newsPath []string) error
+}
 
-%s
-
-__________________________________________________________`
-
-// ThreadedNews is the top level struct containing all threaded news categories, bundles, and articles
+// ThreadedNews contains the top level of threaded news categories, bundles, and articles.
 type ThreadedNews struct {
 	Categories map[string]NewsCategoryListData15 `yaml:"Categories"`
 }
@@ -40,19 +48,23 @@ func (newscat *NewsCategoryListData15) GetNewsArtListData() NewsArtListData {
 		id := make([]byte, 4)
 		binary.BigEndian.PutUint32(id, i)
 
-		newArt := NewsArtList{
+		newsArts = append(newsArts, NewsArtList{
 			ID:          [4]byte(id),
 			TimeStamp:   art.Date,
 			ParentID:    art.ParentArt,
 			Title:       []byte(art.Title),
 			Poster:      []byte(art.Poster),
 			ArticleSize: art.DataSize(),
-		}
-
-		newsArts = append(newsArts, newArt)
+		})
 	}
 
-	sort.Sort(byID(newsArts))
+	// Sort the articles by ID.  This is important for displaying the message threading correctly on the client side.
+	slices.SortFunc(newsArts, func(a, b NewsArtList) int {
+		return cmp.Compare(
+			binary.BigEndian.Uint32(a.ID[:]),
+			binary.BigEndian.Uint32(b.ID[:]),
+		)
+	})
 
 	for _, v := range newsArts {
 		b, err := io.ReadAll(&v)
@@ -71,7 +83,7 @@ func (newscat *NewsCategoryListData15) GetNewsArtListData() NewsArtListData {
 	}
 }
 
-// NewsArtData represents single news article
+// NewsArtData represents an individual news article.
 type NewsArtData struct {
 	Title         string  `yaml:"Title"`
 	Poster        string  `yaml:"Poster"`
@@ -80,19 +92,19 @@ type NewsArtData struct {
 	NextArt       [4]byte `yaml:"NextArt,flow"`
 	ParentArt     [4]byte `yaml:"ParentArt,flow"`
 	FirstChildArt [4]byte `yaml:"FirstChildArtArt,flow"`
-	DataFlav      []byte  `yaml:"-"` // "text/plain"
+	DataFlav      []byte  `yaml:"-"` // MIME type string.  Always "text/plain".
 	Data          string  `yaml:"Data"`
 }
 
-func (art *NewsArtData) DataSize() []byte {
+func (art *NewsArtData) DataSize() [2]byte {
 	dataLen := make([]byte, 2)
 	binary.BigEndian.PutUint16(dataLen, uint16(len(art.Data)))
 
-	return dataLen
+	return [2]byte(dataLen)
 }
 
 type NewsArtListData struct {
-	ID          [4]byte `yaml:"ID"`
+	ID          [4]byte `yaml:"Type"`
 	Name        []byte  `yaml:"Name"`
 	Description []byte  `yaml:"Description"` // not used?
 	NewsArtList []byte  // List of articles			Optional (if article count > 0)
@@ -138,21 +150,9 @@ type NewsArtList struct {
 	Poster     []byte
 	FlavorList []NewsFlavorList
 	// Flavor list…			Optional (if flavor count > 0)
-	ArticleSize []byte // Size 2
+	ArticleSize [2]byte // Size 2
 
 	readOffset int // Internal offset to track read progress
-}
-
-type byID []NewsArtList
-
-func (s byID) Len() int {
-	return len(s)
-}
-func (s byID) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-func (s byID) Less(i, j int) bool {
-	return binary.BigEndian.Uint32(s[i].ID[:]) < binary.BigEndian.Uint32(s[j].ID[:])
 }
 
 var (
@@ -173,7 +173,7 @@ func (nal *NewsArtList) Read(p []byte) (int, error) {
 		nal.Poster,
 		NewsFlavorLen,
 		NewsFlavor,
-		nal.ArticleSize,
+		nal.ArticleSize[:],
 	)
 
 	if nal.readOffset >= len(out) {
@@ -200,22 +200,24 @@ func (newscat *NewsCategoryListData15) Read(p []byte) (int, error) {
 		newscat.Type[:],
 		count,
 	)
-
-	// If type is category
-	if newscat.Type == [2]byte{0, 3} {
-		out = append(out, newscat.GUID[:]...)
-		out = append(out, newscat.AddSN[:]...)
-		out = append(out, newscat.DeleteSN[:]...)
+	if newscat.Type == NewsCategory {
+		out = slices.Concat(out,
+			newscat.GUID[:],
+			newscat.AddSN[:],
+			newscat.DeleteSN[:],
+		)
 	}
-
-	out = append(out, newscat.nameLen()...)
-	out = append(out, []byte(newscat.Name)...)
+	out = slices.Concat(out,
+		newscat.nameLen(),
+		[]byte(newscat.Name),
+	)
 
 	if newscat.readOffset >= len(out) {
 		return 0, io.EOF // All bytes have been read
 	}
 
 	n := copy(p, out)
+
 	newscat.readOffset = n
 
 	return n, nil
@@ -225,30 +227,12 @@ func (newscat *NewsCategoryListData15) nameLen() []byte {
 	return []byte{uint8(len(newscat.Name))}
 }
 
-// TODO: re-implement as bufio.Scanner interface
-func ReadNewsPath(newsPath []byte) []string {
-	if len(newsPath) == 0 {
-		return []string{}
-	}
-	pathCount := binary.BigEndian.Uint16(newsPath[0:2])
-
-	pathData := newsPath[2:]
-	var paths []string
-
-	for i := uint16(0); i < pathCount; i++ {
-		pathLen := pathData[2]
-		paths = append(paths, string(pathData[3:3+pathLen]))
-
-		pathData = pathData[pathLen+3:]
+// newsPathScanner implements bufio.SplitFunc for parsing incoming byte slices into complete tokens
+func newsPathScanner(data []byte, _ bool) (advance int, token []byte, err error) {
+	if len(data) < 3 {
+		return 0, nil, nil
 	}
 
-	return paths
-}
-
-func (s *Server) GetNewsCatByPath(paths []string) map[string]NewsCategoryListData15 {
-	cats := s.ThreadedNews.Categories
-	for _, path := range paths {
-		cats = cats[path].SubCats
-	}
-	return cats
+	advance = 3 + int(data[2])
+	return advance, data[3:advance], nil
 }

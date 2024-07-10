@@ -9,7 +9,7 @@ import (
 
 type transfer struct {
 	Protocol        [4]byte // "HTXF" 0x48545846
-	ReferenceNumber [4]byte // Unique ID generated for the transfer
+	ReferenceNumber [4]byte // Unique Type generated for the transfer
 	DataSize        [4]byte // File size
 	RSVD            [4]byte // Not implemented in Hotline Protocol
 }

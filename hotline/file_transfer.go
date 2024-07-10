@@ -16,20 +16,87 @@ import (
 	"sync"
 )
 
-// File transfer types
+// Folder download actions.  Send by the client to indicate the next action the server should take
+// for a folder download.
 const (
-	FileDownload = iota
-	FileUpload
-	FolderDownload
-	FolderUpload
-	bannerDownload
+	DlFldrActionSendFile   = 1
+	DlFldrActionResumeFile = 2
+	DlFldrActionNextFile   = 3
 )
+
+// File transfer types
+type FileTransferType uint8
+
+const (
+	FileDownload   = FileTransferType(0)
+	FileUpload     = FileTransferType(1)
+	FolderDownload = FileTransferType(2)
+	FolderUpload   = FileTransferType(3)
+	BannerDownload = FileTransferType(4)
+)
+
+type FileTransferID [4]byte
+
+type FileTransferMgr interface {
+	Add(ft *FileTransfer)
+	Get(id FileTransferID) *FileTransfer
+	Delete(id FileTransferID)
+}
+
+type MemFileTransferMgr struct {
+	fileTransfers map[FileTransferID]*FileTransfer
+
+	mu sync.Mutex
+}
+
+func NewMemFileTransferMgr() *MemFileTransferMgr {
+	return &MemFileTransferMgr{
+		fileTransfers: make(map[FileTransferID]*FileTransfer),
+	}
+}
+
+func (ftm *MemFileTransferMgr) Add(ft *FileTransfer) {
+	ftm.mu.Lock()
+	defer ftm.mu.Unlock()
+
+	_, _ = rand.Read(ft.refNum[:])
+
+	ftm.fileTransfers[ft.refNum] = ft
+
+	ft.ClientConn.ClientFileTransferMgr.Add(ft.Type, ft)
+
+	//ft.ClientConn.transfersMU.Lock()
+	//ft.ClientConn.transfers[ft.Type] = ft
+	//ft.ClientConn.transfersMU.Unlock()
+}
+
+func (ftm *MemFileTransferMgr) Get(id FileTransferID) *FileTransfer {
+	ftm.mu.Lock()
+	defer ftm.mu.Unlock()
+
+	return ftm.fileTransfers[id]
+}
+
+func (ftm *MemFileTransferMgr) Delete(id FileTransferID) {
+	ftm.mu.Lock()
+	defer ftm.mu.Unlock()
+
+	ft := ftm.fileTransfers[id]
+
+	//ft.ClientConn.transfersMU.Lock()
+	//delete(ft.ClientConn.transfers[ft.Type], ft.refNum)
+	//ft.ClientConn.transfersMU.Unlock()
+	ft.ClientConn.ClientFileTransferMgr.Delete(ft.Type, id)
+
+	delete(ftm.fileTransfers, id)
+
+}
 
 type FileTransfer struct {
 	FileName         []byte
 	FilePath         []byte
 	refNum           [4]byte
-	Type             int
+	Type             FileTransferType
 	TransferSize     []byte
 	FolderItemCount  []byte
 	fileResumeData   *FileResumeData
@@ -55,7 +122,7 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-func (cc *ClientConn) newFileTransfer(transferType int, fileName, filePath, size []byte) *FileTransfer {
+func (cc *ClientConn) newFileTransfer(transferType FileTransferType, fileName, filePath, size []byte) *FileTransfer {
 	ft := &FileTransfer{
 		FileName:         fileName,
 		FilePath:         filePath,
@@ -64,16 +131,18 @@ func (cc *ClientConn) newFileTransfer(transferType int, fileName, filePath, size
 		ClientConn:       cc,
 		bytesSentCounter: &WriteCounter{},
 	}
+	//
+	//_, _ = rand.Read(ft.refNum[:])
+	//
+	//cc.transfersMU.Lock()
+	//defer cc.transfersMU.Unlock()
+	//cc.transfers[transferType][ft.refNum] = ft
 
-	_, _ = rand.Read(ft.refNum[:])
+	cc.Server.FileTransferMgr.Add(ft)
 
-	cc.transfersMU.Lock()
-	defer cc.transfersMU.Unlock()
-	cc.transfers[transferType][ft.refNum] = ft
-
-	cc.Server.mux.Lock()
-	defer cc.Server.mux.Unlock()
-	cc.Server.fileTransfers[ft.refNum] = ft
+	//cc.Server.mux.Lock()
+	//defer cc.Server.mux.Unlock()
+	//cc.Server.fileTransfers[ft.refNum] = ft
 
 	return ft
 }
@@ -148,7 +217,7 @@ func (fu *folderUpload) FormattedPath() string {
 	return filepath.Join(pathSegments...)
 }
 
-func DownloadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfer, fs FileStore, rLogger *slog.Logger, preserveForks bool) error {
+func DownloadHandler(w io.Writer, fullPath string, fileTransfer *FileTransfer, fs FileStore, rLogger *slog.Logger, preserveForks bool) error {
 	//s.Stats.DownloadCounter += 1
 	//s.Stats.DownloadsInProgress += 1
 	//defer func() {
@@ -162,48 +231,48 @@ func DownloadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTrans
 
 	fw, err := newFileWrapper(fs, fullPath, 0)
 	if err != nil {
-		//return err
+		return fmt.Errorf("reading file header: %v", err)
 	}
 
-	rLogger.Info("File download started", "filePath", fullPath)
+	rLogger.Info("Download file", "filePath", fullPath)
 
-	// if file transfer options are included, that means this is a "quick preview" request from a 1.5+ client
+	// If file transfer options are included, that means this is a "quick preview" request.  In this case skip sending
+	// the flat file info and proceed directly to sending the file data.
 	if fileTransfer.options == nil {
-		_, err = io.Copy(rwc, fw.ffo)
-		if err != nil {
-			//return err
+		if _, err = io.Copy(w, fw.ffo); err != nil {
+			return fmt.Errorf("send flat file object: %v", err)
 		}
 	}
 
 	file, err := fw.dataForkReader()
 	if err != nil {
-		//return err
+		return fmt.Errorf("open data fork reader: %v", err)
 	}
 
 	br := bufio.NewReader(file)
 	if _, err := br.Discard(int(dataOffset)); err != nil {
-		//return err
+		return fmt.Errorf("seek to resume offsent: %v", err)
 	}
 
-	if _, err = io.Copy(rwc, io.TeeReader(br, fileTransfer.bytesSentCounter)); err != nil {
-		return err
+	if _, err = io.Copy(w, io.TeeReader(br, fileTransfer.bytesSentCounter)); err != nil {
+		return fmt.Errorf("send data fork: %v", err)
 	}
 
-	// if the client requested to resume transfer, do not send the resource fork header, or it will be appended into the fileWrapper data
+	// If the client requested to resume transfer, do not send the resource fork header.
 	if fileTransfer.fileResumeData == nil {
-		err = binary.Write(rwc, binary.BigEndian, fw.rsrcForkHeader())
+		err = binary.Write(w, binary.BigEndian, fw.rsrcForkHeader())
 		if err != nil {
-			return err
+			return fmt.Errorf("send resource fork header: %v", err)
 		}
 	}
 
 	rFile, err := fw.rsrcForkFile()
 	if err != nil {
-		return nil
+		// return fmt.Errorf("open resource fork file: %v", err)
 	}
 
-	if _, err = io.Copy(rwc, io.TeeReader(rFile, fileTransfer.bytesSentCounter)); err != nil {
-		return err
+	if _, err = io.Copy(w, io.TeeReader(rFile, fileTransfer.bytesSentCounter)); err != nil {
+		// return fmt.Errorf("send resource fork data: %v", err)
 	}
 
 	return nil
@@ -347,7 +416,7 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 		var dataOffset int64
 
 		switch nextAction[1] {
-		case dlFldrActionResumeFile:
+		case DlFldrActionResumeFile:
 			// get size of resumeData
 			resumeDataByteLen := make([]byte, 2)
 			if _, err := io.ReadFull(rwc, resumeDataByteLen); err != nil {
@@ -365,7 +434,7 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 				return err
 			}
 			dataOffset = int64(binary.BigEndian.Uint32(frd.ForkInfoList[0].DataSize[:]))
-		case dlFldrActionNextFile:
+		case DlFldrActionNextFile:
 			// client asked to skip this file
 			return nil
 		}
@@ -442,7 +511,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 	}
 
 	// Begin the folder upload flow by sending the "next file action" to client
-	if _, err := rwc.Write([]byte{0, dlFldrActionNextFile}); err != nil {
+	if _, err := rwc.Write([]byte{0, DlFldrActionNextFile}); err != nil {
 		return err
 	}
 
@@ -475,11 +544,11 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 			}
 
 			// Tell client to send next file
-			if _, err := rwc.Write([]byte{0, dlFldrActionNextFile}); err != nil {
+			if _, err := rwc.Write([]byte{0, DlFldrActionNextFile}); err != nil {
 				return err
 			}
 		} else {
-			nextAction := dlFldrActionSendFile
+			nextAction := DlFldrActionSendFile
 
 			// Check if we have the full file already.  If so, send dlFldrAction_NextFile to client to skip.
 			_, err := os.Stat(filepath.Join(fullPath, fu.FormattedPath()))
@@ -487,7 +556,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 				return err
 			}
 			if err == nil {
-				nextAction = dlFldrActionNextFile
+				nextAction = DlFldrActionNextFile
 			}
 
 			//  Check if we have a partial file already.  If so, send dlFldrAction_ResumeFile to client to resume upload.
@@ -496,7 +565,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 				return err
 			}
 			if err == nil {
-				nextAction = dlFldrActionResumeFile
+				nextAction = DlFldrActionResumeFile
 			}
 
 			if _, err := rwc.Write([]byte{0, uint8(nextAction)}); err != nil {
@@ -504,9 +573,9 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 			}
 
 			switch nextAction {
-			case dlFldrActionNextFile:
+			case DlFldrActionNextFile:
 				continue
-			case dlFldrActionResumeFile:
+			case DlFldrActionResumeFile:
 				offset := make([]byte, 4)
 				binary.BigEndian.PutUint32(offset, uint32(incompleteFile.Size()))
 
@@ -539,7 +608,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 					return err
 				}
 
-			case dlFldrActionSendFile:
+			case DlFldrActionSendFile:
 				if _, err := io.ReadFull(rwc, fileSize); err != nil {
 					return err
 				}
@@ -581,7 +650,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 			}
 
 			// Tell client to send next fileWrapper
-			if _, err := rwc.Write([]byte{0, dlFldrActionNextFile}); err != nil {
+			if _, err := rwc.Write([]byte{0, DlFldrActionNextFile}); err != nil {
 				return err
 			}
 		}

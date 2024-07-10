@@ -119,8 +119,8 @@ var ServerHandshake = []byte{
 }
 
 func (c *Client) Handshake() error {
-	// Protocol ID	4	‘TRTP’	0x54 52 54 50
-	// Sub-protocol ID	4		User defined
+	// Protocol Type	4	‘TRTP’	0x54 52 54 50
+	// Sub-protocol Type	4		User defined
 	// Version	2	1	Currently 1
 	// Sub-version	2		User defined
 	if _, err := c.Connection.Write(ClientHandshake); err != nil {

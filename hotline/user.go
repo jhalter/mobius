@@ -15,7 +15,7 @@ const (
 	UserFlagRefusePChat = 3 // User refuses private chat
 )
 
-// FieldOptions flags are sent from v1.5+ clients as part of TranAgreed
+// User options are sent from clients and represent options set in the client's preferences.
 const (
 	UserOptRefusePM     = 0 // User has "Refuse private messages" pref set
 	UserOptRefuseChat   = 1 // User has "Refuse private chat" pref set
@@ -24,15 +24,15 @@ const (
 
 type UserFlags [2]byte
 
-func (flag *UserFlags) IsSet(i int) bool {
-	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(flag[:])))
+func (f *UserFlags) IsSet(i int) bool {
+	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(f[:])))
 	return flagBitmap.Bit(i) == 1
 }
 
-func (flag *UserFlags) Set(i int, newVal uint) {
-	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(flag[:])))
+func (f *UserFlags) Set(i int, newVal uint) {
+	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(f[:])))
 	flagBitmap.SetBit(flagBitmap, i, newVal)
-	binary.BigEndian.PutUint16(flag[:], uint16(flagBitmap.Int64()))
+	binary.BigEndian.PutUint16(f[:], uint16(flagBitmap.Int64()))
 }
 
 type User struct {
