@@ -7,14 +7,17 @@ import (
 	"flag"
 	"fmt"
 	"github.com/jhalter/mobius/hotline"
+	"github.com/jhalter/mobius/internal/mobius"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"log"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"path"
 	"runtime"
+	"syscall"
 )
 
 //go:embed mobius/config
@@ -36,28 +39,16 @@ var (
 )
 
 func main() {
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 
-	// TODO: implement graceful shutdown by closing context
-	//c := make(chan os.Signal, 1)
-	//signal.Notify(c, os.Interrupt)
-	//defer func() {
-	//	signal.Stop(c)
-	//	cancel()
-	//}()
-	//go func() {
-	//	select {
-	//	case <-c:
-	//		cancel()
-	//	case <-ctx.Done():
-	//	}
-	//}()
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGINT, os.Interrupt)
 
 	netInterface := flag.String("interface", "", "IP addr of interface to listen on.  Defaults to all interfaces.")
 	basePort := flag.Int("bind", defaultPort, "Base Hotline server port.  File transfer port is base port + 1.")
 	statsPort := flag.String("stats-port", "", "Enable stats HTTP endpoint on address and port")
 	configDir := flag.String("config", defaultConfigPath(), "Path to config root")
-	printVersion := flag.Bool("version", false, "print version and exit")
+	printVersion := flag.Bool("version", false, "Print version and exit")
 	logLevel := flag.String("log-level", "info", "Log level")
 	logFile := flag.String("log-file", "", "Path to log file")
 
@@ -105,9 +96,33 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv, err := hotline.NewServer(*configDir, *netInterface, *basePort, slogger, &hotline.OSFileStore{})
+	config, err := mobius.LoadConfig(path.Join(*configDir, "config.yaml"))
+	if err != nil {
+		slogger.Error(fmt.Sprintf("Error loading config: %v", err))
+		os.Exit(1)
+	}
+
+	srv, err := hotline.NewServer(*config, *configDir, *netInterface, *basePort, slogger, &hotline.OSFileStore{})
 	if err != nil {
 		slogger.Error(fmt.Sprintf("Error starting server: %s", err))
+		os.Exit(1)
+	}
+
+	srv.MessageBoard, err = mobius.NewFlatNews(path.Join(*configDir, "MessageBoard.txt"))
+	if err != nil {
+		slogger.Error(fmt.Sprintf("Error loading message board: %v", err))
+		os.Exit(1)
+	}
+
+	srv.BanList, err = mobius.NewBanFile(path.Join(*configDir, "Banlist.yaml"))
+	if err != nil {
+		slogger.Error(fmt.Sprintf("Error loading ban list: %v", err))
+		os.Exit(1)
+	}
+
+	srv.ThreadedNewsMgr, err = mobius.NewThreadedNewsYAML(path.Join(*configDir, "ThreadedNews.yaml"))
+	if err != nil {
+		slogger.Error(fmt.Sprintf("Error loading news: %v", err))
 		os.Exit(1)
 	}
 
@@ -123,6 +138,33 @@ func main() {
 			}
 		}(srv)
 	}
+
+	go func() {
+		for {
+			sig := <-sigChan
+			switch sig {
+			case syscall.SIGHUP:
+				slogger.Info("SIGHUP received.  Reloading configuration.")
+
+				if err := srv.MessageBoard.(*mobius.FlatNews).Reload(); err != nil {
+					slogger.Error("Error reloading news", "err", err)
+				}
+
+				if err := srv.BanList.(*mobius.BanFile).Load(); err != nil {
+					slogger.Error("Error reloading ban list", "err", err)
+				}
+
+				if err := srv.ThreadedNewsMgr.(*mobius.ThreadedNewsYAML).Load(); err != nil {
+					slogger.Error("Error reloading threaded news list", "err", err)
+				}
+			default:
+				signal.Stop(sigChan)
+				cancel()
+				os.Exit(0)
+			}
+
+		}
+	}()
 
 	slogger.Info("Hotline server started",
 		"version", version,
@@ -166,24 +208,6 @@ func defaultConfigPath() string {
 	}
 
 	return cfgPath
-}
-
-// copyFile copies a file from src to dst. If dst does not exist, it is created.
-func copyFile(src, dst string) error {
-	sourceFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer sourceFile.Close()
-
-	destinationFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer destinationFile.Close()
-
-	_, err = io.Copy(destinationFile, sourceFile)
-	return err
 }
 
 // copyDir recursively copies a directory tree, attempting to preserve permissions.

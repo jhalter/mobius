@@ -11,7 +11,7 @@ func TestFileTransfer_String(t *testing.T) {
 		FileName         []byte
 		FilePath         []byte
 		refNum           [4]byte
-		Type             int
+		Type             FileTransferType
 		TransferSize     []byte
 		FolderItemCount  []byte
 		fileResumeData   *FileResumeData

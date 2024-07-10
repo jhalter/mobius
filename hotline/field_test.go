@@ -172,7 +172,7 @@ func TestField_Read(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := &Field{
-				ID:         tt.fields.ID,
+				Type:       tt.fields.ID,
 				FieldSize:  tt.fields.FieldSize,
 				Data:       tt.fields.Data,
 				readOffset: tt.fields.readOffset,
@@ -183,6 +183,49 @@ func TestField_Read(t *testing.T) {
 			}
 			assert.Equalf(t, tt.want, got, "Read(%v)", tt.args.p)
 			assert.Equalf(t, tt.wantBytes, tt.args.p[:got], "Read(%v)", tt.args.p)
+		})
+	}
+}
+
+func TestField_DecodeInt(t *testing.T) {
+	type fields struct {
+		Data []byte
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		want    int
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name:    "with 2 bytes of input",
+			fields:  fields{Data: []byte{0, 1}},
+			want:    1,
+			wantErr: assert.NoError,
+		},
+		{
+			name:    "with 4 bytes of input",
+			fields:  fields{Data: []byte{0, 1, 0, 0}},
+			want:    65536,
+			wantErr: assert.NoError,
+		},
+		{
+			name:    "with invalid number of bytes of input",
+			fields:  fields{Data: []byte{1, 0, 0, 0, 0, 0, 0, 0}},
+			want:    0,
+			wantErr: assert.Error,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &Field{
+				Data: tt.fields.Data,
+			}
+			got, err := f.DecodeInt()
+			if !tt.wantErr(t, err, fmt.Sprintf("DecodeInt()")) {
+				return
+			}
+			assert.Equalf(t, tt.want, got, "DecodeInt()")
 		})
 	}
 }
