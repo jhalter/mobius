@@ -31,6 +31,7 @@ type Client struct {
 	Pref        *ClientPrefs
 	Handlers    map[[2]byte]ClientHandler
 	activeTasks map[[4]byte]*Transaction
+	UserList    []User
 }
 
 type ClientHandler func(context.Context, *Client, *Transaction) ([]Transaction, error)
