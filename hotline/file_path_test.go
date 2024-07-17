@@ -154,13 +154,13 @@ func Test_readPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := readPath(tt.args.fileRoot, tt.args.filePath, tt.args.fileName)
+			got, err := ReadPath(tt.args.fileRoot, tt.args.filePath, tt.args.fileName)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("readPath() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("ReadPath() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if got != tt.want {
-				t.Errorf("readPath() got = %v, want %v", got, tt.want)
+				t.Errorf("ReadPath() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

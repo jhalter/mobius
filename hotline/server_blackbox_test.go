@@ -35,13 +35,13 @@ func assertTransferBytesEqual(t *testing.T, wantHexDump string, got []byte) bool
 
 var tranSortFunc = func(a, b Transaction) int {
 	return cmp.Compare(
-		binary.BigEndian.Uint16(a.clientID[:]),
-		binary.BigEndian.Uint16(b.clientID[:]),
+		binary.BigEndian.Uint16(a.ClientID[:]),
+		binary.BigEndian.Uint16(b.ClientID[:]),
 	)
 }
 
-// tranAssertEqual compares equality of transactions slices after stripping out the random transaction Type
-func tranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
+// TranAssertEqual compares equality of transactions slices after stripping out the random transaction Type
+func TranAssertEqual(t *testing.T, tran1, tran2 []Transaction) bool {
 	var newT1 []Transaction
 	var newT2 []Transaction
 

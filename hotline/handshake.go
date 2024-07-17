@@ -72,15 +72,14 @@ func performHandshake(rw io.ReadWriter) error {
 
 	// Copy exactly handshakeSize bytes from rw to handshake
 	if _, err := io.CopyN(&h, rw, handshakeSize); err != nil {
-		return fmt.Errorf("failed to read handshake data: %w", err)
+		return fmt.Errorf("read handshake: %w", err)
 	}
-
 	if !h.Valid() {
 		return errors.New("invalid protocol or sub-protocol in handshake")
 	}
 
 	if _, err := rw.Write(handshakeResponse[:]); err != nil {
-		return fmt.Errorf("error sending handshake response: %w", err)
+		return fmt.Errorf("send handshake response: %w", err)
 	}
 
 	return nil

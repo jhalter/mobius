@@ -6,9 +6,11 @@ import (
 	"time"
 )
 
-// toHotlineTime converts a time.Time to the 8 byte Hotline time format:
+type Time [8]byte
+
+// NewTime converts a time.Time to the 8 byte Hotline time format:
 // Year (2 bytes), milliseconds (2 bytes) and seconds (4 bytes)
-func toHotlineTime(t time.Time) (b [8]byte) {
+func NewTime(t time.Time) (b Time) {
 	yearBytes := make([]byte, 2)
 	secondBytes := make([]byte, 4)
 

@@ -8,14 +8,14 @@ import (
 )
 
 type FileNameWithInfo struct {
-	fileNameWithInfoHeader
+	FileNameWithInfoHeader
 	Name []byte // File Name
 
 	readOffset int // Internal offset to track read progress
 }
 
-// fileNameWithInfoHeader contains the fixed length fields of FileNameWithInfo
-type fileNameWithInfoHeader struct {
+// FileNameWithInfoHeader contains the fixed length fields of FileNameWithInfo
+type FileNameWithInfoHeader struct {
 	Type       [4]byte // File type code
 	Creator    [4]byte // File creator code
 	FileSize   [4]byte // File Size in bytes
@@ -24,7 +24,7 @@ type fileNameWithInfoHeader struct {
 	NameSize   [2]byte // Length of Name field
 }
 
-func (f *fileNameWithInfoHeader) nameLen() int {
+func (f *FileNameWithInfoHeader) nameLen() int {
 	return int(binary.BigEndian.Uint16(f.NameSize[:]))
 }
 
@@ -51,11 +51,11 @@ func (f *FileNameWithInfo) Read(p []byte) (int, error) {
 }
 
 func (f *FileNameWithInfo) Write(p []byte) (int, error) {
-	err := binary.Read(bytes.NewReader(p), binary.BigEndian, &f.fileNameWithInfoHeader)
+	err := binary.Read(bytes.NewReader(p), binary.BigEndian, &f.FileNameWithInfoHeader)
 	if err != nil {
 		return 0, err
 	}
-	headerLen := binary.Size(f.fileNameWithInfoHeader)
+	headerLen := binary.Size(f.FileNameWithInfoHeader)
 	f.Name = p[headerLen : headerLen+f.nameLen()]
 
 	return len(p), nil

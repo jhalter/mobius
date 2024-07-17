@@ -84,8 +84,8 @@ func (c *Client) Connect(address, login, passwd string) (err error) {
 			TranLogin, [2]byte{0, 0},
 			NewField(FieldUserName, []byte(c.Pref.Username)),
 			NewField(FieldUserIconID, c.Pref.IconBytes()),
-			NewField(FieldUserLogin, encodeString([]byte(login))),
-			NewField(FieldUserPassword, encodeString([]byte(passwd))),
+			NewField(FieldUserLogin, EncodeString([]byte(login))),
+			NewField(FieldUserPassword, EncodeString([]byte(passwd))),
 		),
 	)
 	if err != nil {
@@ -185,12 +185,6 @@ func (c *Client) HandleTransaction(ctx context.Context, t *Transaction) error {
 				return err
 			}
 		}
-	} else {
-		c.Logger.Debug(
-			"Unimplemented transaction type",
-			"IsReply", t.IsReply,
-			"type", t.Type[:],
-		)
 	}
 
 	return nil

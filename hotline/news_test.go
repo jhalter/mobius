@@ -2,60 +2,9 @@ package hotline
 
 import (
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"io"
 	"testing"
 )
-
-type mockThreadNewsMgr struct {
-	mock.Mock
-}
-
-func (m *mockThreadNewsMgr) ListArticles(newsPath []string) NewsArtListData {
-	args := m.Called(newsPath)
-
-	return args.Get(0).(NewsArtListData)
-}
-
-func (m *mockThreadNewsMgr) GetArticle(newsPath []string, articleID uint32) *NewsArtData {
-	args := m.Called(newsPath, articleID)
-
-	return args.Get(0).(*NewsArtData)
-}
-func (m *mockThreadNewsMgr) DeleteArticle(newsPath []string, articleID uint32, recursive bool) error {
-	args := m.Called(newsPath, articleID, recursive)
-
-	return args.Error(0)
-}
-
-func (m *mockThreadNewsMgr) PostArticle(newsPath []string, parentArticleID uint32, article NewsArtData) error {
-	args := m.Called(newsPath, parentArticleID, article)
-
-	return args.Error(0)
-}
-func (m *mockThreadNewsMgr) CreateGrouping(newsPath []string, name string, itemType [2]byte) error {
-	args := m.Called(newsPath, name, itemType)
-
-	return args.Error(0)
-}
-
-func (m *mockThreadNewsMgr) GetCategories(paths []string) []NewsCategoryListData15 {
-	args := m.Called(paths)
-
-	return args.Get(0).([]NewsCategoryListData15)
-}
-
-func (m *mockThreadNewsMgr) NewsItem(newsPath []string) NewsCategoryListData15 {
-	args := m.Called(newsPath)
-
-	return args.Get(0).(NewsCategoryListData15)
-}
-
-func (m *mockThreadNewsMgr) DeleteNewsItem(newsPath []string) error {
-	args := m.Called(newsPath)
-
-	return args.Error(0)
-}
 
 func TestNewsCategoryListData15_MarshalBinary(t *testing.T) {
 	type fields struct {

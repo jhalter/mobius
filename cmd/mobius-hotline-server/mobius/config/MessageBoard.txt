@@ -1,1 +1,13 @@
-Welcome to Hotline
+From Adam Hinkley (Nov04 12:05):
+
+Welcome to...
+ _   _       _   _ _
+| | | | ___ | |_| (_)_ __   ___
+| |_| |/ _ \| __| | | '_ \ / _ \
+|  _  | (_) | |_| | | | | |  __/
+|_| |_|\___/ \__|_|_|_| |_|\___|
+
+This is the NEWS area of Hotline.  Users can leave messages in this area by clicking on the “Post” button in the toolbar.
+
+The messages stay here until the administrator cleans the News up.  To edit the news, simply open the text file named “News” in the same folder as the Hotline Server program.  Once you've finished editing it, click the “Reload News” button in the server.
+__________________________________________________________

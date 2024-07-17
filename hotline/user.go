@@ -84,10 +84,10 @@ func (u *User) Write(p []byte) (int, error) {
 	return 8 + namelen, nil
 }
 
-// encodeString takes []byte s containing cleartext and rotates by 255 into obfuscated cleartext.
+// EncodeString takes []byte s containing cleartext and rotates by 255 into obfuscated cleartext.
 // The Hotline protocol uses this format for sending passwords over network.
 // Not secure, but hey, it was the 90s!
-func encodeString(clearText []byte) []byte {
+func EncodeString(clearText []byte) []byte {
 	obfuText := make([]byte, len(clearText))
 	for i := 0; i < len(clearText); i++ {
 		obfuText[i] = 255 - clearText[i]

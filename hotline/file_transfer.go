@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -59,15 +60,11 @@ func (ftm *MemFileTransferMgr) Add(ft *FileTransfer) {
 	ftm.mu.Lock()
 	defer ftm.mu.Unlock()
 
-	_, _ = rand.Read(ft.refNum[:])
+	_, _ = rand.Read(ft.RefNum[:])
 
-	ftm.fileTransfers[ft.refNum] = ft
+	ftm.fileTransfers[ft.RefNum] = ft
 
 	ft.ClientConn.ClientFileTransferMgr.Add(ft.Type, ft)
-
-	//ft.ClientConn.transfersMU.Lock()
-	//ft.ClientConn.transfers[ft.Type] = ft
-	//ft.ClientConn.transfersMU.Unlock()
 }
 
 func (ftm *MemFileTransferMgr) Get(id FileTransferID) *FileTransfer {
@@ -83,9 +80,6 @@ func (ftm *MemFileTransferMgr) Delete(id FileTransferID) {
 
 	ft := ftm.fileTransfers[id]
 
-	//ft.ClientConn.transfersMU.Lock()
-	//delete(ft.ClientConn.transfers[ft.Type], ft.refNum)
-	//ft.ClientConn.transfersMU.Unlock()
 	ft.ClientConn.ClientFileTransferMgr.Delete(ft.Type, id)
 
 	delete(ftm.fileTransfers, id)
@@ -95,12 +89,12 @@ func (ftm *MemFileTransferMgr) Delete(id FileTransferID) {
 type FileTransfer struct {
 	FileName         []byte
 	FilePath         []byte
-	refNum           [4]byte
+	RefNum           [4]byte
 	Type             FileTransferType
 	TransferSize     []byte
 	FolderItemCount  []byte
-	fileResumeData   *FileResumeData
-	options          []byte
+	FileResumeData   *FileResumeData
+	Options          []byte
 	bytesSentCounter *WriteCounter
 	ClientConn       *ClientConn
 }
@@ -122,7 +116,7 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-func (cc *ClientConn) newFileTransfer(transferType FileTransferType, fileName, filePath, size []byte) *FileTransfer {
+func (cc *ClientConn) NewFileTransfer(transferType FileTransferType, fileName, filePath, size []byte) *FileTransfer {
 	ft := &FileTransfer{
 		FileName:         fileName,
 		FilePath:         filePath,
@@ -131,18 +125,8 @@ func (cc *ClientConn) newFileTransfer(transferType FileTransferType, fileName, f
 		ClientConn:       cc,
 		bytesSentCounter: &WriteCounter{},
 	}
-	//
-	//_, _ = rand.Read(ft.refNum[:])
-	//
-	//cc.transfersMU.Lock()
-	//defer cc.transfersMU.Unlock()
-	//cc.transfers[transferType][ft.refNum] = ft
 
 	cc.Server.FileTransferMgr.Add(ft)
-
-	//cc.Server.mux.Lock()
-	//defer cc.Server.mux.Unlock()
-	//cc.Server.fileTransfers[ft.refNum] = ft
 
 	return ft
 }
@@ -217,6 +201,45 @@ func (fu *folderUpload) FormattedPath() string {
 	return filepath.Join(pathSegments...)
 }
 
+type FileHeader struct {
+	Size     [2]byte // Total size of FileHeader payload
+	Type     [2]byte // 0 for file, 1 for dir
+	FilePath []byte  // encoded file path
+
+	readOffset int // Internal offset to track read progress
+}
+
+func NewFileHeader(fileName string, isDir bool) FileHeader {
+	fh := FileHeader{
+		FilePath: EncodeFilePath(fileName),
+	}
+	if isDir {
+		fh.Type = [2]byte{0x00, 0x01}
+	}
+
+	encodedPathLen := uint16(len(fh.FilePath) + len(fh.Type))
+	binary.BigEndian.PutUint16(fh.Size[:], encodedPathLen)
+
+	return fh
+}
+
+func (fh *FileHeader) Read(p []byte) (int, error) {
+	buf := slices.Concat(
+		fh.Size[:],
+		fh.Type[:],
+		fh.FilePath,
+	)
+
+	if fh.readOffset >= len(buf) {
+		return 0, io.EOF // All bytes have been read
+	}
+
+	n := copy(p, buf[fh.readOffset:])
+	fh.readOffset += n
+
+	return n, nil
+}
+
 func DownloadHandler(w io.Writer, fullPath string, fileTransfer *FileTransfer, fs FileStore, rLogger *slog.Logger, preserveForks bool) error {
 	//s.Stats.DownloadCounter += 1
 	//s.Stats.DownloadsInProgress += 1
@@ -225,11 +248,11 @@ func DownloadHandler(w io.Writer, fullPath string, fileTransfer *FileTransfer, f
 	//}()
 
 	var dataOffset int64
-	if fileTransfer.fileResumeData != nil {
-		dataOffset = int64(binary.BigEndian.Uint32(fileTransfer.fileResumeData.ForkInfoList[0].DataSize[:]))
+	if fileTransfer.FileResumeData != nil {
+		dataOffset = int64(binary.BigEndian.Uint32(fileTransfer.FileResumeData.ForkInfoList[0].DataSize[:]))
 	}
 
-	fw, err := newFileWrapper(fs, fullPath, 0)
+	fw, err := NewFileWrapper(fs, fullPath, 0)
 	if err != nil {
 		return fmt.Errorf("reading file header: %v", err)
 	}
@@ -238,8 +261,8 @@ func DownloadHandler(w io.Writer, fullPath string, fileTransfer *FileTransfer, f
 
 	// If file transfer options are included, that means this is a "quick preview" request.  In this case skip sending
 	// the flat file info and proceed directly to sending the file data.
-	if fileTransfer.options == nil {
-		if _, err = io.Copy(w, fw.ffo); err != nil {
+	if fileTransfer.Options == nil {
+		if _, err = io.Copy(w, fw.Ffo); err != nil {
 			return fmt.Errorf("send flat file object: %v", err)
 		}
 	}
@@ -259,7 +282,7 @@ func DownloadHandler(w io.Writer, fullPath string, fileTransfer *FileTransfer, f
 	}
 
 	// If the client requested to resume transfer, do not send the resource fork header.
-	if fileTransfer.fileResumeData == nil {
+	if fileTransfer.FileResumeData == nil {
 		err = binary.Write(w, binary.BigEndian, fw.rsrcForkHeader())
 		if err != nil {
 			return fmt.Errorf("send resource fork header: %v", err)
@@ -294,13 +317,13 @@ func UploadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfe
 	}
 	if errors.Is(err, fs.ErrNotExist) {
 		// If not found, open or create a new .incomplete file
-		file, err = os.OpenFile(fullPath+incompleteFileSuffix, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		file, err = os.OpenFile(fullPath+IncompleteFileSuffix, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
 			return err
 		}
 	}
 
-	f, err := newFileWrapper(fileStore, fullPath, 0)
+	f, err := NewFileWrapper(fileStore, fullPath, 0)
 	if err != nil {
 		return err
 	}
@@ -315,7 +338,7 @@ func UploadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfe
 			return err
 		}
 
-		iForkWriter, err = f.infoForkWriter()
+		iForkWriter, err = f.InfoForkWriter()
 		if err != nil {
 			return err
 		}
@@ -389,7 +412,7 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 			return nil
 		}
 
-		hlFile, err := newFileWrapper(fileStore, path, 0)
+		hlFile, err := NewFileWrapper(fileStore, path, 0)
 		if err != nil {
 			return err
 		}
@@ -445,17 +468,17 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 
 		rLogger.Info("File download started",
 			"fileName", info.Name(),
-			"TransferSize", fmt.Sprintf("%x", hlFile.ffo.TransferSize(dataOffset)),
+			"TransferSize", fmt.Sprintf("%x", hlFile.Ffo.TransferSize(dataOffset)),
 		)
 
 		// Send file size to client
-		if _, err := rwc.Write(hlFile.ffo.TransferSize(dataOffset)); err != nil {
+		if _, err := rwc.Write(hlFile.Ffo.TransferSize(dataOffset)); err != nil {
 			rLogger.Error(err.Error())
 			return fmt.Errorf("error sending file size: %w", err)
 		}
 
 		// Send ffo bytes to client
-		_, err = io.Copy(rwc, hlFile.ffo)
+		_, err = io.Copy(rwc, hlFile.Ffo)
 		if err != nil {
 			return fmt.Errorf("error sending flat file object: %w", err)
 		}
@@ -470,7 +493,7 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 			return fmt.Errorf("error sending file: %w", err)
 		}
 
-		if nextAction[1] != 2 && hlFile.ffo.FlatFileHeader.ForkCount[1] == 3 {
+		if nextAction[1] != 2 && hlFile.Ffo.FlatFileHeader.ForkCount[1] == 3 {
 			err = binary.Write(rwc, binary.BigEndian, hlFile.rsrcForkHeader())
 			if err != nil {
 				return fmt.Errorf("error sending resource fork header: %w", err)
@@ -560,7 +583,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 			}
 
 			//  Check if we have a partial file already.  If so, send dlFldrAction_ResumeFile to client to resume upload.
-			incompleteFile, err := os.Stat(filepath.Join(fullPath, fu.FormattedPath()+incompleteFileSuffix))
+			incompleteFile, err := os.Stat(filepath.Join(fullPath, fu.FormattedPath()+IncompleteFileSuffix))
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
@@ -579,7 +602,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 				offset := make([]byte, 4)
 				binary.BigEndian.PutUint32(offset, uint32(incompleteFile.Size()))
 
-				file, err := os.OpenFile(fullPath+"/"+fu.FormattedPath()+incompleteFileSuffix, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				file, err := os.OpenFile(fullPath+"/"+fu.FormattedPath()+IncompleteFileSuffix, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 				if err != nil {
 					return err
 				}
@@ -615,7 +638,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 
 				filePath := filepath.Join(fullPath, fu.FormattedPath())
 
-				hlFile, err := newFileWrapper(fileStore, filePath, 0)
+				hlFile, err := NewFileWrapper(fileStore, filePath, 0)
 				if err != nil {
 					return err
 				}
@@ -630,7 +653,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 				rForkWriter := io.Discard
 				iForkWriter := io.Discard
 				if preserveForks {
-					iForkWriter, err = hlFile.infoForkWriter()
+					iForkWriter, err = hlFile.InfoForkWriter()
 					if err != nil {
 						return err
 					}

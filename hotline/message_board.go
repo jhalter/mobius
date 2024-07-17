@@ -1,8 +1,8 @@
 package hotline
 
-const defaultNewsDateFormat = "Jan02 15:04" // Jun23 20:49
+const NewsDateFormat = "Jan02 15:04" // Jun23 20:49
 
-const defaultNewsTemplate = `From %s (%s):
+const NewsTemplate = `From %s (%s):
 
 %s
 

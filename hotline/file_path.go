@@ -102,7 +102,7 @@ func (fp *FilePath) Len() uint16 {
 	return binary.BigEndian.Uint16(fp.ItemCount[:])
 }
 
-func readPath(fileRoot string, filePath, fileName []byte) (fullPath string, err error) {
+func ReadPath(fileRoot string, filePath, fileName []byte) (fullPath string, err error) {
 	var fp FilePath
 	if filePath != nil {
 		if _, err = fp.Write(filePath); err != nil {

@@ -14,16 +14,16 @@ type Account struct {
 	Login    string       `yaml:"Login"`
 	Name     string       `yaml:"Name"`
 	Password string       `yaml:"Password"`
-	Access   accessBitmap `yaml:"Access,flow"`
+	Access   AccessBitmap `yaml:"Access,flow"`
 
 	readOffset int // Internal offset to track read progress
 }
 
-func NewAccount(login, name, password string, access accessBitmap) *Account {
+func NewAccount(login, name, password string, access AccessBitmap) *Account {
 	return &Account{
 		Login:    login,
 		Name:     name,
-		Password: hashAndSalt([]byte(password)),
+		Password: HashAndSalt([]byte(password)),
 		Access:   access,
 	}
 }
@@ -32,7 +32,7 @@ func NewAccount(login, name, password string, access accessBitmap) *Account {
 func (a *Account) Read(p []byte) (int, error) {
 	fields := []Field{
 		NewField(FieldUserName, []byte(a.Name)),
-		NewField(FieldUserLogin, encodeString([]byte(a.Login))),
+		NewField(FieldUserLogin, EncodeString([]byte(a.Login))),
 		NewField(FieldUserAccess, a.Access[:]),
 	}
 
@@ -63,8 +63,8 @@ func (a *Account) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-// hashAndSalt generates a password hash from a users obfuscated plaintext password
-func hashAndSalt(pwd []byte) string {
+// HashAndSalt generates a password hash from a users obfuscated plaintext password
+func HashAndSalt(pwd []byte) string {
 	hash, _ := bcrypt.GenerateFromPassword(pwd, bcrypt.MinCost)
 
 	return string(hash)

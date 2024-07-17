@@ -282,7 +282,7 @@ func TestTransaction_Read(t1 *testing.T) {
 	for _, tt := range tests {
 		t1.Run(tt.name, func(t1 *testing.T) {
 			t := &Transaction{
-				clientID:   tt.fields.clientID,
+				ClientID:   tt.fields.clientID,
 				Flags:      tt.fields.Flags,
 				IsReply:    tt.fields.IsReply,
 				Type:       tt.fields.Type,
@@ -362,7 +362,7 @@ func TestTransaction_Write(t1 *testing.T) {
 						Data:      []byte("hai"),
 					},
 				},
-				clientID:   [2]byte{},
+				ClientID:   [2]byte{},
 				readOffset: 0,
 			},
 		},
@@ -376,7 +376,7 @@ func TestTransaction_Write(t1 *testing.T) {
 			}
 			assert.Equalf(t1, tt.wantN, gotN, "Write(%v)", tt.args.p)
 
-			tranAssertEqual(t1, []Transaction{tt.wantTransaction}, []Transaction{*t})
+			TranAssertEqual(t1, []Transaction{tt.wantTransaction}, []Transaction{*t})
 		})
 	}
 }

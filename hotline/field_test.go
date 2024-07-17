@@ -90,12 +90,12 @@ func Test_fieldScanner(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotAdvance, gotToken, err := fieldScanner(tt.args.data, tt.args.in1)
-			if !tt.wantErr(t, err, fmt.Sprintf("fieldScanner(%v, %v)", tt.args.data, tt.args.in1)) {
+			gotAdvance, gotToken, err := FieldScanner(tt.args.data, tt.args.in1)
+			if !tt.wantErr(t, err, fmt.Sprintf("FieldScanner(%v, %v)", tt.args.data, tt.args.in1)) {
 				return
 			}
-			assert.Equalf(t, tt.wantAdvance, gotAdvance, "fieldScanner(%v, %v)", tt.args.data, tt.args.in1)
-			assert.Equalf(t, tt.wantToken, gotToken, "fieldScanner(%v, %v)", tt.args.data, tt.args.in1)
+			assert.Equalf(t, tt.wantAdvance, gotAdvance, "FieldScanner(%v, %v)", tt.args.data, tt.args.in1)
+			assert.Equalf(t, tt.wantToken, gotToken, "FieldScanner(%v, %v)", tt.args.data, tt.args.in1)
 		})
 	}
 }

@@ -41,12 +41,12 @@ const (
 	AccessSendPrivMsg      = 40 // Messaging: Can Send Messages (Note: 1.9 protocol doc incorrectly says this is bit 19)
 )
 
-type accessBitmap [8]byte
+type AccessBitmap [8]byte
 
-func (bits *accessBitmap) Set(i int) {
+func (bits *AccessBitmap) Set(i int) {
 	bits[i/8] |= 1 << uint(7-i%8)
 }
 
-func (bits *accessBitmap) IsSet(i int) bool {
+func (bits *AccessBitmap) IsSet(i int) bool {
 	return bits[i/8]&(1<<uint(7-i%8)) != 0
 }

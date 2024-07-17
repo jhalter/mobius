@@ -1,6 +1,7 @@
 package mobius
 
 import (
+	"fmt"
 	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
@@ -22,8 +23,11 @@ func NewBanFile(path string) (*BanFile, error) {
 	}
 
 	err := bf.Load()
+	if err != nil {
+		return nil, fmt.Errorf("load ban file: %w", err)
+	}
 
-	return bf, err
+	return bf, nil
 }
 
 func (bf *BanFile) Load() error {
@@ -33,18 +37,17 @@ func (bf *BanFile) Load() error {
 	bf.banList = make(map[string]*time.Time)
 
 	fh, err := os.Open(bf.filePath)
+	if os.IsNotExist(err) {
+		return nil
+	}
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
+		return fmt.Errorf("open file: %v", err)
 	}
 	defer fh.Close()
 
-	decoder := yaml.NewDecoder(fh)
-	err = decoder.Decode(&bf.banList)
+	err = yaml.NewDecoder(fh).Decode(&bf.banList)
 	if err != nil {
-		return err
+		return fmt.Errorf("decode yaml: %v", err)
 	}
 
 	return nil
@@ -58,10 +61,15 @@ func (bf *BanFile) Add(ip string, until *time.Time) error {
 
 	out, err := yaml.Marshal(bf.banList)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal yaml: %v", err)
 	}
 
-	return os.WriteFile(filepath.Join(bf.filePath), out, 0644)
+	err = os.WriteFile(filepath.Join(bf.filePath), out, 0644)
+	if err != nil {
+		return fmt.Errorf("write file: %v", err)
+	}
+
+	return nil
 }
 
 func (bf *BanFile) IsBanned(ip string) (bool, *time.Time) {

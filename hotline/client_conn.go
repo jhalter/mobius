@@ -26,7 +26,7 @@ type ClientConn struct {
 	Icon       []byte // TODO: make fixed size of 2
 	Version    []byte // TODO: make fixed size of 2
 
-	flagsMU sync.Mutex // TODO: move into UserFlags struct
+	FlagsMU sync.Mutex // TODO: move into UserFlags struct
 	Flags   UserFlags
 
 	UserName  []byte
@@ -37,7 +37,7 @@ type ClientConn struct {
 
 	ClientFileTransferMgr ClientFileTransferMgr
 
-	logger *slog.Logger
+	Logger *slog.Logger
 
 	mu sync.RWMutex
 }
@@ -64,7 +64,7 @@ func (cftm *ClientFileTransferMgr) Add(ftType FileTransferType, ft *FileTransfer
 	cftm.mu.Lock()
 	defer cftm.mu.Unlock()
 
-	cftm.transfers[ftType][ft.refNum] = ft
+	cftm.transfers[ftType][ft.RefNum] = ft
 }
 
 func (cftm *ClientFileTransferMgr) Get(ftType FileTransferType) []FileTransfer {
@@ -95,9 +95,9 @@ func (cc *ClientConn) SendAll(t [2]byte, fields ...Field) {
 }
 
 func (cc *ClientConn) handleTransaction(transaction Transaction) {
-	if handler, ok := TransactionHandlers[transaction.Type]; ok {
+	if handler, ok := cc.Server.handlers[transaction.Type]; ok {
 		if transaction.Type != TranKeepAlive {
-			cc.logger.Info(tranTypeNames[transaction.Type])
+			cc.Logger.Info(tranTypeNames[transaction.Type])
 		}
 
 		for _, t := range handler(cc, &transaction) {
@@ -144,7 +144,7 @@ func (cc *ClientConn) Authorize(access int) bool {
 	return cc.Account.Access.IsSet(access)
 }
 
-// Disconnect notifies other clients that a client has disconnected
+// Disconnect notifies other clients that a client has disconnected and closes the connection.
 func (cc *ClientConn) Disconnect() {
 	cc.Server.ClientMgr.Delete(cc.ID)
 
@@ -153,7 +153,7 @@ func (cc *ClientConn) Disconnect() {
 	}
 
 	if err := cc.Connection.Close(); err != nil {
-		cc.Server.Logger.Error("error closing client connection", "RemoteAddr", cc.RemoteAddr)
+		cc.Server.Logger.Debug("error closing client connection", "RemoteAddr", cc.RemoteAddr)
 	}
 }
 
@@ -161,7 +161,7 @@ func (cc *ClientConn) Disconnect() {
 func (cc *ClientConn) NotifyOthers(t Transaction) (trans []Transaction) {
 	for _, c := range cc.Server.ClientMgr.List() {
 		if c.ID != cc.ID {
-			t.clientID = c.ID
+			t.ClientID = c.ID
 			trans = append(trans, t)
 		}
 	}
@@ -173,7 +173,7 @@ func (cc *ClientConn) NewReply(t *Transaction, fields ...Field) Transaction {
 	return Transaction{
 		IsReply:  1,
 		ID:       t.ID,
-		clientID: cc.ID,
+		ClientID: cc.ID,
 		Fields:   fields,
 	}
 }
@@ -182,7 +182,7 @@ func (cc *ClientConn) NewReply(t *Transaction, fields ...Field) Transaction {
 func (cc *ClientConn) NewErrReply(t *Transaction, errMsg string) []Transaction {
 	return []Transaction{
 		{
-			clientID:  cc.ID,
+			ClientID:  cc.ID,
 			IsReply:   1,
 			ID:        t.ID,
 			ErrorCode: [4]byte{0, 0, 0, 1},

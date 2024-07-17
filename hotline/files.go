@@ -34,7 +34,7 @@ func fileTypeFromInfo(info fs.FileInfo) (ft fileType, err error) {
 
 const maxFileSize = 4294967296
 
-func getFileNameList(path string, ignoreList []string) (fields []Field, err error) {
+func GetFileNameList(path string, ignoreList []string) (fields []Field, err error) {
 	files, err := os.ReadDir(path)
 	if err != nil {
 		return fields, fmt.Errorf("error reading path: %s: %w", path, err)
@@ -112,14 +112,14 @@ func getFileNameList(path string, ignoreList []string) (fields []Field, err erro
 				continue
 			}
 
-			hlFile, err := newFileWrapper(&OSFileStore{}, path+"/"+file.Name(), 0)
+			hlFile, err := NewFileWrapper(&OSFileStore{}, path+"/"+file.Name(), 0)
 			if err != nil {
-				return nil, fmt.Errorf("newFileWrapper: %w", err)
+				return nil, fmt.Errorf("NewFileWrapper: %w", err)
 			}
 
-			copy(fnwi.FileSize[:], hlFile.totalSize())
-			copy(fnwi.Type[:], hlFile.ffo.FlatFileInformationFork.TypeSignature[:])
-			copy(fnwi.Creator[:], hlFile.ffo.FlatFileInformationFork.CreatorSignature[:])
+			copy(fnwi.FileSize[:], hlFile.TotalSize())
+			copy(fnwi.Type[:], hlFile.Ffo.FlatFileInformationFork.TypeSignature[:])
+			copy(fnwi.Creator[:], hlFile.Ffo.FlatFileInformationFork.CreatorSignature[:])
 		}
 
 		strippedName := strings.ReplaceAll(file.Name(), ".incomplete", "")

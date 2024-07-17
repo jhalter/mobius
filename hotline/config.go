@@ -1,15 +1,9 @@
 package hotline
 
-const (
-	userIdleSeconds        = 300 // time in seconds before an inactive user is marked idle
-	idleCheckInterval      = 10  // time in seconds to check for idle users
-	trackerUpdateFrequency = 300 // time in seconds between tracker re-registration
-)
-
 type Config struct {
 	Name                      string   `yaml:"Name" validate:"required,max=50"`         // Name used for Tracker registration
 	Description               string   `yaml:"Description" validate:"required,max=200"` // Description used for Tracker registration
-	BannerFile                string   `yaml:"BannerFile"`                              // Path to banner jpg
+	BannerFile                string   `yaml:"BannerFile"`                              // Path to Banner jpg
 	FileRoot                  string   `yaml:"FileRoot" validate:"required"`            // Path to Files
 	EnableTrackerRegistration bool     `yaml:"EnableTrackerRegistration"`               // Toggle Tracker Registration
 	Trackers                  []string `yaml:"Trackers" validate:"dive,hostname_port"`  // List of trackers that the server should register with

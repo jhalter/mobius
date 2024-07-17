@@ -85,18 +85,18 @@ type Transaction struct {
 	ParamCount [2]byte  // Number of the parameters for this transaction
 	Fields     []Field
 
-	clientID   [2]byte // Internal identifier for target client
-	readOffset int     // Internal offset to track read progress
+	ClientID   ClientID // Internal identifier for target client
+	readOffset int      // Internal offset to track read progress
 }
 
 var tranTypeNames = map[TranType]string{
 	TranChatMsg:            "Receive chat",
 	TranNotifyChangeUser:   "User change",
 	TranError:              "Error",
-	TranShowAgreement:      "Show Agreement",
+	TranShowAgreement:      "Show agreement",
 	TranUserAccess:         "User access",
 	TranNotifyDeleteUser:   "User left",
-	TranAgreed:             "TranAgreed",
+	TranAgreed:             "Accept agreement",
 	TranChatSend:           "Send chat",
 	TranDelNewsArt:         "Delete news article",
 	TranDelNewsItem:        "Delete news item",
@@ -141,18 +141,15 @@ var tranTypeNames = map[TranType]string{
 	TranDownloadBanner:     "Download banner",
 }
 
-//func (t TranType) LogValue() slog.Value {
-//	return slog.StringValue(tranTypeNames[t])
-//}
-
-// NewTransaction creates a new Transaction with the specified type, client Type, and optional fields.
-func NewTransaction(t TranType, clientID [2]byte, fields ...Field) Transaction {
+// NewTransaction creates a new Transaction with the specified type, client, and optional fields.
+func NewTransaction(t TranType, clientID ClientID, fields ...Field) Transaction {
 	transaction := Transaction{
 		Type:     t,
-		clientID: clientID,
+		ClientID: clientID,
 		Fields:   fields,
 	}
 
+	// Give the transaction a random ID.
 	binary.BigEndian.PutUint32(transaction.ID[:], rand.Uint32())
 
 	return transaction
@@ -183,7 +180,7 @@ func (t *Transaction) Write(p []byte) (n int, err error) {
 	copy(t.ParamCount[:], p[20:22])
 
 	scanner := bufio.NewScanner(bytes.NewReader(p[22:tranLen]))
-	scanner.Split(fieldScanner)
+	scanner.Split(FieldScanner)
 
 	for i := 0; i < int(paramCount); i++ {
 		if !scanner.Scan() {

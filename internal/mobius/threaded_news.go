@@ -95,16 +95,6 @@ func (n *ThreadedNewsYAML) GetArticle(newsPath []string, articleID uint32) *hotl
 	return art
 }
 
-//
-//func (n *ThreadedNewsYAML) GetNewsCatByPath(paths []string) map[string]hotline.NewsCategoryListData15 {
-//	n.mu.Lock()
-//	defer n.mu.Unlock()
-//
-//	cats := n.getCatByPath(paths)
-//
-//	return cats
-//}
-
 func (n *ThreadedNewsYAML) GetCategories(paths []string) []hotline.NewsCategoryListData15 {
 	n.mu.Lock()
 	defer n.mu.Unlock()

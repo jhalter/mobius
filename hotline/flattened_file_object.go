@@ -56,21 +56,21 @@ func NewFlatFileInformationFork(fileName string, modifyTime [8]byte, typeSignatu
 	}
 }
 
-func (ffif *FlatFileInformationFork) friendlyType() []byte {
+func (ffif *FlatFileInformationFork) FriendlyType() []byte {
 	if name, ok := friendlyCreatorNames[string(ffif.TypeSignature[:])]; ok {
 		return []byte(name)
 	}
 	return ffif.TypeSignature[:]
 }
 
-func (ffif *FlatFileInformationFork) friendlyCreator() []byte {
+func (ffif *FlatFileInformationFork) FriendlyCreator() []byte {
 	if name, ok := friendlyCreatorNames[string(ffif.CreatorSignature[:])]; ok {
 		return []byte(name)
 	}
 	return ffif.CreatorSignature[:]
 }
 
-func (ffif *FlatFileInformationFork) setComment(comment []byte) error {
+func (ffif *FlatFileInformationFork) SetComment(comment []byte) error {
 	commentSize := make([]byte, 2)
 	ffif.Comment = comment
 	binary.BigEndian.PutUint16(commentSize, uint16(len(comment)))

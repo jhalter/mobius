@@ -166,7 +166,7 @@ func TestPerformHandshake(t *testing.T) {
 				0x54, 0x52, 0x54, 0x50, // TRTP
 			},
 			expectedOutput: nil,
-			expectedError:  "failed to read handshake data: invalid handshake size",
+			expectedError:  "read handshake: invalid handshake size",
 		},
 		{
 			name: "Invalid Protocol",

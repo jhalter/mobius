@@ -16,14 +16,12 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"runtime"
+	"path/filepath"
 	"syscall"
 )
 
 //go:embed mobius/config
 var cfgTemplate embed.FS
-
-const defaultPort = 5500
 
 var logLevels = map[string]slog.Level{
 	"debug": slog.LevelDebug,
@@ -45,13 +43,12 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGINT, os.Interrupt)
 
 	netInterface := flag.String("interface", "", "IP addr of interface to listen on.  Defaults to all interfaces.")
-	basePort := flag.Int("bind", defaultPort, "Base Hotline server port.  File transfer port is base port + 1.")
+	basePort := flag.Int("bind", 5500, "Base Hotline server port.  File transfer port is base port + 1.")
 	statsPort := flag.String("stats-port", "", "Enable stats HTTP endpoint on address and port")
-	configDir := flag.String("config", defaultConfigPath(), "Path to config root")
+	configDir := flag.String("config", configSearchPaths(), "Path to config root")
 	printVersion := flag.Bool("version", false, "Print version and exit")
 	logLevel := flag.String("log-level", "info", "Log level")
 	logFile := flag.String("log-file", "", "Path to log file")
-
 	init := flag.Bool("init", false, "Populate the config dir with default configuration")
 
 	flag.Parse()
@@ -91,18 +88,18 @@ func main() {
 		}
 	}
 
-	if _, err := os.Stat(*configDir); os.IsNotExist(err) {
-		slogger.Error("Configuration directory not found.  Correct the path or re-run with -init to generate initial config.")
-		os.Exit(1)
-	}
-
 	config, err := mobius.LoadConfig(path.Join(*configDir, "config.yaml"))
 	if err != nil {
 		slogger.Error(fmt.Sprintf("Error loading config: %v", err))
 		os.Exit(1)
 	}
 
-	srv, err := hotline.NewServer(*config, *configDir, *netInterface, *basePort, slogger, &hotline.OSFileStore{})
+	srv, err := hotline.NewServer(
+		hotline.WithInterface(*netInterface),
+		hotline.WithLogger(slogger),
+		hotline.WithPort(*basePort),
+		hotline.WithConfig(*config),
+	)
 	if err != nil {
 		slogger.Error(fmt.Sprintf("Error starting server: %s", err))
 		os.Exit(1)
@@ -126,12 +123,59 @@ func main() {
 		os.Exit(1)
 	}
 
-	sh := statHandler{hlServer: srv}
+	srv.AccountManager, err = mobius.NewYAMLAccountManager(filepath.Join(*configDir, "Users/"))
+	if err != nil {
+		slogger.Error(fmt.Sprintf("Error loading accounts: %v", err))
+		os.Exit(1)
+	}
+
+	srv.Agreement, err = mobius.NewAgreement(*configDir, "\r")
+	if err != nil {
+		slogger.Error(fmt.Sprintf("Error loading agreement: %v", err))
+		os.Exit(1)
+	}
+
+	bannerPath := filepath.Join(*configDir, config.BannerFile)
+	srv.Banner, err = os.ReadFile(bannerPath)
+	if err != nil {
+		slogger.Error(fmt.Sprintf("Error loading accounts: %v", err))
+		os.Exit(1)
+	}
+
+	reloadFunc := func() {
+		if err := srv.MessageBoard.(*mobius.FlatNews).Reload(); err != nil {
+			slogger.Error("Error reloading news", "err", err)
+		}
+
+		if err := srv.BanList.(*mobius.BanFile).Load(); err != nil {
+			slogger.Error("Error reloading ban list", "err", err)
+		}
+
+		if err := srv.ThreadedNewsMgr.(*mobius.ThreadedNewsYAML).Load(); err != nil {
+			slogger.Error("Error reloading threaded news list", "err", err)
+		}
+
+		if err := srv.Agreement.(*mobius.Agreement).Reload(); err != nil {
+			slogger.Error(fmt.Sprintf("Error reloading agreement: %v", err))
+			os.Exit(1)
+		}
+	}
+
+	reloadHandler := func(reloadFunc func()) func(w http.ResponseWriter, _ *http.Request) {
+		return func(w http.ResponseWriter, _ *http.Request) {
+			reloadFunc()
+
+			_, _ = io.WriteString(w, `{ "msg": "config reloaded" }`)
+		}
+	}
+
+	sh := APIHandler{hlServer: srv}
 	if *statsPort != "" {
 		http.HandleFunc("/", sh.RenderStats)
+		http.HandleFunc("/api/v1/stats", sh.RenderStats)
+		http.HandleFunc("/api/v1/reload", reloadHandler(reloadFunc))
 
 		go func(srv *hotline.Server) {
-			// Use the default DefaultServeMux.
 			err = http.ListenAndServe(":"+*statsPort, nil)
 			if err != nil {
 				log.Fatal(err)
@@ -146,17 +190,7 @@ func main() {
 			case syscall.SIGHUP:
 				slogger.Info("SIGHUP received.  Reloading configuration.")
 
-				if err := srv.MessageBoard.(*mobius.FlatNews).Reload(); err != nil {
-					slogger.Error("Error reloading news", "err", err)
-				}
-
-				if err := srv.BanList.(*mobius.BanFile).Load(); err != nil {
-					slogger.Error("Error reloading ban list", "err", err)
-				}
-
-				if err := srv.ThreadedNewsMgr.(*mobius.ThreadedNewsYAML).Load(); err != nil {
-					slogger.Error("Error reloading threaded news list", "err", err)
-				}
+				reloadFunc()
 			default:
 				signal.Stop(sigChan)
 				cancel()
@@ -168,19 +202,23 @@ func main() {
 
 	slogger.Info("Hotline server started",
 		"version", version,
+		"config", *configDir,
 		"API port", fmt.Sprintf("%s:%v", *netInterface, *basePort),
 		"Transfer port", fmt.Sprintf("%s:%v", *netInterface, *basePort+1),
 	)
+
+	// Assign functions to handle specific Hotline transaction types
+	mobius.RegisterHandlers(srv)
 
 	// Serve Hotline requests until program exit
 	log.Fatal(srv.ListenAndServe(ctx))
 }
 
-type statHandler struct {
+type APIHandler struct {
 	hlServer *hotline.Server
 }
 
-func (sh *statHandler) RenderStats(w http.ResponseWriter, _ *http.Request) {
+func (sh *APIHandler) RenderStats(w http.ResponseWriter, _ *http.Request) {
 	u, err := json.Marshal(sh.hlServer.CurrentStats())
 	if err != nil {
 		panic(err)
@@ -189,25 +227,14 @@ func (sh *statHandler) RenderStats(w http.ResponseWriter, _ *http.Request) {
 	_, _ = io.WriteString(w, string(u))
 }
 
-func defaultConfigPath() string {
-	var cfgPath string
-
-	switch runtime.GOOS {
-	case "windows":
-		cfgPath = "config/"
-	case "darwin":
-		if _, err := os.Stat("/usr/local/var/mobius/config/"); err == nil {
-			cfgPath = "/usr/local/var/mobius/config/"
-		} else if _, err := os.Stat("/opt/homebrew/var/mobius/config"); err == nil {
-			cfgPath = "/opt/homebrew/var/mobius/config/"
+func configSearchPaths() string {
+	for _, cfgPath := range mobius.ConfigSearchOrder {
+		if _, err := os.Stat(cfgPath); err == nil {
+			return cfgPath
 		}
-	case "linux":
-		cfgPath = "/usr/local/var/mobius/config/"
-	default:
-		cfgPath = "./config/"
 	}
 
-	return cfgPath
+	return "config"
 }
 
 // copyDir recursively copies a directory tree, attempting to preserve permissions.
@@ -236,7 +263,7 @@ func copyDir(src, dst string) error {
 				if err != nil {
 					return err
 				}
-				f.Close()
+				_ = f.Close()
 			}
 		} else {
 			f, err := os.Create(path.Join(dst, dirEntry.Name()))
@@ -252,7 +279,7 @@ func copyDir(src, dst string) error {
 			if err != nil {
 				return err
 			}
-			f.Close()
+			_ = f.Close()
 		}
 	}
 

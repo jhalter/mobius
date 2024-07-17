@@ -3,6 +3,7 @@ package hotline
 import (
 	"cmp"
 	"encoding/binary"
+	"github.com/stretchr/testify/mock"
 	"io"
 	"slices"
 )
@@ -235,4 +236,54 @@ func newsPathScanner(data []byte, _ bool) (advance int, token []byte, err error)
 
 	advance = 3 + int(data[2])
 	return advance, data[3:advance], nil
+}
+
+type MockThreadNewsMgr struct {
+	mock.Mock
+}
+
+func (m *MockThreadNewsMgr) ListArticles(newsPath []string) NewsArtListData {
+	args := m.Called(newsPath)
+
+	return args.Get(0).(NewsArtListData)
+}
+
+func (m *MockThreadNewsMgr) GetArticle(newsPath []string, articleID uint32) *NewsArtData {
+	args := m.Called(newsPath, articleID)
+
+	return args.Get(0).(*NewsArtData)
+}
+func (m *MockThreadNewsMgr) DeleteArticle(newsPath []string, articleID uint32, recursive bool) error {
+	args := m.Called(newsPath, articleID, recursive)
+
+	return args.Error(0)
+}
+
+func (m *MockThreadNewsMgr) PostArticle(newsPath []string, parentArticleID uint32, article NewsArtData) error {
+	args := m.Called(newsPath, parentArticleID, article)
+
+	return args.Error(0)
+}
+func (m *MockThreadNewsMgr) CreateGrouping(newsPath []string, name string, itemType [2]byte) error {
+	args := m.Called(newsPath, name, itemType)
+
+	return args.Error(0)
+}
+
+func (m *MockThreadNewsMgr) GetCategories(paths []string) []NewsCategoryListData15 {
+	args := m.Called(paths)
+
+	return args.Get(0).([]NewsCategoryListData15)
+}
+
+func (m *MockThreadNewsMgr) NewsItem(newsPath []string) NewsCategoryListData15 {
+	args := m.Called(newsPath)
+
+	return args.Get(0).(NewsCategoryListData15)
+}
+
+func (m *MockThreadNewsMgr) DeleteNewsItem(newsPath []string) error {
+	args := m.Called(newsPath)
+
+	return args.Error(0)
 }

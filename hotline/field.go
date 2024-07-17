@@ -92,8 +92,8 @@ func NewField(fieldType [2]byte, data []byte) Field {
 	return f
 }
 
-// fieldScanner implements bufio.SplitFunc for parsing byte slices into complete tokens
-func fieldScanner(data []byte, _ bool) (advance int, token []byte, err error) {
+// FieldScanner implements bufio.SplitFunc for parsing byte slices into complete tokens
+func FieldScanner(data []byte, _ bool) (advance int, token []byte, err error) {
 	if len(data) < minFieldLen {
 		return 0, nil, nil
 	}
@@ -122,7 +122,7 @@ func (f *Field) DecodeInt() (int, error) {
 }
 
 func (f *Field) DecodeObfuscatedString() string {
-	return string(encodeString(f.Data))
+	return string(EncodeString(f.Data))
 }
 
 // DecodeNewsPath decodes the field data to a news path.
@@ -185,7 +185,7 @@ func (f *Field) Write(p []byte) (int, error) {
 	return minFieldLen + dataSize, nil
 }
 
-func getField(id [2]byte, fields *[]Field) *Field {
+func GetField(id [2]byte, fields *[]Field) *Field {
 	for _, field := range *fields {
 		if id == field.Type {
 			return &field

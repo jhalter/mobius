@@ -11,13 +11,13 @@ func Test_accessBitmap_IsSet(t *testing.T) {
 	}
 	tests := []struct {
 		name string
-		bits accessBitmap
+		bits AccessBitmap
 		args args
 		want bool
 	}{
 		{
 			name: "returns true when bit is set",
-			bits: func() (access accessBitmap) {
+			bits: func() (access AccessBitmap) {
 				access.Set(22)
 				return access
 			}(),
@@ -26,7 +26,7 @@ func Test_accessBitmap_IsSet(t *testing.T) {
 		},
 		{
 			name: "returns false when bit is unset",
-			bits: accessBitmap{},
+			bits: AccessBitmap{},
 			args: args{i: 22},
 			want: false,
 		},

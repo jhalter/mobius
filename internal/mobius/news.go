@@ -5,28 +5,25 @@ import (
 	"io"
 	"os"
 	"slices"
+	"strings"
 	"sync"
 )
 
 type FlatNews struct {
-	mu sync.Mutex
-
 	data     []byte
 	filePath string
 
+	mu         sync.Mutex
 	readOffset int // Internal offset to track read progress
 }
 
 func NewFlatNews(path string) (*FlatNews, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return &FlatNews{}, err
+	flatNews := &FlatNews{filePath: path}
+	if err := flatNews.Reload(); err != nil {
+		return nil, fmt.Errorf("reload: %w", err)
 	}
 
-	return &FlatNews{
-		data:     data,
-		filePath: path,
-	}, nil
+	return flatNews, nil
 }
 
 func (f *FlatNews) Reload() error {
@@ -37,7 +34,12 @@ func (f *FlatNews) Reload() error {
 	if err != nil {
 		return err
 	}
-	f.data = data
+
+	// Swap line breaks
+	agreement := strings.ReplaceAll(string(data), "\n", "\r")
+	agreement = strings.ReplaceAll(agreement, "\r\n", "\r")
+
+	f.data = []byte(agreement)
 
 	return nil
 }

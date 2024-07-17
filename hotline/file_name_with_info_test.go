@@ -9,7 +9,7 @@ import (
 
 func TestFileNameWithInfo_MarshalBinary(t *testing.T) {
 	type fields struct {
-		fileNameWithInfoHeader fileNameWithInfoHeader
+		fileNameWithInfoHeader FileNameWithInfoHeader
 		name                   []byte
 	}
 	tests := []struct {
@@ -21,7 +21,7 @@ func TestFileNameWithInfo_MarshalBinary(t *testing.T) {
 		{
 			name: "returns expected bytes",
 			fields: fields{
-				fileNameWithInfoHeader: fileNameWithInfoHeader{
+				fileNameWithInfoHeader: FileNameWithInfoHeader{
 					Type:       [4]byte{0x54, 0x45, 0x58, 0x54}, // TEXT
 					Creator:    [4]byte{0x54, 0x54, 0x58, 0x54}, // TTXT
 					FileSize:   [4]byte{0x00, 0x43, 0x16, 0xd3}, // File Size
@@ -46,7 +46,7 @@ func TestFileNameWithInfo_MarshalBinary(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := &FileNameWithInfo{
-				fileNameWithInfoHeader: tt.fields.fileNameWithInfoHeader,
+				FileNameWithInfoHeader: tt.fields.fileNameWithInfoHeader,
 				Name:                   tt.fields.name,
 			}
 			gotData, err := io.ReadAll(f)
@@ -63,7 +63,7 @@ func TestFileNameWithInfo_MarshalBinary(t *testing.T) {
 
 func TestFileNameWithInfo_UnmarshalBinary(t *testing.T) {
 	type fields struct {
-		fileNameWithInfoHeader fileNameWithInfoHeader
+		fileNameWithInfoHeader FileNameWithInfoHeader
 		name                   []byte
 	}
 	type args struct {
@@ -90,7 +90,7 @@ func TestFileNameWithInfo_UnmarshalBinary(t *testing.T) {
 				},
 			},
 			want: &FileNameWithInfo{
-				fileNameWithInfoHeader: fileNameWithInfoHeader{
+				FileNameWithInfoHeader: FileNameWithInfoHeader{
 					Type:       [4]byte{0x54, 0x45, 0x58, 0x54}, // TEXT
 					Creator:    [4]byte{0x54, 0x54, 0x58, 0x54}, // TTXT
 					FileSize:   [4]byte{0x00, 0x43, 0x16, 0xd3}, // File Size
@@ -106,7 +106,7 @@ func TestFileNameWithInfo_UnmarshalBinary(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := &FileNameWithInfo{
-				fileNameWithInfoHeader: tt.fields.fileNameWithInfoHeader,
+				FileNameWithInfoHeader: tt.fields.fileNameWithInfoHeader,
 				Name:                   tt.fields.name,
 			}
 			if _, err := f.Write(tt.args.data); (err != nil) != tt.wantErr {

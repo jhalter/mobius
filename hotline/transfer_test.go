@@ -122,16 +122,13 @@ func Test_receiveFile(t *testing.T) {
 						FlatFileHeader: FlatFileHeader{
 							Format:    [4]byte{0x46, 0x49, 0x4c, 0x50}, // "FILP"
 							Version:   [2]byte{0, 1},
-							RSVD:      [16]byte{},
 							ForkCount: [2]byte{0, 2},
 						},
 						FlatFileInformationForkHeader: FlatFileForkHeader{},
 						FlatFileInformationFork:       NewFlatFileInformationFork("testfile.txt", [8]byte{}, "TEXT", "TEXT"),
 						FlatFileDataForkHeader: FlatFileForkHeader{
-							ForkType:        [4]byte{0x4d, 0x41, 0x43, 0x52}, // DATA
-							CompressionType: [4]byte{0, 0, 0, 0},
-							RSVD:            [4]byte{0, 0, 0, 0},
-							DataSize:        [4]byte{0x00, 0x00, 0x00, 0x03},
+							ForkType: [4]byte{0x4d, 0x41, 0x43, 0x52}, // DATA
+							DataSize: [4]byte{0x00, 0x00, 0x00, 0x03},
 						},
 					}
 					fakeFileData := []byte{1, 2, 3}
