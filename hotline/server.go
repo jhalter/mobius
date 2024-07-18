@@ -13,6 +13,7 @@ import (
 	"log"
 	"log/slog"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -585,4 +586,19 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 		}
 	}
 	return nil
+}
+
+func (s *Server) SendAll(t TranType, fields ...Field) {
+	for _, c := range s.ClientMgr.List() {
+		s.outbox <- NewTransaction(t, c.ID, fields...)
+	}
+}
+
+func (s *Server) Shutdown(msg []byte) {
+	s.Logger.Info("Shutdown signal received")
+	s.SendAll(TranDisconnectMsg, NewField(FieldData, msg))
+
+	time.Sleep(3 * time.Second)
+
+	os.Exit(0)
 }
