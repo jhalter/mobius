@@ -171,3 +171,62 @@ Usage of mobius-hotline-server:
 
 To run as a systemd service, refer to this sample unit file: [mobius-hotline-server.service](https://github.com/jhalter/mobius/blob/master/cmd/mobius-hotline-server/mobius-hotline-server.service)
 
+## (Optional) HTTP API
+
+The Mobius server includes an optional HTTP API to perform out-of-band administrative functions.
+
+To enable it, include the `--api-port` flag with a string defining the IP and port to listen on in the form of `<ip>:<port>`.
+
+Example: `--api-port=127.0.0.1:5503`
+
+⚠️ The API has no authentication, so binding it to localhost is a good idea!
+
+#### GET /api/v1/stats
+
+The stats endpoint returns server runtime statistics and counters.
+
+```
+❯ curl -s localhost:5603/api/v1/stats  | jq .
+{
+  "ConnectionCounter": 0,
+  "ConnectionPeak": 0,
+  "CurrentlyConnected": 0,
+  "DownloadCounter": 0,
+  "DownloadsInProgress": 0,
+  "Since": "2024-07-18T15:36:42.426156-07:00",
+  "UploadCounter": 0,
+  "UploadsInProgress": 0,
+  "WaitingDownloads": 0
+}
+```
+
+#### GET /api/v1/reload
+
+The reload endpoint reloads the following configuration files from disk:
+
+* Agreement.txt
+* News.txt
+* Users/*.yaml
+* ThreadedNews.yaml
+* banner.jpg
+
+Example:
+
+```
+❯ curl -s localhost:5603/api/v1/reload | jq .
+{
+  "msg": "config reloaded"
+}
+```
+
+#### POST /api/v1/shutdown
+
+The shutdown endpoint accepts a shutdown message from POST payload, sends it to to all connected Hotline clients, then gracefully shuts down the server.
+
+Example:
+
+```
+❯ curl -d 'Server rebooting' localhost:5603/api/v1/shutdown
+
+{ "msg": "server shutting down" }
+```

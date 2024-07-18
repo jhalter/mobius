@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"embed"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/jhalter/mobius/hotline"
@@ -12,7 +11,6 @@ import (
 	"io"
 	"log"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"path"
@@ -44,7 +42,7 @@ func main() {
 
 	netInterface := flag.String("interface", "", "IP addr of interface to listen on.  Defaults to all interfaces.")
 	basePort := flag.Int("bind", 5500, "Base Hotline server port.  File transfer port is base port + 1.")
-	statsPort := flag.String("stats-port", "", "Enable stats HTTP endpoint on address and port")
+	apiAddr := flag.String("api-addr", "", "Enable HTTP API endpoint on address and port")
 	configDir := flag.String("config", configSearchPaths(), "Path to config root")
 	printVersion := flag.Bool("version", false, "Print version and exit")
 	logLevel := flag.String("log-level", "info", "Log level")
@@ -161,26 +159,9 @@ func main() {
 		}
 	}
 
-	reloadHandler := func(reloadFunc func()) func(w http.ResponseWriter, _ *http.Request) {
-		return func(w http.ResponseWriter, _ *http.Request) {
-			reloadFunc()
-
-			_, _ = io.WriteString(w, `{ "msg": "config reloaded" }`)
-		}
-	}
-
-	sh := APIHandler{hlServer: srv}
-	if *statsPort != "" {
-		http.HandleFunc("/", sh.RenderStats)
-		http.HandleFunc("/api/v1/stats", sh.RenderStats)
-		http.HandleFunc("/api/v1/reload", reloadHandler(reloadFunc))
-
-		go func(srv *hotline.Server) {
-			err = http.ListenAndServe(":"+*statsPort, nil)
-			if err != nil {
-				log.Fatal(err)
-			}
-		}(srv)
+	if *apiAddr != "" {
+		sh := mobius.NewAPIServer(srv, reloadFunc, slogger)
+		go sh.Serve(*apiAddr)
 	}
 
 	go func() {
@@ -212,19 +193,6 @@ func main() {
 
 	// Serve Hotline requests until program exit
 	log.Fatal(srv.ListenAndServe(ctx))
-}
-
-type APIHandler struct {
-	hlServer *hotline.Server
-}
-
-func (sh *APIHandler) RenderStats(w http.ResponseWriter, _ *http.Request) {
-	u, err := json.Marshal(sh.hlServer.CurrentStats())
-	if err != nil {
-		panic(err)
-	}
-
-	_, _ = io.WriteString(w, string(u))
 }
 
 func configSearchPaths() string {
