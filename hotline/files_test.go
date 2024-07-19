@@ -3,9 +3,9 @@ package hotline
 import (
 	"bytes"
 	"encoding/binary"
+	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 )
 
@@ -77,7 +77,7 @@ func TestCalcTotalSize(t *testing.T) {
 				t.Errorf("CalcTotalSize() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
+			if !assert.Equal(t, tt.want, got) {
 				t.Errorf("CalcTotalSize() got = %v, want %v", got, tt.want)
 			}
 		})

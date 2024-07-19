@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io"
-	"reflect"
 	"testing"
 )
 
@@ -42,6 +41,7 @@ func TestTrackerRegistration_Payload(t *testing.T) {
 				0x54, 0x65, 0x73, 0x74, 0x20, 0x53, 0x65, 0x72, 0x76,
 				0x04,
 				0x46, 0x6f, 0x6f, 0x7a,
+				0x00,
 			},
 		},
 	}
@@ -55,7 +55,7 @@ func TestTrackerRegistration_Payload(t *testing.T) {
 				Description: tt.fields.Description,
 			}
 
-			if got, _ := io.ReadAll(tr); !reflect.DeepEqual(got, tt.want) {
+			if got, _ := io.ReadAll(tr); !assert.Equal(t, tt.want, got) {
 				t.Errorf("Read() = %v, want %v", got, tt.want)
 			}
 		})

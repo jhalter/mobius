@@ -3,7 +3,6 @@ package hotline
 import (
 	"github.com/stretchr/testify/assert"
 	"io"
-	"reflect"
 	"testing"
 )
 
@@ -54,7 +53,7 @@ func TestFileNameWithInfo_MarshalBinary(t *testing.T) {
 				t.Errorf("MarshalBinary() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(gotData, tt.wantData) {
+			if !assert.Equal(t, tt.wantData, gotData) {
 				t.Errorf("MarshalBinary() gotData = %v, want %v", gotData, tt.wantData)
 			}
 		})

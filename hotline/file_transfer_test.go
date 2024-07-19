@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"github.com/stretchr/testify/assert"
 	"io"
-	"reflect"
 	"testing"
 )
 
@@ -127,7 +126,7 @@ func TestNewFileHeader(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NewFileHeader(tt.args.fileName, tt.args.isDir); !reflect.DeepEqual(got, tt.want) {
+			if got := NewFileHeader(tt.args.fileName, tt.args.isDir); !assert.Equal(t, tt.want, got) {
 				t.Errorf("NewFileHeader() = %v, want %v", got, tt.want)
 			}
 		})
@@ -170,7 +169,7 @@ func TestFileHeader_Payload(t *testing.T) {
 				FilePath: tt.fields.FilePath,
 			}
 			got, _ := io.ReadAll(fh)
-			if !reflect.DeepEqual(got, tt.want) {
+			if !assert.Equal(t, tt.want, got) {
 				t.Errorf("Read() = %v, want %v", got, tt.want)
 			}
 		})
