@@ -289,14 +289,15 @@ func DownloadHandler(w io.Writer, fullPath string, fileTransfer *FileTransfer, f
 		}
 	}
 
-	rFile, err := fw.rsrcForkFile()
-	if err != nil {
-		// return fmt.Errorf("open resource fork file: %v", err)
-	}
+	rFile, _ := fw.rsrcForkFile()
+	//if err != nil {
+	//	// return fmt.Errorf("open resource fork file: %v", err)
+	//}
 
-	if _, err = io.Copy(w, io.TeeReader(rFile, fileTransfer.bytesSentCounter)); err != nil {
-		// return fmt.Errorf("send resource fork data: %v", err)
-	}
+	_, _ = io.Copy(w, io.TeeReader(rFile, fileTransfer.bytesSentCounter))
+	//if err != nil {
+	//	// return fmt.Errorf("send resource fork data: %v", err)
+	//}
 
 	return nil
 }

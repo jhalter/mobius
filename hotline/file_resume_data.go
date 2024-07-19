@@ -13,7 +13,7 @@ type FileResumeData struct {
 	ForkCount    [2]byte  // Length of ForkInfoList.  Either 2 or 3 depending on whether file has a resource fork
 	ForkInfoList []ForkInfoList
 
-	readOffset int
+	//readOffset int // TODO
 }
 
 type ForkInfoList struct {

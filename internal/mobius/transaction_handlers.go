@@ -981,12 +981,11 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 
 			err := cc.Server.BanList.Add(ip, nil)
 			if err != nil {
-				// TODO
+				cc.Logger.Error("Error saving ban", "err", err)
 			}
 		}
 	}
 
-	// TODO: remove this awful hack
 	go func() {
 		time.Sleep(1 * time.Second)
 		clientConn.Disconnect()
@@ -1005,14 +1004,15 @@ func HandleGetNewsCatNameList(cc *hotline.ClientConn, t *hotline.Transaction) (r
 
 	pathStrs, err := t.GetField(hotline.FieldNewsPath).DecodeNewsPath()
 	if err != nil {
-
+		cc.Logger.Error("get news path", "err", err)
+		return nil
 	}
 
 	var fields []hotline.Field
 	for _, cat := range cc.Server.ThreadedNewsMgr.GetCategories(pathStrs) {
 		b, err := io.ReadAll(&cat)
 		if err != nil {
-			// TODO
+			cc.Logger.Error("get news categories", "err", err)
 		}
 
 		fields = append(fields, hotline.NewField(hotline.FieldNewsCatListData15, b))
@@ -1254,7 +1254,7 @@ func HandleGetMsgs(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 
 	newsData, err := io.ReadAll(cc.Server.MessageBoard)
 	if err != nil {
-		// TODO
+		cc.Logger.Error("Error reading messageboard", "err", err)
 	}
 
 	return append(res, cc.NewReply(t, hotline.NewField(hotline.FieldData, newsData)))

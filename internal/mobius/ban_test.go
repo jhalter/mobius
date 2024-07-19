@@ -107,7 +107,6 @@ func TestAdd(t *testing.T) {
 func TestBanFile_IsBanned(t *testing.T) {
 	type fields struct {
 		banList map[string]*time.Time
-		Mutex   sync.Mutex
 	}
 	type args struct {
 		ip string

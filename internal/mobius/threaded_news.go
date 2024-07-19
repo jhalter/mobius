@@ -168,13 +168,13 @@ func (n *ThreadedNewsYAML) PostArticle(newsPath []string, parentArticleID uint32
 	return n.writeFile()
 }
 
-func (n *ThreadedNewsYAML) DeleteArticle(newsPath []string, articleID uint32, recursive bool) error {
+func (n *ThreadedNewsYAML) DeleteArticle(newsPath []string, articleID uint32, _ bool) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	if recursive {
-		// TODO: Handle delete recursive
-	}
+	//if recursive {
+	//	// TODO: Handle delete recursive
+	//}
 
 	cats := n.getCatByPath(newsPath[:len(newsPath)-1])
 
@@ -214,8 +214,7 @@ func (n *ThreadedNewsYAML) Load() error {
 
 	n.ThreadedNews = hotline.ThreadedNews{}
 
-	decoder := yaml.NewDecoder(fh)
-	return decoder.Decode(&n.ThreadedNews)
+	return yaml.NewDecoder(fh).Decode(&n.ThreadedNews)
 }
 
 func (n *ThreadedNewsYAML) writeFile() error {

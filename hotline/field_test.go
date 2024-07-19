@@ -222,7 +222,7 @@ func TestField_DecodeInt(t *testing.T) {
 				Data: tt.fields.Data,
 			}
 			got, err := f.DecodeInt()
-			if !tt.wantErr(t, err, fmt.Sprintf("DecodeInt()")) {
+			if !tt.wantErr(t, err) {
 				return
 			}
 			assert.Equalf(t, tt.want, got, "DecodeInt()")

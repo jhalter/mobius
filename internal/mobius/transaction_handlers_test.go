@@ -3,7 +3,6 @@ package mobius
 import (
 	"cmp"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"github.com/jhalter/mobius/hotline"
 	"github.com/stretchr/testify/assert"
@@ -43,24 +42,6 @@ func (m *mockReadWriteSeeker) Seek(offset int64, whence int) (int64, error) {
 
 func NewTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stdout, nil))
-}
-
-// assertTransferBytesEqual takes a string with a hexdump in the same format that `hexdump -C` produces and compares with
-// a hexdump for the bytes in got, after stripping the create/modify timestamps.
-// I don't love this, but as git does not  preserve file create/modify timestamps, we either need to fully mock the
-// filesystem interactions or work around in this way.
-// TODO: figure out a better solution
-func assertTransferBytesEqual(t *testing.T, wantHexDump string, got []byte) bool {
-	if wantHexDump == "" {
-		return true
-	}
-
-	clean := slices.Concat(
-		got[:92],
-		make([]byte, 16),
-		got[108:],
-	)
-	return assert.Equal(t, wantHexDump, hex.Dump(clean))
 }
 
 var tranSortFunc = func(a, b hotline.Transaction) int {

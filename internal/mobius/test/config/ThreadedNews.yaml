@@ -28,61 +28,7 @@ Categories:
         addsn: []
         deletesn: []
         guid: []
-      TestSubCat:
-        Type:
-        - 0
-        - 3
-        Name: TestSubCat
-        Articles:
-          1:
-            Title: SubCatArt
-            Poster: Halcyon 1.9.2
-            Date:
-            - 7
-            - 228
-            - 0
-            - 0
-            - 0
-            - 254
-            - 252
-            - 246
-            PrevArt:
-            - 0
-            - 0
-            - 0
-            - 0
-            NextArt:
-            - 0
-            - 0
-            - 0
-            - 0
-            ParentArt:
-            - 0
-            - 0
-            - 0
-            - 0
-            FirstChildArtArt:
-            - 0
-            - 0
-            - 0
-            - 0
-            DataFlav:
-            - 116
-            - 101
-            - 120
-            - 116
-            - 47
-            - 112
-            - 108
-            - 97
-            - 105
-            - 110
-            Data: I'm an article in a subcategory!
-        SubCats: {}
-        count: []
-        addsn: []
-        deletesn: []
-        guid: []
+
     count: []
     addsn: []
     deletesn: []
