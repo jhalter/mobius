@@ -17,12 +17,13 @@ FileRoot: Files
 # Enable tracker registration.  Must be "true" or "false".
 EnableTrackerRegistration: false
 
-# List of trackers to register with
+# List of trackers to register with in colon delimited form of hostname/port/password (optional).
 Trackers:
   - hltracker.com:5499
   - tracker.preterhuman.net:5499
   - saddle.dyndns.org:5499
   - hotline.kicks-ass.net:5499
+# - example-tracker-with-password.com:5499:mypassword
 
 # Preserve resource forks and file type/creator codes for files uploaded by Macintosh clients.
 # This comes with trade-offs.  For more details, see:

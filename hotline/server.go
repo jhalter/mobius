@@ -241,15 +241,9 @@ const trackerUpdateFrequency = 300
 // registerWithTrackers runs every trackerUpdateFrequency seconds to update the server's tracker entry on all configured
 // trackers.
 func (s *Server) registerWithTrackers(ctx context.Context) {
-	ticker := time.NewTicker(trackerUpdateFrequency * time.Second)
-	defer ticker.Stop()
-
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if s.Config.EnableTrackerRegistration {
+		if s.Config.EnableTrackerRegistration {
+			for _, t := range s.Config.Trackers {
 				tr := &TrackerRegistration{
 					UserCount:   len(s.ClientMgr.List()),
 					PassID:      s.TrackerPassID,
@@ -258,15 +252,23 @@ func (s *Server) registerWithTrackers(ctx context.Context) {
 				}
 				binary.BigEndian.PutUint16(tr.Port[:], uint16(s.Port))
 
-				for _, t := range s.Config.Trackers {
-					if err := register(&RealDialer{}, t, tr); err != nil {
-						s.Logger.Error(fmt.Sprintf("Unable to register with tracker %v", t), "error", err)
-					}
+				// Check the tracker string for a password.  This is janky but avoids a breaking change to the Config
+				// Trackers field.
+				splitAddr := strings.Split(":", t)
+				if len(splitAddr) == 3 {
+					tr.Password = splitAddr[2]
+				}
+
+				if err := register(&RealDialer{}, t, tr); err != nil {
+					s.Logger.Error(fmt.Sprintf("Unable to register with tracker %v", t), "error", err)
 				}
 			}
 		}
+		// Using time.Ticker with for/select would be more idiomatic, but it's super annoying that it doesn't tick on
+		// first pass.  Revist, maybe.
+		// https://github.com/golang/go/issues/17601
+		time.Sleep(trackerUpdateFrequency * time.Second)
 	}
-
 }
 
 const (
