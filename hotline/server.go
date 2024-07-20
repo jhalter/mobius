@@ -526,7 +526,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 		"Name", string(fileTransfer.ClientConn.UserName),
 	)
 
-	fullPath, err := ReadPath(s.Config.FileRoot, fileTransfer.FilePath, fileTransfer.FileName)
+	fullPath, err := ReadPath(fileTransfer.FileRoot, fileTransfer.FilePath, fileTransfer.FileName)
 	if err != nil {
 		return err
 	}
@@ -534,7 +534,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 	switch fileTransfer.Type {
 	case BannerDownload:
 		if _, err := io.Copy(rwc, bytes.NewBuffer(s.Banner)); err != nil {
-			return fmt.Errorf("error sending Banner: %w", err)
+			return fmt.Errorf("banner download: %w", err)
 		}
 	case FileDownload:
 		s.Stats.Increment(StatDownloadCounter, StatDownloadsInProgress)
@@ -555,7 +555,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 
 		err = UploadHandler(rwc, fullPath, fileTransfer, s.FS, rLogger, s.Config.PreserveResourceForks)
 		if err != nil {
-			return fmt.Errorf("file upload error: %w", err)
+			return fmt.Errorf("file upload: %w", err)
 		}
 
 	case FolderDownload:
@@ -566,7 +566,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 
 		err = DownloadFolderHandler(rwc, fullPath, fileTransfer, s.FS, rLogger, s.Config.PreserveResourceForks)
 		if err != nil {
-			return fmt.Errorf("file upload error: %w", err)
+			return fmt.Errorf("folder download: %w", err)
 		}
 
 	case FolderUpload:
@@ -584,7 +584,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 
 		err = UploadFolderHandler(rwc, fullPath, fileTransfer, s.FS, rLogger, s.Config.PreserveResourceForks)
 		if err != nil {
-			return fmt.Errorf("file upload error: %w", err)
+			return fmt.Errorf("folder upload: %w", err)
 		}
 	}
 	return nil

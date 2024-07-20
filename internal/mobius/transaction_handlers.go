@@ -204,7 +204,7 @@ func HandleGetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 	fileName := t.GetField(hotline.FieldFileName).Data
 	filePath := t.GetField(hotline.FieldFilePath).Data
 
-	fullFilePath, err := hotline.ReadPath(cc.Server.Config.FileRoot, filePath, fileName)
+	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName)
 	if err != nil {
 		return res
 	}
@@ -253,7 +253,7 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 	fileName := t.GetField(hotline.FieldFileName).Data
 	filePath := t.GetField(hotline.FieldFilePath).Data
 
-	fullFilePath, err := hotline.ReadPath(cc.Server.Config.FileRoot, filePath, fileName)
+	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName)
 	if err != nil {
 		return res
 	}
@@ -292,7 +292,7 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		}
 	}
 
-	fullNewFilePath, err := hotline.ReadPath(cc.Server.Config.FileRoot, filePath, t.GetField(hotline.FieldFileNewName).Data)
+	fullNewFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, t.GetField(hotline.FieldFileNewName).Data)
 	if err != nil {
 		return nil
 	}
@@ -314,7 +314,7 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 			if !cc.Authorize(hotline.AccessRenameFile) {
 				return cc.NewErrReply(t, "You are not allowed to rename files.")
 			}
-			fileDir, err := hotline.ReadPath(cc.Server.Config.FileRoot, filePath, []byte{})
+			fileDir, err := hotline.ReadPath(cc.FileRoot(), filePath, []byte{})
 			if err != nil {
 				return nil
 			}
@@ -346,7 +346,7 @@ func HandleDeleteFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	fileName := t.GetField(hotline.FieldFileName).Data
 	filePath := t.GetField(hotline.FieldFilePath).Data
 
-	fullFilePath, err := hotline.ReadPath(cc.Server.Config.FileRoot, filePath, fileName)
+	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName)
 	if err != nil {
 		return res
 	}
@@ -384,12 +384,12 @@ func HandleDeleteFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 func HandleMoveFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	fileName := string(t.GetField(hotline.FieldFileName).Data)
 
-	filePath, err := hotline.ReadPath(cc.Server.Config.FileRoot, t.GetField(hotline.FieldFilePath).Data, t.GetField(hotline.FieldFileName).Data)
+	filePath, err := hotline.ReadPath(cc.FileRoot(), t.GetField(hotline.FieldFilePath).Data, t.GetField(hotline.FieldFileName).Data)
 	if err != nil {
 		return res
 	}
 
-	fileNewPath, err := hotline.ReadPath(cc.Server.Config.FileRoot, t.GetField(hotline.FieldFileNewPath).Data, nil)
+	fileNewPath, err := hotline.ReadPath(cc.FileRoot(), t.GetField(hotline.FieldFileNewPath).Data, nil)
 	if err != nil {
 		return res
 	}
@@ -446,7 +446,7 @@ func HandleNewFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 			subPath = filepath.Join("/", subPath, string(pathItem.Name))
 		}
 	}
-	newFolderPath := path.Join(cc.Server.Config.FileRoot, subPath, folderName)
+	newFolderPath := path.Join(cc.FileRoot(), subPath, folderName)
 	newFolderPath, err := txtDecoder.String(newFolderPath)
 	if err != nil {
 		return res
@@ -1279,7 +1279,7 @@ func HandleDownloadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 		dataOffset = int64(binary.BigEndian.Uint32(frd.ForkInfoList[0].DataSize[:]))
 	}
 
-	fullFilePath, err := hotline.ReadPath(cc.Server.Config.FileRoot, filePath, fileName)
+	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName)
 	if err != nil {
 		return res
 	}
@@ -1291,9 +1291,14 @@ func HandleDownloadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 
 	xferSize := hlFile.Ffo.TransferSize(0)
 
-	ft := cc.NewFileTransfer(hotline.FileDownload, fileName, filePath, xferSize)
+	ft := cc.NewFileTransfer(
+		hotline.FileDownload,
+		cc.FileRoot(),
+		fileName,
+		filePath,
+		xferSize,
+	)
 
-	// TODO: refactor to remove this
 	if resumeData != nil {
 		var frd hotline.FileResumeData
 		if err := frd.UnmarshalBinary(t.GetField(hotline.FieldFileResumeData).Data); err != nil {
@@ -1326,26 +1331,26 @@ func HandleDownloadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 		return cc.NewErrReply(t, "You are not allowed to download folders.")
 	}
 
-	fullFilePath, err := hotline.ReadPath(cc.Server.Config.FileRoot, t.GetField(hotline.FieldFilePath).Data, t.GetField(hotline.FieldFileName).Data)
+	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), t.GetField(hotline.FieldFilePath).Data, t.GetField(hotline.FieldFileName).Data)
 	if err != nil {
-		return res
+		return nil
 	}
 
 	transferSize, err := hotline.CalcTotalSize(fullFilePath)
 	if err != nil {
-		return res
+		return nil
 	}
 	itemCount, err := hotline.CalcItemCount(fullFilePath)
 	if err != nil {
-		return res
+		return nil
 	}
 
-	fileTransfer := cc.NewFileTransfer(hotline.FolderDownload, t.GetField(hotline.FieldFileName).Data, t.GetField(hotline.FieldFilePath).Data, transferSize)
+	fileTransfer := cc.NewFileTransfer(hotline.FolderDownload, cc.FileRoot(), t.GetField(hotline.FieldFileName).Data, t.GetField(hotline.FieldFilePath).Data, transferSize)
 
 	var fp hotline.FilePath
 	_, err = fp.Write(t.GetField(hotline.FieldFilePath).Data)
 	if err != nil {
-		return res
+		return nil
 	}
 
 	res = append(res, cc.NewReply(t,
@@ -1380,6 +1385,7 @@ func HandleUploadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 	}
 
 	fileTransfer := cc.NewFileTransfer(hotline.FolderUpload,
+		cc.FileRoot(),
 		t.GetField(hotline.FieldFileName).Data,
 		t.GetField(hotline.FieldFilePath).Data,
 		t.GetField(hotline.FieldTransferSize).Data,
@@ -1420,7 +1426,7 @@ func HandleUploadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 			return cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload of the file \"%v\" because you are only allowed to upload to the \"Uploads\" folder.", string(fileName)))
 		}
 	}
-	fullFilePath, err := hotline.ReadPath(cc.Server.Config.FileRoot, filePath, fileName)
+	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName)
 	if err != nil {
 		return res
 	}
@@ -1429,7 +1435,7 @@ func HandleUploadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 		return cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload because there is already a file named \"%v\".  Try choosing a different Name.", string(fileName)))
 	}
 
-	ft := cc.NewFileTransfer(hotline.FileUpload, fileName, filePath, transferSize)
+	ft := cc.NewFileTransfer(hotline.FileUpload, cc.FileRoot(), fileName, filePath, transferSize)
 
 	replyT := cc.NewReply(t, hotline.NewField(hotline.FieldRefNum, ft.RefNum[:]))
 
@@ -1509,7 +1515,7 @@ func HandleKeepAlive(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 
 func HandleGetFileNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	fullPath, err := hotline.ReadPath(
-		cc.Server.Config.FileRoot,
+		cc.FileRoot(),
 		t.GetField(hotline.FieldFilePath).Data,
 		nil,
 	)
@@ -1756,12 +1762,12 @@ func HandleMakeAlias(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 	filePath := t.GetField(hotline.FieldFilePath).Data
 	fileNewPath := t.GetField(hotline.FieldFileNewPath).Data
 
-	fullFilePath, err := hotline.ReadPath(cc.Server.Config.FileRoot, filePath, fileName)
+	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName)
 	if err != nil {
 		return res
 	}
 
-	fullNewFilePath, err := hotline.ReadPath(cc.Server.Config.FileRoot, fileNewPath, fileName)
+	fullNewFilePath, err := hotline.ReadPath(cc.FileRoot(), fileNewPath, fileName)
 	if err != nil {
 		return res
 	}
@@ -1783,7 +1789,7 @@ func HandleMakeAlias(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 // 107	FieldRefNum			Used later for transfer
 // 108	FieldTransferSize	Size of data to be downloaded
 func HandleDownloadBanner(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
-	ft := cc.NewFileTransfer(hotline.BannerDownload, []byte{}, []byte{}, make([]byte, 4))
+	ft := cc.NewFileTransfer(hotline.BannerDownload, "", []byte{}, []byte{}, make([]byte, 4))
 	binary.BigEndian.PutUint32(ft.TransferSize, uint32(len(cc.Server.Banner)))
 
 	return append(res, cc.NewReply(t,

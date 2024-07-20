@@ -782,7 +782,8 @@ func TestHandleGetFileInfo(t *testing.T) {
 			name: "returns expected fields when a valid file is requested",
 			args: args{
 				cc: &hotline.ClientConn{
-					ID: [2]byte{0x00, 0x01},
+					ID:      [2]byte{0, 1},
+					Account: &hotline.Account{},
 					Server: &hotline.Server{
 						FS: &hotline.OSFileStore{},
 						Config: hotline.Config{
@@ -2629,14 +2630,13 @@ func TestHandleGetFileNameList(t *testing.T) {
 			name: "with file root",
 			args: args{
 				cc: &hotline.ClientConn{
-					Server: &hotline.Server{
-						Config: hotline.Config{
-							FileRoot: func() string {
-								path, _ := os.Getwd()
-								return filepath.Join(path, "/test/config/Files/getFileNameListTestDir")
-							}(),
-						},
+					Account: &hotline.Account{
+						FileRoot: func() string {
+							path, _ := os.Getwd()
+							return filepath.Join(path, "/test/config/Files/getFileNameListTestDir")
+						}(),
 					},
+					Server: &hotline.Server{},
 				},
 				t: hotline.NewTransaction(
 					hotline.TranGetFileNameList, [2]byte{0, 1},
