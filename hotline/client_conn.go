@@ -42,6 +42,13 @@ type ClientConn struct {
 	mu sync.RWMutex
 }
 
+func (cc *ClientConn) FileRoot() string {
+	if cc.Account.FileRoot != "" {
+		return cc.Account.FileRoot
+	}
+	return cc.Server.Config.FileRoot
+}
+
 type ClientFileTransferMgr struct {
 	transfers map[FileTransferType]map[FileTransferID]*FileTransfer
 

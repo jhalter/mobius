@@ -99,12 +99,7 @@ func TestServer_handleFileTransfer(t *testing.T) {
 		{
 			name: "file download",
 			fields: fields{
-				FS: &OSFileStore{},
-				Config: Config{
-					FileRoot: func() string {
-						path, _ := os.Getwd()
-						return path + "/test/config/Files"
-					}()},
+				FS:     &OSFileStore{},
 				Logger: NewTestLogger(),
 				Stats:  NewStats(),
 				FileTransferMgr: &MemFileTransferMgr{
@@ -114,6 +109,10 @@ func TestServer_handleFileTransfer(t *testing.T) {
 							Type:     FileDownload,
 							FileName: []byte("testfile-8b"),
 							FilePath: []byte{},
+							FileRoot: func() string {
+								path, _ := os.Getwd()
+								return path + "/test/config/Files"
+							}(),
 							ClientConn: &ClientConn{
 								Account: &Account{
 									Login: "foo",

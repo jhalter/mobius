@@ -87,6 +87,7 @@ func (ftm *MemFileTransferMgr) Delete(id FileTransferID) {
 }
 
 type FileTransfer struct {
+	FileRoot         string
 	FileName         []byte
 	FilePath         []byte
 	RefNum           [4]byte
@@ -116,9 +117,10 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-func (cc *ClientConn) NewFileTransfer(transferType FileTransferType, fileName, filePath, size []byte) *FileTransfer {
+func (cc *ClientConn) NewFileTransfer(transferType FileTransferType, fileroot string, fileName, filePath, size []byte) *FileTransfer {
 	ft := &FileTransfer{
 		FileName:         fileName,
+		FileRoot:         fileroot,
 		FilePath:         filePath,
 		Type:             transferType,
 		TransferSize:     size,
