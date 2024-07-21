@@ -7,10 +7,9 @@
 
 # Mobius
 
-Mobius is a cross-platform command line [Hotline](https://en.wikipedia.org/wiki/Hotline_Communications) client and server implemented in Golang.
+Mobius is a cross-platform command line [Hotline](https://en.wikipedia.org/wiki/Hotline_Communications) server implemented in Golang.
 
-- **Server Goal:** Make it simple to run a Hotline server on macOS, Linux, and Windows, with full compatibility for all popular Hotline clients.
-- **Client Goal:** Make it fun and easy to connect to multiple Hotline servers through a [terminal UI](https://github.com/jhalter/mobius/wiki/Mobius-Client-Screenshot-Gallery).
+- **Project Goal:** Make it simple to run a Hotline server on macOS, Linux, and Windows, with full compatibility for all popular Hotline clients.
 
 
 ## Installation
