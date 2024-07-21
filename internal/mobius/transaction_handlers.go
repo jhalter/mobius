@@ -1772,8 +1772,6 @@ func HandleMakeAlias(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 		return res
 	}
 
-	cc.Logger.Debug("Make alias", "src", fullFilePath, "dst", fullNewFilePath)
-
 	if err := cc.Server.FS.Symlink(fullFilePath, fullNewFilePath); err != nil {
 		return cc.NewErrReply(t, "Error creating alias")
 	}

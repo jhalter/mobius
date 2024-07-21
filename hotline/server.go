@@ -400,7 +400,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 			return err
 		}
 
-		c.Logger.Info("Login failed", "clientVersion", fmt.Sprintf("%x", c.Version))
+		c.Logger.Info("Incorrect login")
 
 		return nil
 	}

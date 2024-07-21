@@ -7,10 +7,8 @@ import (
 	"fmt"
 	"github.com/jhalter/mobius/hotline"
 	"github.com/jhalter/mobius/internal/mobius"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"log"
-	"log/slog"
 	"os"
 	"os/signal"
 	"path"
@@ -20,12 +18,6 @@ import (
 
 //go:embed mobius/config
 var cfgTemplate embed.FS
-
-var logLevels = map[string]slog.Level{
-	"debug": slog.LevelDebug,
-	"info":  slog.LevelInfo,
-	"error": slog.LevelError,
-}
 
 // Values swapped in by go-releaser at build time
 var (
@@ -52,21 +44,11 @@ func main() {
 	flag.Parse()
 
 	if *printVersion {
-		fmt.Printf("mobius-hotline-server %s, commit %s, built at %s", version, commit, date)
+		fmt.Printf("mobius-hotline-server %s, commit %s, built on %s\n", version, commit, date)
 		os.Exit(0)
 	}
 
-	slogger := slog.New(
-		slog.NewTextHandler(
-			io.MultiWriter(os.Stdout, &lumberjack.Logger{
-				Filename:   *logFile,
-				MaxSize:    100, // MB
-				MaxBackups: 3,
-				MaxAge:     365, // days
-			}),
-			&slog.HandlerOptions{Level: logLevels[*logLevel]},
-		),
-	)
+	slogger := mobius.NewLogger(logLevel, logFile)
 
 	// It's important for Windows compatibility to use path.Join and not filepath.Join for the config dir initialization.
 	// https://github.com/golang/go/issues/44305
@@ -181,12 +163,7 @@ func main() {
 		}
 	}()
 
-	slogger.Info("Hotline server started",
-		"version", version,
-		"config", *configDir,
-		"API port", fmt.Sprintf("%s:%v", *netInterface, *basePort),
-		"Transfer port", fmt.Sprintf("%s:%v", *netInterface, *basePort+1),
-	)
+	slogger.Info("Hotline server started", "version", version, "config", *configDir)
 
 	// Assign functions to handle specific Hotline transaction types
 	mobius.RegisterHandlers(srv)

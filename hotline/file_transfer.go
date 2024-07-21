@@ -421,7 +421,6 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 		}
 
 		subPath := path[basePathLen+1:]
-		rLogger.Debug("Sending fileheader", "i", i, "path", path, "fullFilePath", fullPath, "subPath", subPath, "IsDir", info.IsDir())
 
 		if i == 1 {
 			return nil
@@ -436,8 +435,6 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 		if _, err := io.ReadFull(rwc, nextAction); err != nil {
 			return err
 		}
-
-		rLogger.Debug("Client folder download action", "action", fmt.Sprintf("%X", nextAction[0:2]))
 
 		var dataOffset int64
 
