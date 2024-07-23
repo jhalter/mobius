@@ -1148,8 +1148,9 @@ func HandleGetNewsArtData(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 // None
 func HandleDelNewsItem(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	pathStrs, err := t.GetField(hotline.FieldNewsPath).DecodeNewsPath()
-	if err != nil {
-		return res
+	if err != nil || len(pathStrs) == 0 {
+		cc.Logger.Error("invalid news path")
+		return nil
 	}
 
 	item := cc.Server.ThreadedNewsMgr.NewsItem(pathStrs)
@@ -1217,7 +1218,8 @@ func HandlePostNewsArt(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 	}
 
 	pathStrs, err := t.GetField(hotline.FieldNewsPath).DecodeNewsPath()
-	if err != nil {
+	if err != nil || len(pathStrs) == 0 {
+		cc.Logger.Error("invalid news path")
 		return res
 	}
 
