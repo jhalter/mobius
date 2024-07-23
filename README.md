@@ -52,7 +52,7 @@ sudo docker run \
     -p 5500:5500 \
     -p 5501:5501 \
     -v $HLFILES:/usr/local/var/mobius/config \
-    ghcr.io/jhalter/mobius:latest \
+    ghcr.io/jhalter/mobius-hotline-server:latest \
     -init
 ```
 
