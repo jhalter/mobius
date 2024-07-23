@@ -129,6 +129,10 @@ func (n *ThreadedNewsYAML) PostArticle(newsPath []string, parentArticleID uint32
 
 	binary.BigEndian.PutUint32(article.ParentArt[:], parentArticleID)
 
+	if len(newsPath) == 0 {
+		return fmt.Errorf("invalid news path")
+	}
+
 	cats := n.getCatByPath(newsPath[:len(newsPath)-1])
 
 	catName := newsPath[len(newsPath)-1]
@@ -175,6 +179,10 @@ func (n *ThreadedNewsYAML) DeleteArticle(newsPath []string, articleID uint32, _ 
 	//if recursive {
 	//	// TODO: Handle delete recursive
 	//}
+
+	if len(newsPath) == 0 {
+		return fmt.Errorf("invalid news path")
+	}
 
 	cats := n.getCatByPath(newsPath[:len(newsPath)-1])
 
