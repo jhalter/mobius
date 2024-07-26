@@ -174,7 +174,7 @@ func (s *Server) ServeFileTransfers(ctx context.Context, ln net.Listener) error 
 			)
 
 			if err != nil {
-				s.Logger.Error("file transfer error", "reason", err)
+				s.Logger.Error("file transfer error", "err", err)
 			}
 		}()
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 )
 
@@ -31,26 +32,26 @@ func (tf *transfer) Write(b []byte) (int, error) {
 func receiveFile(r io.Reader, targetFile, resForkFile, infoFork, counterWriter io.Writer) error {
 	var ffo flattenedFileObject
 	if _, err := ffo.ReadFrom(r); err != nil {
-		return err
+		return fmt.Errorf("read flatted file object: %v", err)
 	}
 
 	// Write the information fork
 	_, err := io.Copy(infoFork, &ffo.FlatFileInformationFork)
 	if err != nil {
-		return err
+		return fmt.Errorf("write the information fork: %v", err)
 	}
 
 	if _, err = io.CopyN(targetFile, io.TeeReader(r, counterWriter), ffo.dataSize()); err != nil {
-		return err
+		return fmt.Errorf("copy file data to partial file: %v", err)
 	}
 
 	if ffo.FlatFileHeader.ForkCount == [2]byte{0, 3} {
 		if err := binary.Read(r, binary.BigEndian, &ffo.FlatFileResForkHeader); err != nil {
-			return err
+			return fmt.Errorf("read resource fork header: %v", err)
 		}
 
 		if _, err = io.CopyN(resForkFile, io.TeeReader(r, counterWriter), ffo.rsrcSize()); err != nil {
-			return err
+			return fmt.Errorf("read resource fork: %v", err)
 		}
 	}
 	return nil

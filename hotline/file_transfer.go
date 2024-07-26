@@ -326,12 +326,14 @@ func UploadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfe
 		}
 	}
 
+	defer file.Close()
+
 	f, err := NewFileWrapper(fileStore, fullPath, 0)
 	if err != nil {
 		return err
 	}
 
-	rLogger.Info("File upload started", "dstFile", fullPath)
+	rLogger.Debug("File upload started", "dstFile", fullPath)
 
 	rForkWriter := io.Discard
 	iForkWriter := io.Discard
@@ -348,15 +350,11 @@ func UploadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfe
 	}
 
 	if err := receiveFile(rwc, file, rForkWriter, iForkWriter, fileTransfer.bytesSentCounter); err != nil {
-		rLogger.Error(err.Error())
-	}
-
-	if err := file.Close(); err != nil {
-		return err
+		return fmt.Errorf("receive file: %v", err)
 	}
 
 	if err := fileStore.Rename(fullPath+".incomplete", fullPath); err != nil {
-		return err
+		return fmt.Errorf("rename incomplete file: %v", err)
 	}
 
 	rLogger.Info("File upload complete", "dstFile", fullPath)
