@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/jhalter/mobius/hotline"
 	"github.com/jhalter/mobius/internal/mobius"
+	"github.com/oleksandr/bonjour"
 	"io"
 	"log"
 	"os"
@@ -167,6 +168,12 @@ func main() {
 
 	// Assign functions to handle specific Hotline transaction types
 	mobius.RegisterHandlers(srv)
+
+	s, err := bonjour.Register(srv.Config.Name, "_hotline._tcp", "", *basePort, []string{"txtv=1", "app=hotline"}, nil)
+	if err != nil {
+		slogger.Error("Error registering Hotline server with Bonjour", "err", err)
+	}
+	defer s.Shutdown()
 
 	// Serve Hotline requests until program exit
 	log.Fatal(srv.ListenAndServe(ctx))
