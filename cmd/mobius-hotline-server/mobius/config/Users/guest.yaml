@@ -1,12 +1,4 @@
 Login: guest
 Name: guest
 Password: $2a$04$9P/jgLn1fR9TjSoWL.rKxuN6g.1TSpf2o6Hw.aaRuBwrWIJNwsKkS
-Access:
-- 252
-- 240
-- 205
-- 201
-- 43
-- 128
-- 0
-- 0
+Access: [96, 112, 12, 32, 3, 128, 0, 0]
