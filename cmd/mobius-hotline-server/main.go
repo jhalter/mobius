@@ -24,7 +24,6 @@ var cfgTemplate embed.FS
 var (
 	version = "dev"
 	commit  = "none"
-	date    = "unknown"
 )
 
 func main() {
@@ -45,7 +44,7 @@ func main() {
 	flag.Parse()
 
 	if *printVersion {
-		fmt.Printf("mobius-hotline-server %s, commit %s, built on %s\n", version, commit, date)
+		fmt.Printf("mobius-hotline-server version %s, commit %s\n", version, commit)
 		os.Exit(0)
 	}
 
