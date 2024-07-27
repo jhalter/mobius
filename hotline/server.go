@@ -265,6 +265,8 @@ const trackerUpdateFrequency = 300
 // registerWithTrackers runs every trackerUpdateFrequency seconds to update the server's tracker entry on all configured
 // trackers.
 func (s *Server) registerWithTrackers(ctx context.Context) {
+	s.Logger.Info("Tracker registration enabled", "trackers", s.Config.Trackers)
+
 	for {
 		if s.Config.EnableTrackerRegistration {
 			for _, t := range s.Config.Trackers {
