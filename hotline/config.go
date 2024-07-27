@@ -14,4 +14,5 @@ type Config struct {
 	MaxConnectionsPerIP       int      `yaml:"MaxConnectionsPerIP"`                     // Max connections per IP
 	PreserveResourceForks     bool     `yaml:"PreserveResourceForks"`                   // Enable preservation of file info and resource forks in sidecar files
 	IgnoreFiles               []string `yaml:"IgnoreFiles"`                             // List of regular expression for filtering files from the file list
+	EnableBonjour             bool     `yaml:"EnableBonjour"`                           // Enable service announcement on local network with Bonjour
 }

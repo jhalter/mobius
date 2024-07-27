@@ -58,3 +58,6 @@ MaxConnectionsPerIP: 0
 IgnoreFiles:
   - '^\.'     # Ignore all files starting with ".".  Leave this set if you are using the PreserveResourceForks option.
   - '^@'       # Ignore all files starting with "@"
+
+# Enable service announcement on local network with Bonjour
+EnableBonjour: false
