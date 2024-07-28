@@ -1,4 +1,45 @@
 Login: guest
 Name: guest
-Password: $2a$04$9P/jgLn1fR9TjSoWL.rKxuN6g.1TSpf2o6Hw.aaRuBwrWIJNwsKkS
-Access: [96, 112, 12, 32, 3, 128, 0, 0]
+Password: $2a$04$6Yq/TIlgjSD.FbARwtYs9ODnkHawonu1TJ5W2jJKfhnHwBIQTk./y
+Access:
+    DownloadFile: true
+    DownloadFolder: true
+    UploadFile: true
+    UploadFolder: true
+    DeleteFile: false
+    RenameFile: false
+    MoveFile: false
+    CreateFolder: false
+    DeleteFolder: false
+    RenameFolder: false
+    MoveFolder: false
+    ReadChat: true
+    SendChat: true
+    OpenChat: true
+    CloseChat: false
+    ShowInList: false
+    CreateUser: false
+    DeleteUser: false
+    OpenUser: false
+    ModifyUser: false
+    ChangeOwnPass: false
+    NewsReadArt: true
+    NewsPostArt: true
+    DisconnectUser: false
+    CannotBeDisconnected: false
+    GetClientInfo: false
+    UploadAnywhere: false
+    AnyName: true
+    NoAgreement: false
+    SetFileComment: false
+    SetFolderComment: false
+    ViewDropBoxes: false
+    MakeAlias: false
+    Broadcast: false
+    NewsDeleteArt: false
+    NewsCreateCat: false
+    NewsDeleteCat: false
+    NewsCreateFldr: false
+    NewsDeleteFldr: false
+    SendPrivMsg: true
+FileRoot: ""

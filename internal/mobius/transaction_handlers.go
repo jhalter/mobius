@@ -1329,7 +1329,7 @@ func HandleDownloadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 
 // Download all files from the specified folder and sub-folders
 func HandleDownloadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
-	if !cc.Authorize(hotline.AccessDownloadFile) {
+	if !cc.Authorize(hotline.AccessDownloadFolder) {
 		return cc.NewErrReply(t, "You are not allowed to download folders.")
 	}
 
@@ -1372,6 +1372,10 @@ func HandleDownloadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 // 220	Folder item count
 // 204	File transfer options	"Optional Currently set to 1" (TODO: ??)
 func HandleUploadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
+	if !cc.Authorize(hotline.AccessUploadFolder) {
+		return cc.NewErrReply(t, "You are not allowed to upload folders.")
+	}
+
 	var fp hotline.FilePath
 	if t.GetField(hotline.FieldFilePath).Data != nil {
 		if _, err := fp.Write(t.GetField(hotline.FieldFilePath).Data); err != nil {

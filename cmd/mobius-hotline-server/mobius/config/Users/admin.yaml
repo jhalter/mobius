@@ -2,11 +2,44 @@ Login: admin
 Name: admin
 Password: $2a$04$2itGEYx8C1N5bsfRSoC9JuonS3I4YfnyVPZHLSwp7kEInRX0yoB.a
 Access:
-- 255
-- 255
-- 255
-- 255
-- 255
-- 255
-- 255
-- 255
+    DownloadFile: true
+    DownloadFolder: true
+    UploadFile: true
+    UploadFolder: true
+    DeleteFile: true
+    RenameFile: true
+    MoveFile: true
+    CreateFolder: true
+    DeleteFolder: true
+    RenameFolder: true
+    MoveFolder: true
+    ReadChat: true
+    SendChat: true
+    OpenChat: true
+    CloseChat: true
+    ShowInList: true
+    CreateUser: true
+    DeleteUser: true
+    OpenUser: true
+    ModifyUser: true
+    ChangeOwnPass: true
+    NewsReadArt: true
+    NewsPostArt: true
+    DisconnectUser: true
+    CannotBeDisconnected: true
+    GetClientInfo: true
+    UploadAnywhere: true
+    AnyName: true
+    NoAgreement: true
+    SetFileComment: true
+    SetFolderComment: true
+    ViewDropBoxes: true
+    MakeAlias: true
+    Broadcast: false
+    NewsDeleteArt: true
+    NewsCreateCat: true
+    NewsDeleteCat: true
+    NewsCreateFldr: true
+    NewsDeleteFldr: true
+    SendPrivMsg: true
+FileRoot: ""

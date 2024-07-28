@@ -38,7 +38,7 @@ func NewYAMLAccountManager(accountDir string) (*YAMLAccountManager, error) {
 
 	matches, err := filepath.Glob(filepath.Join(accountDir, "*.yaml"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list account files: %w", err)
 	}
 
 	if len(matches) == 0 {
@@ -50,7 +50,6 @@ func NewYAMLAccountManager(accountDir string) (*YAMLAccountManager, error) {
 		if err = loadFromYAMLFile(file, &account); err != nil {
 			return nil, fmt.Errorf("error loading account %s: %w", file, err)
 		}
-
 		accountMgr.accounts[account.Login] = account
 	}
 
