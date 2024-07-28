@@ -3774,3 +3774,97 @@ func TestHandlePostNewsArt(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleUploadFolder(t *testing.T) {
+	type args struct {
+		cc *hotline.ClientConn
+		t  hotline.Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []hotline.Transaction
+	}{
+		{
+			name: "when user does not have required access",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: hotline.AccessBitmap{},
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranUploadFldr, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldFileName, []byte("testFile")),
+					hotline.NewField(hotline.FieldFilePath, []byte{
+						0x00, 0x01,
+						0x00, 0x00,
+						0x03,
+						0x2e, 0x2e, 0x2f,
+					}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte("You are not allowed to upload folders.")),
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			TranAssertEqual(t, tt.wantRes, HandleUploadFolder(tt.args.cc, &tt.args.t))
+		})
+	}
+}
+
+func TestHandleDownloadFolder(t *testing.T) {
+	type args struct {
+		cc *hotline.ClientConn
+		t  hotline.Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []hotline.Transaction
+	}{
+		{
+			name: "when user does not have required access",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: hotline.AccessBitmap{},
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranDownloadFldr, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldFileName, []byte("testFile")),
+					hotline.NewField(hotline.FieldFilePath, []byte{
+						0x00, 0x01,
+						0x00, 0x00,
+						0x03,
+						0x2e, 0x2e, 0x2f,
+					}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte("You are not allowed to download folders.")),
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			TranAssertEqual(t, tt.wantRes, HandleDownloadFolder(tt.args.cc, &tt.args.t))
+		})
+	}
+}
