@@ -5,17 +5,39 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
+	"github.com/pkg/xattr"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 )
 
 const (
 	IncompleteFileSuffix = ".incomplete"
-	InfoForkNameTemplate = ".info_%s" // template string for info fork filenames
-	RsrcForkNameTemplate = ".rsrc_%s" // template string for resource fork filenames
+	infoForkNameTemplate = ".info_%s" // template string for info fork filenames
+	rsrcForkNameTemplate = ".rsrc_%s" // template string for resource fork filenames
 )
+
+type xattrWrapper struct {
+	data     []byte
+	filePath string
+}
+
+func (x *xattrWrapper) Write(data []byte) (int, error) {
+	//spew.Dump("(x *xattrWrapper) Write", data)
+	x.data = append(x.data, data...)
+	spew.Dump("w")
+	return len(data), nil
+}
+
+func (x *xattrWrapper) Close() error {
+	spew.Dump("Writing xattr!", x.filePath, len(x.data))
+	return xattr.Set(x.filePath, xattrResourceFork, x.data)
+}
 
 // fileWrapper encapsulates the data, info, and resource forks of a Hotline file and provides methods to manage the files.
 type fileWrapper struct {
@@ -28,24 +50,93 @@ type fileWrapper struct {
 	infoPath       string // path to the file information fork
 	incompletePath string // path to partially transferred temp file
 	Ffo            *flattenedFileObject
+
+	rsrcSize [4]byte
+
+	rsrcForkReader io.Reader
+	rsrcWriter     io.Writer
 }
+
+const (
+	xattrResourceFork  = "com.apple.ResourceFork"
+	xattrFinderInfo    = "com.apple.FinderInfo"
+	xattrFinderComment = "com.apple.metadata:kMDItemFinderComment"
+)
+
+const (
+	forkModeOff = iota
+	forkModeSidecar
+	forkModeXattr
+)
 
 func NewFileWrapper(fs FileStore, path string, dataOffset int64) (*fileWrapper, error) {
 	dir := filepath.Dir(path)
 	fName := filepath.Base(path)
+
+	if runtime.GOOS == "darwin" {
+		spew.Dump("🍎")
+	}
+
+	//rsrcPath := filepath.Join(dir, fmt.Sprintf(rsrcForkNameTemplate, fName))
+
 	f := fileWrapper{
 		fs:             fs,
 		Name:           fName,
 		path:           dir,
 		dataPath:       path,
 		dataOffset:     dataOffset,
-		rsrcPath:       filepath.Join(dir, fmt.Sprintf(RsrcForkNameTemplate, fName)),
-		infoPath:       filepath.Join(dir, fmt.Sprintf(InfoForkNameTemplate, fName)),
+		rsrcPath:       filepath.Join(dir, fmt.Sprintf(rsrcForkNameTemplate, fName)),
+		infoPath:       filepath.Join(dir, fmt.Sprintf(infoForkNameTemplate, fName)),
 		incompletePath: filepath.Join(dir, fName+IncompleteFileSuffix),
 		Ffo:            &flattenedFileObject{},
+		rsrcWriter:     io.Discard,
+		rsrcForkReader: bytes.NewReader([]byte{}),
 	}
 
-	var err error
+	fileInfo, err := f.fs.Stat(filepath.Join(dir, fmt.Sprintf(rsrcForkNameTemplate, fName)))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("stat resource fork: %v", err)
+	}
+	if err == nil {
+		binary.BigEndian.PutUint32(f.rsrcSize[:], uint32(fileInfo.Size()))
+		f.rsrcForkReader, err = os.Open(f.rsrcPath)
+		if err != nil {
+			return nil, fmt.Errorf("open resource fork file: %v", err)
+		}
+	}
+
+	// Check if the file has extended attributes for the info and resource forks.
+	list, err := xattr.List(path)
+	if err != nil {
+		return nil, fmt.Errorf("read extended attributes: %w", err)
+	}
+
+	// com.apple.metadata:kMDItemFinderComment: macOS Finder comment
+	// com.apple.FinderInfo: type/creator
+	// com.apple.ResourceFork: resource fork data
+	for _, attr := range list {
+		switch attr {
+		case "com.apple.ResourceFork":
+			data, err := xattr.Get(path, attr)
+			if err != nil {
+				return nil, fmt.Errorf("get xattr: %s: %v", attr, err)
+			}
+
+			f.rsrcForkReader = bytes.NewReader(data)
+			binary.BigEndian.PutUint32(f.rsrcSize[:], uint32(len(data)))
+
+		case xattrFinderInfo:
+			data, err := xattr.Get(path, attr)
+			if err != nil {
+				return nil, fmt.Errorf("get xattr: %s: %v", attr, err)
+			}
+
+			typeCode := data[0:4]
+			creatorCode := data[4:8]
+			spew.Dump(typeCode, creatorCode)
+		}
+	}
+
 	f.Ffo, err = f.flattenedFileObject()
 	if err != nil {
 		return nil, err
@@ -63,30 +154,17 @@ func (f *fileWrapper) TotalSize() []byte {
 		s += info.Size() - f.dataOffset
 	}
 
-	info, err = f.fs.Stat(f.rsrcPath)
-	if err == nil {
-		s += info.Size()
-	}
+	s += int64(binary.BigEndian.Uint32(f.rsrcSize[:]))
 
 	binary.BigEndian.PutUint32(size, uint32(s))
 
 	return size
 }
 
-func (f *fileWrapper) rsrcForkSize() (s [4]byte) {
-	info, err := f.fs.Stat(f.rsrcPath)
-	if err != nil {
-		return s
-	}
-
-	binary.BigEndian.PutUint32(s[:], uint32(info.Size()))
-	return s
-}
-
 func (f *fileWrapper) rsrcForkHeader() FlatFileForkHeader {
 	return FlatFileForkHeader{
-		ForkType: [4]byte{0x4D, 0x41, 0x43, 0x52}, // "MACR"
-		DataSize: f.rsrcForkSize(),
+		ForkType: forkTypeMACR,
+		DataSize: f.rsrcSize,
 	}
 }
 
@@ -95,20 +173,24 @@ func (f *fileWrapper) incompleteDataName() string {
 }
 
 func (f *fileWrapper) rsrcForkName() string {
-	return fmt.Sprintf(RsrcForkNameTemplate, f.Name)
+	return fmt.Sprintf(rsrcForkNameTemplate, f.Name)
 }
 
 func (f *fileWrapper) infoForkName() string {
-	return fmt.Sprintf(InfoForkNameTemplate, f.Name)
+	return fmt.Sprintf(infoForkNameTemplate, f.Name)
 }
 
+// TODO: on macOS, write to xattr
 func (f *fileWrapper) rsrcForkWriter() (io.WriteCloser, error) {
-	file, err := os.OpenFile(f.rsrcPath, os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return nil, err
+	spew.Dump(runtime.GOOS)
+	if runtime.GOOS == "darwin" {
+		return &xattrWrapper{
+			filePath: f.dataPath + ".incomplete",
+			data:     make([]byte, 0),
+		}, nil
 	}
 
-	return file, nil
+	return os.OpenFile(f.rsrcPath, os.O_CREATE|os.O_WRONLY, 0644)
 }
 
 func (f *fileWrapper) InfoForkWriter() (io.WriteCloser, error) {
@@ -129,13 +211,18 @@ func (f *fileWrapper) incFileWriter() (io.WriteCloser, error) {
 	return file, nil
 }
 
-func (f *fileWrapper) dataForkReader() (io.Reader, error) {
+func (f *fileWrapper) dataForkReader() (io.ReadCloser, error) {
 	return f.fs.Open(f.dataPath)
 }
 
-func (f *fileWrapper) rsrcForkFile() (*os.File, error) {
-	return f.fs.Open(f.rsrcPath)
-}
+//
+//func (f *fileWrapper) rsrcForkFile() (io.ReadCloser, error) {
+//	return f.fs.Open(f.rsrcPath)
+//}
+
+//func (f *fileWrapper) rsrcForkReader() (io.ReadCloser, error) {
+//	return f.fs.Open(f.rsrcPath)
+//}
 
 func (f *fileWrapper) DataFile() (os.FileInfo, error) {
 	if fi, err := f.fs.Stat(f.dataPath); err == nil {
@@ -178,7 +265,7 @@ func (f *fileWrapper) Move(newPath string) error {
 	return nil
 }
 
-// Delete a fileWrapper and its associated metadata files if they exist
+// Delete a file and any associated sidecar files if they exist.
 func (f *fileWrapper) Delete() error {
 	err := f.fs.RemoveAll(f.dataPath)
 	if err != nil {
@@ -204,26 +291,41 @@ func (f *fileWrapper) Delete() error {
 }
 
 func (f *fileWrapper) flattenedFileObject() (*flattenedFileObject, error) {
-	dataSize := make([]byte, 4)
-	mTime := [8]byte{}
-
-	ft := defaultFileType
-
 	fileInfo, err := f.fs.Stat(f.dataPath)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, err
+		return nil, fmt.Errorf("stat data file: %v", err)
 	}
+
+	// If the file doesn't exist, it might be partially transferred.
 	if errors.Is(err, fs.ErrNotExist) {
 		fileInfo, err = f.fs.Stat(f.incompletePath)
-		if err == nil {
-			mTime = NewTime(fileInfo.ModTime())
-			binary.BigEndian.PutUint32(dataSize, uint32(fileInfo.Size()-f.dataOffset))
-			ft, _ = fileTypeFromInfo(fileInfo)
+		if err != nil {
+			return nil, fmt.Errorf("stat incomplete file: %v", err)
 		}
-	} else {
-		mTime = NewTime(fileInfo.ModTime())
-		binary.BigEndian.PutUint32(dataSize, uint32(fileInfo.Size()-f.dataOffset))
-		ft, _ = fileTypeFromInfo(fileInfo)
+	}
+
+	ft := fileTypeFromInfo(fileInfo)
+
+	list, err := xattr.List(f.dataPath)
+	if err != nil {
+		return nil, fmt.Errorf("read extended attributes: %w", err)
+	}
+	for _, attr := range list {
+		// Read type and creater codes from com.apple.FinderInfo xattr if present.  This should look like:
+		// 00000000  41 50 50 4C C3 2B 47 57 00 00 00 00 00 00 00 00  |APPL.+GW........|
+		// 00000010  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+		// 00000020
+		if attr == "com.apple.FinderInfo" {
+			data, err := xattr.Get(f.dataPath, attr)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			if len(data) > 8 {
+				ft.TypeCode = string(data[0:4])
+				ft.CreatorCode = string(data[4:8])
+			}
+		}
 	}
 
 	f.Ffo.FlatFileHeader = FlatFileHeader{
@@ -232,20 +334,23 @@ func (f *fileWrapper) flattenedFileObject() (*flattenedFileObject, error) {
 		ForkCount: [2]byte{0, 2},
 	}
 
+	// Check to see if we have an info fork sidecar file.
 	_, err = f.fs.Stat(f.infoPath)
 	if err == nil {
 		b, err := f.fs.ReadFile(f.infoPath)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("read info fork: %v", err)
 		}
 
 		f.Ffo.FlatFileHeader.ForkCount[1] = 3
 
-		_, err = io.Copy(&f.Ffo.FlatFileInformationFork, bytes.NewReader(b))
-		if err != nil {
-			return nil, fmt.Errorf("error copying FlatFileInformationFork: %w", err)
+		if _, err := io.Copy(&f.Ffo.FlatFileInformationFork, bytes.NewReader(b)); err != nil {
+			return nil, fmt.Errorf("copy FlatFileInformationFork: %w", err)
 		}
+
 	} else {
+		mTime := NewTime(fileInfo.ModTime())
+
 		f.Ffo.FlatFileInformationFork = FlatFileInformationFork{
 			Platform:         [4]byte{0x41, 0x4D, 0x41, 0x43}, // "AMAC" TODO: Remove hardcode to support "AWIN" Platform (maybe?)
 			TypeSignature:    [4]byte([]byte(ft.TypeCode)),
@@ -257,20 +362,22 @@ func (f *fileWrapper) flattenedFileObject() (*flattenedFileObject, error) {
 			Comment:          []byte{},
 		}
 
-		ns := make([]byte, 2)
-		binary.BigEndian.PutUint16(ns, uint16(len(f.Name)))
-		f.Ffo.FlatFileInformationFork.NameSize = [2]byte(ns[:])
+		binary.BigEndian.PutUint16(f.Ffo.FlatFileInformationFork.NameSize[:], uint16(len(f.Name)))
+	}
+
+	if strings.Contains(fileInfo.Name(), IncompleteFileSuffix) {
+		f.Ffo.FlatFileInformationFork.TypeSignature = [4]byte([]byte("HTft"))
+		f.Ffo.FlatFileInformationFork.CreatorSignature = [4]byte([]byte("HTLC"))
 	}
 
 	f.Ffo.FlatFileInformationForkHeader = FlatFileForkHeader{
-		ForkType: [4]byte{0x49, 0x4E, 0x46, 0x4F}, // "INFO"
+		ForkType: forkTypeInfo,
 		DataSize: f.Ffo.FlatFileInformationFork.Size(),
 	}
 
-	f.Ffo.FlatFileDataForkHeader = FlatFileForkHeader{
-		ForkType: [4]byte{0x44, 0x41, 0x54, 0x41}, // "DATA"
-		DataSize: [4]byte{dataSize[0], dataSize[1], dataSize[2], dataSize[3]},
-	}
+	f.Ffo.FlatFileDataForkHeader = FlatFileForkHeader{ForkType: forkTypeData}
+	binary.BigEndian.PutUint32(f.Ffo.FlatFileDataForkHeader.DataSize[:], uint32(fileInfo.Size()-f.dataOffset))
+
 	f.Ffo.FlatFileResForkHeader = f.rsrcForkHeader()
 
 	return f.Ffo, nil

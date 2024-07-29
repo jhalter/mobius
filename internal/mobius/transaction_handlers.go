@@ -279,9 +279,8 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 			}
 		}
 
-		if err := hlFile.Ffo.FlatFileInformationFork.SetComment(t.GetField(hotline.FieldFileComment).Data); err != nil {
-			return res
-		}
+		hlFile.Ffo.FlatFileInformationFork.SetComment(t.GetField(hotline.FieldFileComment).Data)
+
 		w, err := hlFile.InfoForkWriter()
 		if err != nil {
 			return res

@@ -45,11 +45,11 @@ type FlatFileInformationFork struct {
 
 func NewFlatFileInformationFork(fileName string, modifyTime [8]byte, typeSignature string, creatorSignature string) FlatFileInformationFork {
 	return FlatFileInformationFork{
-		Platform:         [4]byte{0x41, 0x4D, 0x41, 0x43},   // "AMAC" TODO: Remove hardcode to support "AWIN" Platform (maybe?)
-		TypeSignature:    [4]byte([]byte(typeSignature)),    // TODO: Don't infer types from filename
-		CreatorSignature: [4]byte([]byte(creatorSignature)), // TODO: Don't infer types from filename
-		PlatformFlags:    [4]byte{0, 0, 1, 0},               // TODO: What is this?
-		CreateDate:       modifyTime,                        // some filesystems don't support createTime
+		Platform:         [4]byte{0x41, 0x4D, 0x41, 0x43}, // "AMAC" TODO: Remove hardcode to support "AWIN" Platform (maybe?)
+		TypeSignature:    [4]byte([]byte(typeSignature)),
+		CreatorSignature: [4]byte([]byte(creatorSignature)),
+		PlatformFlags:    [4]byte{0, 0, 1, 0}, // TODO: What is this?
+		CreateDate:       modifyTime,          // some filesystems don't support createTime
 		ModifyDate:       modifyTime,
 		Name:             []byte(fileName),
 		Comment:          []byte{}, // TODO: implement (maybe?)
@@ -70,13 +70,10 @@ func (ffif *FlatFileInformationFork) FriendlyCreator() []byte {
 	return ffif.CreatorSignature[:]
 }
 
-func (ffif *FlatFileInformationFork) SetComment(comment []byte) error {
-	commentSize := make([]byte, 2)
+func (ffif *FlatFileInformationFork) SetComment(comment []byte) {
+	// TODO: truncate long comments
 	ffif.Comment = comment
-	binary.BigEndian.PutUint16(commentSize, uint16(len(comment)))
-	ffif.CommentSize = [2]byte(commentSize)
-	// TODO: return err if comment is too long
-	return nil
+	binary.BigEndian.PutUint16(ffif.CommentSize[:], uint16(len(comment)))
 }
 
 // DataSize calculates the size of the flat file information fork, which is
@@ -127,10 +124,16 @@ func (ffif *FlatFileInformationFork) ReadNameSize() []byte {
 	return size
 }
 
+var (
+	forkTypeData = [4]byte{0x44, 0x41, 0x54, 0x41} // "DATA"
+	forkTypeMACR = [4]byte{0x4D, 0x41, 0x43, 0x52} // "MACR"
+	forkTypeInfo = [4]byte{0x49, 0x4E, 0x46, 0x4F} // "INFO"
+)
+
 type FlatFileForkHeader struct {
 	ForkType        [4]byte // Either INFO, DATA or MACR
-	CompressionType [4]byte
-	RSVD            [4]byte
+	CompressionType [4]byte // Unused
+	RSVD            [4]byte // Unused
 	DataSize        [4]byte
 }
 
@@ -193,35 +196,36 @@ func (ffif *FlatFileInformationFork) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (ffif *FlatFileInformationFork) UnmarshalBinary(b []byte) error {
-	nameSize := b[70:72]
-	bs := binary.BigEndian.Uint16(nameSize)
-	nameEnd := 72 + bs
-
-	ffif.Platform = [4]byte(b[0:4])
-	ffif.TypeSignature = [4]byte(b[4:8])
-	ffif.CreatorSignature = [4]byte(b[8:12])
-	ffif.Flags = [4]byte(b[12:16])
-	ffif.PlatformFlags = [4]byte(b[16:20])
-	ffif.RSVD = [32]byte(b[20:52])
-	ffif.CreateDate = [8]byte(b[52:60])
-	ffif.ModifyDate = [8]byte(b[60:68])
-	ffif.NameScript = [2]byte(b[68:70])
-	ffif.NameSize = [2]byte(b[70:72])
-	ffif.Name = b[72:nameEnd]
-
-	if len(b) > int(nameEnd) {
-		ffif.CommentSize = [2]byte(b[nameEnd : nameEnd+2])
-		commentLen := binary.BigEndian.Uint16(ffif.CommentSize[:])
-
-		commentStartPos := int(nameEnd) + 2
-		commentEndPos := int(nameEnd) + 2 + int(commentLen)
-
-		ffif.Comment = b[commentStartPos:commentEndPos]
-	}
-
-	return nil
-}
+//
+//func (ffif *FlatFileInformationFork) UnmarshalBinary(b []byte) error {
+//	nameSize := b[70:72]
+//	bs := binary.BigEndian.Uint16(nameSize)
+//	nameEnd := 72 + bs
+//
+//	ffif.Platform = [4]byte(b[0:4])
+//	ffif.TypeSignature = [4]byte(b[4:8])
+//	ffif.CreatorSignature = [4]byte(b[8:12])
+//	ffif.Flags = [4]byte(b[12:16])
+//	ffif.PlatformFlags = [4]byte(b[16:20])
+//	ffif.RSVD = [32]byte(b[20:52])
+//	ffif.CreateDate = [8]byte(b[52:60])
+//	ffif.ModifyDate = [8]byte(b[60:68])
+//	ffif.NameScript = [2]byte(b[68:70])
+//	ffif.NameSize = [2]byte(b[70:72])
+//	ffif.Name = b[72:nameEnd]
+//
+//	if len(b) > int(nameEnd) {
+//		ffif.CommentSize = [2]byte(b[nameEnd : nameEnd+2])
+//		commentLen := binary.BigEndian.Uint16(ffif.CommentSize[:])
+//
+//		commentStartPos := int(nameEnd) + 2
+//		commentEndPos := int(nameEnd) + 2 + int(commentLen)
+//
+//		ffif.Comment = b[commentStartPos:commentEndPos]
+//	}
+//
+//	return nil
+//}
 
 // Read implements the io.Reader interface for flattenedFileObject
 func (ffo *flattenedFileObject) Read(p []byte) (int, error) {

@@ -21,7 +21,7 @@ func fileTypeFromFilename(filename string) fileType {
 	return defaultFileType
 }
 
-func fileTypeFromInfo(info fs.FileInfo) (ft fileType, err error) {
+func fileTypeFromInfo(info fs.FileInfo) (ft fileType) {
 	if info.IsDir() {
 		ft.CreatorCode = "n/a "
 		ft.TypeCode = "fldr"
@@ -29,7 +29,11 @@ func fileTypeFromInfo(info fs.FileInfo) (ft fileType, err error) {
 		ft = fileTypeFromFilename(info.Name())
 	}
 
-	return ft, nil
+	return ft
+}
+
+func fileTypeFromXattr(info fs.FileInfo) (ft fileType) {
+	return fileType{}
 }
 
 const maxFileSize = 4294967296
@@ -37,7 +41,7 @@ const maxFileSize = 4294967296
 func GetFileNameList(path string, ignoreList []string) (fields []Field, err error) {
 	files, err := os.ReadDir(path)
 	if err != nil {
-		return fields, fmt.Errorf("error reading path: %s: %w", path, err)
+		return fields, fmt.Errorf("read dir: %s: %w", path, err)
 	}
 
 	for _, file := range files {
@@ -58,7 +62,7 @@ func GetFileNameList(path string, ignoreList []string) (fields []Field, err erro
 		if fileInfo.Mode()&os.ModeSymlink != 0 {
 			resolvedPath, err := os.Readlink(filepath.Join(path, file.Name()))
 			if err != nil {
-				return fields, fmt.Errorf("error following symlink: %s: %w", resolvedPath, err)
+				return fields, fmt.Errorf("read symlink: %s: %w", resolvedPath, err)
 			}
 
 			rFile, err := os.Stat(resolvedPath)
@@ -128,9 +132,7 @@ func GetFileNameList(path string, ignoreList []string) (fields []Field, err erro
 			continue
 		}
 
-		nameSize := make([]byte, 2)
-		binary.BigEndian.PutUint16(nameSize, uint16(len(strippedName)))
-		copy(fnwi.NameSize[:], nameSize)
+		binary.BigEndian.PutUint16(fnwi.NameSize[:], uint16(len(strippedName)))
 
 		fnwi.Name = []byte(strippedName)
 

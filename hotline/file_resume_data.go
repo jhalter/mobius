@@ -25,10 +25,8 @@ type ForkInfoList struct {
 
 func NewForkInfoList(b []byte) *ForkInfoList {
 	return &ForkInfoList{
-		Fork:     [4]byte{0x44, 0x41, 0x54, 0x41},
+		Fork:     forkTypeData,
 		DataSize: [4]byte{b[0], b[1], b[2], b[3]},
-		RSVDA:    [4]byte{},
-		RSVDB:    [4]byte{},
 	}
 }
 
@@ -36,7 +34,6 @@ func NewFileResumeData(list []ForkInfoList) *FileResumeData {
 	return &FileResumeData{
 		Format:       [4]byte{0x52, 0x46, 0x4C, 0x54}, // RFLT
 		Version:      [2]byte{0, 1},
-		RSVD:         [34]byte{},
 		ForkCount:    [2]byte{0, uint8(len(list))},
 		ForkInfoList: list,
 	}

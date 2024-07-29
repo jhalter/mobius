@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -291,15 +292,10 @@ func DownloadHandler(w io.Writer, fullPath string, fileTransfer *FileTransfer, f
 		}
 	}
 
-	rFile, _ := fw.rsrcForkFile()
-	//if err != nil {
-	//	// return fmt.Errorf("open resource fork file: %v", err)
-	//}
-
-	_, _ = io.Copy(w, io.TeeReader(rFile, fileTransfer.bytesSentCounter))
-	//if err != nil {
-	//	// return fmt.Errorf("send resource fork data: %v", err)
-	//}
+	_, err = io.Copy(w, io.TeeReader(fw.rsrcForkReader, fileTransfer.bytesSentCounter))
+	if err != nil {
+		return fmt.Errorf("send resource fork data: %v", err)
+	}
 
 	return nil
 }
@@ -343,15 +339,21 @@ func UploadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfe
 			return err
 		}
 
+		//defer rForkWriter.(*xattrWrapper).Close()
+
 		iForkWriter, err = f.InfoForkWriter()
 		if err != nil {
 			return err
 		}
 	}
 
+	spew.Dump("preserveForks", preserveForks)
+
 	if err := receiveFile(rwc, file, rForkWriter, iForkWriter, fileTransfer.bytesSentCounter); err != nil {
 		return fmt.Errorf("receive file: %v", err)
 	}
+	rForkWriter.(*xattrWrapper).Close()
+	//time.Sleep(5 * time.Minute)
 
 	if err := fileStore.Rename(fullPath+".incomplete", fullPath); err != nil {
 		return fmt.Errorf("rename incomplete file: %v", err)
@@ -497,12 +499,7 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 				return fmt.Errorf("error sending resource fork header: %w", err)
 			}
 
-			rFile, err := hlFile.rsrcForkFile()
-			if err != nil {
-				return fmt.Errorf("error opening resource fork: %w", err)
-			}
-
-			if _, err = io.Copy(rwc, io.TeeReader(rFile, fileTransfer.bytesSentCounter)); err != nil {
+			if _, err = io.Copy(rwc, io.TeeReader(hlFile.rsrcForkReader, fileTransfer.bytesSentCounter)); err != nil {
 				return fmt.Errorf("error sending resource fork: %w", err)
 			}
 		}
@@ -648,7 +645,6 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 					return err
 				}
 
-				rForkWriter := io.Discard
 				iForkWriter := io.Discard
 				if preserveForks {
 					iForkWriter, err = hlFile.InfoForkWriter()
@@ -656,12 +652,8 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 						return err
 					}
 
-					rForkWriter, err = hlFile.rsrcForkWriter()
-					if err != nil {
-						return err
-					}
 				}
-				if err := receiveFile(rwc, incWriter, rForkWriter, iForkWriter, fileTransfer.bytesSentCounter); err != nil {
+				if err := receiveFile(rwc, incWriter, hlFile.rsrcWriter, iForkWriter, fileTransfer.bytesSentCounter); err != nil {
 					return err
 				}
 
@@ -670,7 +662,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 				}
 			}
 
-			// Tell client to send next fileWrapper
+			// Tell client to send next file
 			if _, err := rwc.Write([]byte{0, DlFldrActionNextFile}); err != nil {
 				return err
 			}
