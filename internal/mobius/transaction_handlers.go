@@ -418,7 +418,7 @@ func HandleMoveFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 	if err := hlFile.Move(fileNewPath); err != nil {
 		return res
 	}
-	// TODO: handle other possible errors; e.g. fileWrapper delete fails due to fileWrapper permission issue
+	// TODO: handle other possible errors; e.g. file delete fails due to permission issue
 
 	res = append(res, cc.NewReply(t))
 	return res

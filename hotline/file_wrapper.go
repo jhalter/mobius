@@ -178,7 +178,7 @@ func (f *fileWrapper) Move(newPath string) error {
 	return nil
 }
 
-// Delete a fileWrapper and its associated metadata files if they exist
+// Delete a file and its associated metadata files if they exist
 func (f *fileWrapper) Delete() error {
 	err := f.fs.RemoveAll(f.dataPath)
 	if err != nil {

@@ -366,26 +366,26 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 	// Folder Download flow:
 	// 1. Get filePath from the transfer
 	// 2. Iterate over files
-	// 3. For each fileWrapper:
-	// 	 Send fileWrapper header to client
+	// 3. For each file:
+	// 	 Send file header to client
 	// The client can reply in 3 ways:
 	//
-	// 1. If type is an odd number (unknown type?), or fileWrapper download for the current fileWrapper is completed:
-	//		client sends []byte{0x00, 0x03} to tell the server to continue to the next fileWrapper
+	// 1. If type is an odd number (unknown type?), or file download for the current file is completed:
+	//		client sends []byte{0x00, 0x03} to tell the server to continue to the next file
 	//
-	// 2. If download of a fileWrapper is to be resumed:
+	// 2. If download of a file is to be resumed:
 	//		client sends:
 	//			[]byte{0x00, 0x02} // download folder action
 	//			[2]byte // Resume data size
-	//			[]byte fileWrapper resume data (see myField_FileResumeData)
+	//			[]byte file resume data (see myField_FileResumeData)
 	//
-	// 3. Otherwise, download of the fileWrapper is requested and client sends []byte{0x00, 0x01}
+	// 3. Otherwise, download of the file is requested and client sends []byte{0x00, 0x01}
 	//
 	// When download is requested (case 2 or 3), server replies with:
-	// 			[4]byte - fileWrapper size
+	// 			[4]byte - file size
 	//			[]byte  - Flattened File Object
 	//
-	// After every fileWrapper download, client could request next fileWrapper with:
+	// After every file download, client could request next file with:
 	// 			[]byte{0x00, 0x03}
 	//
 	// This notifies the server to send the next item header
@@ -670,7 +670,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 				}
 			}
 
-			// Tell client to send next fileWrapper
+			// Tell client to send next file
 			if _, err := rwc.Write([]byte{0, DlFldrActionNextFile}); err != nil {
 				return err
 			}
