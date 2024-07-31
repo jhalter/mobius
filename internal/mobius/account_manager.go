@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -45,11 +46,25 @@ func NewYAMLAccountManager(accountDir string) (*YAMLAccountManager, error) {
 		return nil, fmt.Errorf("no accounts found in directory: %s", accountDir)
 	}
 
-	for _, file := range matches {
+	for _, filePath := range matches {
 		var account hotline.Account
-		if err = loadFromYAMLFile(file, &account); err != nil {
-			return nil, fmt.Errorf("error loading account %s: %w", file, err)
+		fileContents, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("read file: %v", err)
 		}
+
+		if err := yaml.Unmarshal(fileContents, &account); err != nil {
+			return nil, fmt.Errorf("unmarshal: %v", err)
+		}
+
+		// Check the account file contents for a field name that only appears in the new AccessBitmap flag format.
+		// If not present, re-save the file to migrate it from the old array of ints format to new bool flag format.
+		if !strings.Contains(string(fileContents), "    DownloadFile:") {
+			if err := accountMgr.Update(account, account.Login); err != nil {
+				return nil, fmt.Errorf("migrate account to new access flag format: %v", err)
+			}
+		}
+
 		accountMgr.accounts[account.Login] = account
 	}
 
