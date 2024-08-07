@@ -174,9 +174,9 @@ To run as a systemd service, refer to this sample unit file: [mobius-hotline-ser
 
 The Mobius server includes an optional HTTP API to perform out-of-band administrative functions.
 
-To enable it, include the `--api-port` flag with a string defining the IP and port to listen on in the form of `<ip>:<port>`.
+To enable it, include the `--api-addr` flag with a string defining the IP and port to listen on in the form of `<ip>:<port>`.
 
-Example: `--api-port=127.0.0.1:5503`
+Example: `--api-addr=127.0.0.1:5503`
 
 ⚠️ The API has no authentication, so binding it to localhost is a good idea!
 
