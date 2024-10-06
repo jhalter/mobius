@@ -185,7 +185,7 @@ Example: `--api-addr=127.0.0.1:5503`
 The stats endpoint returns server runtime statistics and counters.
 
 ```
-❯ curl -s localhost:5603/api/v1/stats  | jq .
+❯ curl -s localhost:5503/api/v1/stats  | jq .
 {
   "ConnectionCounter": 0,
   "ConnectionPeak": 0,
@@ -212,7 +212,7 @@ The reload endpoint reloads the following configuration files from disk:
 Example:
 
 ```
-❯ curl -s localhost:5603/api/v1/reload | jq .
+❯ curl -s localhost:5503/api/v1/reload | jq .
 {
   "msg": "config reloaded"
 }
@@ -225,7 +225,7 @@ The shutdown endpoint accepts a shutdown message from POST payload, sends it to 
 Example:
 
 ```
-❯ curl -d 'Server rebooting' localhost:5603/api/v1/shutdown
+❯ curl -d 'Server rebooting' localhost:5503/api/v1/shutdown
 
 { "msg": "server shutting down" }
 ```
