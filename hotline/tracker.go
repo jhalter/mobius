@@ -142,8 +142,13 @@ func GetListing(conn io.ReadWriteCloser) ([]ServerRecord, error) {
 	for {
 		scanner.Scan()
 
+		// Make a new []byte slice and copy the scanner bytes to it.  This is critical as the
+		// scanner re-uses the buffer for subsequent scans.
+		buf := make([]byte, len(scanner.Bytes()))
+		copy(buf, scanner.Bytes())
+
 		var srv ServerRecord
-		_, err = srv.Write(scanner.Bytes())
+		_, err = srv.Write(buf)
 		if err != nil {
 			return nil, err
 		}
