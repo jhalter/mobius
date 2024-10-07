@@ -7,7 +7,7 @@ import (
 	"slices"
 )
 
-type flattenedFileObject struct {
+type FlattenedFileObject struct {
 	FlatFileHeader                FlatFileHeader
 	FlatFileInformationForkHeader FlatFileForkHeader
 	FlatFileInformationFork       FlatFileInformationFork
@@ -17,6 +17,8 @@ type flattenedFileObject struct {
 	readOffset int // Internal offset to track read progress
 }
 
+var FlatFileFormat = [4]byte{0x46, 0x49, 0x4c, 0x50} //  "FILP"
+
 // FlatFileHeader is the first section of a "Flattened File Object".  All fields have static values.
 type FlatFileHeader struct {
 	Format    [4]byte  // Always "FILP"
@@ -24,6 +26,12 @@ type FlatFileHeader struct {
 	RSVD      [16]byte // Always empty zeros
 	ForkCount [2]byte  // Number of forks, either 2 or 3 if there is a resource fork
 }
+
+// Operating system used
+var (
+	PlatformAMAC = [4]byte{0x41, 0x4D, 0x41, 0x43} // "AMAC"
+	PlatformMWIN = [4]byte{0x4D, 0x57, 0x49, 0x4E} // "MWIN"
+)
 
 type FlatFileInformationFork struct {
 	Platform         [4]byte // Operating System used. ("AMAC" or "MWIN")
@@ -43,19 +51,6 @@ type FlatFileInformationFork struct {
 	readOffset int // Internal offset to track read progress
 }
 
-func NewFlatFileInformationFork(fileName string, modifyTime [8]byte, typeSignature string, creatorSignature string) FlatFileInformationFork {
-	return FlatFileInformationFork{
-		Platform:         [4]byte{0x41, 0x4D, 0x41, 0x43},   // "AMAC" TODO: Remove hardcode to support "AWIN" Platform (maybe?)
-		TypeSignature:    [4]byte([]byte(typeSignature)),    // TODO: Don't infer types from filename
-		CreatorSignature: [4]byte([]byte(creatorSignature)), // TODO: Don't infer types from filename
-		PlatformFlags:    [4]byte{0, 0, 1, 0},               // TODO: What is this?
-		CreateDate:       modifyTime,                        // some filesystems don't support createTime
-		ModifyDate:       modifyTime,
-		Name:             []byte(fileName),
-		Comment:          []byte{}, // TODO: implement (maybe?)
-	}
-}
-
 func (ffif *FlatFileInformationFork) FriendlyType() []byte {
 	if name, ok := friendlyCreatorNames[string(ffif.TypeSignature[:])]; ok {
 		return []byte(name)
@@ -70,41 +65,10 @@ func (ffif *FlatFileInformationFork) FriendlyCreator() []byte {
 	return ffif.CreatorSignature[:]
 }
 
-func (ffif *FlatFileInformationFork) SetComment(comment []byte) error {
-	commentSize := make([]byte, 2)
-	ffif.Comment = comment
-	binary.BigEndian.PutUint16(commentSize, uint16(len(comment)))
-	ffif.CommentSize = [2]byte(commentSize)
-	// TODO: return err if comment is too long
-	return nil
-}
-
-// DataSize calculates the size of the flat file information fork, which is
-// 72 bytes for the fixed length fields plus the length of the Name + Comment
-func (ffif *FlatFileInformationFork) DataSize() []byte {
-	size := make([]byte, 4)
-
-	dataSize := len(ffif.Name) + len(ffif.Comment) + 74 // 74 = len of fixed size headers
-
-	binary.BigEndian.PutUint32(size, uint32(dataSize))
-
-	return size
-}
-
-func (ffif *FlatFileInformationFork) Size() [4]byte {
-	size := [4]byte{}
-
-	dataSize := len(ffif.Name) + len(ffif.Comment) + 74 // 74 = len of fixed size headers
-
-	binary.BigEndian.PutUint32(size[:], uint32(dataSize))
-
-	return size
-}
-
-func (ffo *flattenedFileObject) TransferSize(offset int64) []byte {
+func (ffo *FlattenedFileObject) TransferSize(offset int64) []byte {
 	ffoCopy := *ffo
 
-	// get length of the flattenedFileObject, including the info fork
+	// get length of the FlattenedFileObject, including the info fork
 	b, _ := io.ReadAll(&ffoCopy)
 	payloadSize := len(b)
 
@@ -116,13 +80,6 @@ func (ffo *flattenedFileObject) TransferSize(offset int64) []byte {
 
 	size := make([]byte, 4)
 	binary.BigEndian.PutUint32(size, dataSize+resForkSize+uint32(payloadSize)-uint32(offset))
-
-	return size
-}
-
-func (ffif *FlatFileInformationFork) ReadNameSize() []byte {
-	size := make([]byte, 2)
-	binary.BigEndian.PutUint16(size, uint16(len(ffif.Name)))
 
 	return size
 }
@@ -145,7 +102,7 @@ func (ffif *FlatFileInformationFork) Read(p []byte) (int, error) {
 		ffif.CreateDate[:],
 		ffif.ModifyDate[:],
 		ffif.NameScript[:],
-		ffif.ReadNameSize(),
+		ffif.NameSize[:],
 		ffif.Name,
 		ffif.CommentSize[:],
 		ffif.Comment,
@@ -223,17 +180,17 @@ func (ffif *FlatFileInformationFork) UnmarshalBinary(b []byte) error {
 	return nil
 }
 
-// Read implements the io.Reader interface for flattenedFileObject
-func (ffo *flattenedFileObject) Read(p []byte) (int, error) {
+// Read implements the io.Reader interface for FlattenedFileObject
+func (ffo *FlattenedFileObject) Read(p []byte) (int, error) {
 	buf := slices.Concat(
 		ffo.FlatFileHeader.Format[:],
 		ffo.FlatFileHeader.Version[:],
 		ffo.FlatFileHeader.RSVD[:],
 		ffo.FlatFileHeader.ForkCount[:],
-		[]byte("INFO"),
-		[]byte{0, 0, 0, 0},
-		make([]byte, 4),
-		ffo.FlatFileInformationFork.DataSize(),
+		ffo.FlatFileInformationForkHeader.ForkType[:],
+		ffo.FlatFileInformationForkHeader.CompressionType[:],
+		ffo.FlatFileInformationForkHeader.RSVD[:],
+		ffo.FlatFileInformationForkHeader.DataSize[:],
 		ffo.FlatFileInformationFork.Platform[:],
 		ffo.FlatFileInformationFork.TypeSignature[:],
 		ffo.FlatFileInformationFork.CreatorSignature[:],
@@ -243,7 +200,7 @@ func (ffo *flattenedFileObject) Read(p []byte) (int, error) {
 		ffo.FlatFileInformationFork.CreateDate[:],
 		ffo.FlatFileInformationFork.ModifyDate[:],
 		ffo.FlatFileInformationFork.NameScript[:],
-		ffo.FlatFileInformationFork.ReadNameSize(),
+		ffo.FlatFileInformationFork.NameSize[:],
 		ffo.FlatFileInformationFork.Name,
 		ffo.FlatFileInformationFork.CommentSize[:],
 		ffo.FlatFileInformationFork.Comment,
@@ -263,7 +220,7 @@ func (ffo *flattenedFileObject) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-func (ffo *flattenedFileObject) ReadFrom(r io.Reader) (int64, error) {
+func (ffo *FlattenedFileObject) ReadFrom(r io.Reader) (int64, error) {
 	var n int64
 
 	if err := binary.Read(r, binary.BigEndian, &ffo.FlatFileHeader); err != nil {
@@ -292,10 +249,10 @@ func (ffo *flattenedFileObject) ReadFrom(r io.Reader) (int64, error) {
 	return n, nil
 }
 
-func (ffo *flattenedFileObject) dataSize() int64 {
+func (ffo *FlattenedFileObject) dataSize() int64 {
 	return int64(binary.BigEndian.Uint32(ffo.FlatFileDataForkHeader.DataSize[:]))
 }
 
-func (ffo *flattenedFileObject) rsrcSize() int64 {
+func (ffo *FlattenedFileObject) rsrcSize() int64 {
 	return int64(binary.BigEndian.Uint32(ffo.FlatFileResForkHeader.DataSize[:]))
 }

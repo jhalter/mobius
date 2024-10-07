@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"io"
 )
 
@@ -29,28 +30,37 @@ func (tf *transfer) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-func receiveFile(r io.Reader, targetFile, resForkFile, infoFork, counterWriter io.Writer) error {
-	var ffo flattenedFileObject
+func receiveFile(r io.Reader, file *File, counterWriter io.Writer) error {
+	var ffo FlattenedFileObject
 	if _, err := ffo.ReadFrom(r); err != nil {
-		return fmt.Errorf("read flatted file object: %v", err)
+		return fmt.Errorf("read flattened file object: %v", err)
 	}
 
+	spew.Dump(ffo, file.InfoFork)
+
 	// Write the information fork
-	_, err := io.Copy(infoFork, &ffo.FlatFileInformationFork)
+	_, err := io.Copy(file.InfoFork, &ffo.FlatFileInformationFork)
 	if err != nil {
 		return fmt.Errorf("write the information fork: %v", err)
 	}
+	//err = file.InfoFork.Close()
+	//if err != nil {
+	//	spew.Dump(err)
+	//}
 
-	if _, err = io.CopyN(targetFile, io.TeeReader(r, counterWriter), ffo.dataSize()); err != nil {
+	if _, err = io.CopyN(file.DataFork, io.TeeReader(r, counterWriter), ffo.dataSize()); err != nil {
 		return fmt.Errorf("copy file data to partial file: %v", err)
 	}
+	spew.Dump(file.InfoFork)
+	spew.Dump(ffo.FlatFileHeader.ForkCount)
 
 	if ffo.FlatFileHeader.ForkCount == [2]byte{0, 3} {
 		if err := binary.Read(r, binary.BigEndian, &ffo.FlatFileResForkHeader); err != nil {
 			return fmt.Errorf("read resource fork header: %v", err)
 		}
 
-		if _, err = io.CopyN(resForkFile, io.TeeReader(r, counterWriter), ffo.rsrcSize()); err != nil {
+		spew.Dump("ffo.rsrcSize()", ffo.rsrcSize())
+		if _, err = io.CopyN(file.RsrcFork, io.TeeReader(r, counterWriter), ffo.rsrcSize()); err != nil {
 			return fmt.Errorf("read resource fork: %v", err)
 		}
 	}

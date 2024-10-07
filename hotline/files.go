@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"io"
 	"io/fs"
 	"os"
@@ -21,15 +22,12 @@ func fileTypeFromFilename(filename string) fileType {
 	return defaultFileType
 }
 
-func fileTypeFromInfo(info fs.FileInfo) (ft fileType, err error) {
+func fileTypeFromInfo(info fs.FileInfo) (ft fileType) {
 	if info.IsDir() {
-		ft.CreatorCode = "n/a "
-		ft.TypeCode = "fldr"
-	} else {
-		ft = fileTypeFromFilename(info.Name())
+		return newFileType("fldr", "n/a ")
 	}
 
-	return ft, nil
+	return fileTypeFromFilename(info.Name())
 }
 
 const maxFileSize = 4294967296
@@ -87,8 +85,11 @@ func GetFileNameList(path string, ignoreList []string) (fields []Field, err erro
 				copy(fnwi.Creator[:], fileCreator)
 			} else {
 				binary.BigEndian.PutUint32(fnwi.FileSize[:], uint32(rFile.Size()))
-				copy(fnwi.Type[:], fileTypeFromFilename(rFile.Name()).TypeCode)
-				copy(fnwi.Creator[:], fileTypeFromFilename(rFile.Name()).CreatorCode)
+				fnwi.Type = fileTypeFromFilename(rFile.Name()).TypeCode
+				fnwi.Creator = fileTypeFromFilename(rFile.Name()).CreatorCode
+				//
+				// copy(fnwi.Type[:], fileTypeFromFilename(rFile.Name()).TypeCode)
+				// copy(fnwi.Creator[:], fileTypeFromFilename(rFile.Name()).CreatorCode)
 			}
 		} else if file.IsDir() {
 			dir, err := os.ReadDir(filepath.Join(path, file.Name()))
@@ -112,14 +113,19 @@ func GetFileNameList(path string, ignoreList []string) (fields []Field, err erro
 				continue
 			}
 
-			hlFile, err := NewFileWrapper(&OSFileStore{}, path+"/"+file.Name(), 0)
+			hlFile, err := NewFile(&OSFileStore{}, path+"/"+file.Name(), os.O_RDONLY, os.O_RDONLY, os.O_RDONLY, 0)
 			if err != nil {
-				return nil, fmt.Errorf("NewFileWrapper: %w", err)
+				return nil, fmt.Errorf("NewFile: %w", err)
 			}
 
-			copy(fnwi.FileSize[:], hlFile.TotalSize())
-			copy(fnwi.Type[:], hlFile.Ffo.FlatFileInformationFork.TypeSignature[:])
-			copy(fnwi.Creator[:], hlFile.Ffo.FlatFileInformationFork.CreatorSignature[:])
+			ffo, err := hlFile.FlattenedFileObject()
+			if err != nil {
+				spew.Dump("⚠️", err)
+			}
+
+			copy(fnwi.FileSize[:], hlFile.Size())
+			copy(fnwi.Type[:], ffo.FlatFileInformationFork.TypeSignature[:])
+			copy(fnwi.Creator[:], ffo.FlatFileInformationFork.CreatorSignature[:])
 		}
 
 		strippedName := strings.ReplaceAll(file.Name(), ".incomplete", "")
@@ -128,9 +134,7 @@ func GetFileNameList(path string, ignoreList []string) (fields []Field, err erro
 			continue
 		}
 
-		nameSize := make([]byte, 2)
-		binary.BigEndian.PutUint16(nameSize, uint16(len(strippedName)))
-		copy(fnwi.NameSize[:], nameSize)
+		binary.BigEndian.PutUint16(fnwi.NameSize[:], uint16(len(strippedName)))
 
 		fnwi.Name = []byte(strippedName)
 

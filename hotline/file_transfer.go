@@ -1,7 +1,6 @@
 package hotline
 
 import (
-	"bufio"
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
@@ -254,58 +253,54 @@ func DownloadHandler(w io.Writer, fullPath string, fileTransfer *FileTransfer, f
 		dataOffset = int64(binary.BigEndian.Uint32(fileTransfer.FileResumeData.ForkInfoList[0].DataSize[:]))
 	}
 
-	fw, err := NewFileWrapper(fs, fullPath, 0)
+	fw, err := NewFile(fs, fullPath, os.O_RDONLY, os.O_RDONLY, os.O_RDONLY, 0)
 	if err != nil {
 		return fmt.Errorf("reading file header: %v", err)
 	}
+
+	ffo, _ := fw.FlattenedFileObject()
 
 	rLogger.Info("Download file", "filePath", fullPath)
 
 	// If file transfer options are included, that means this is a "quick preview" request.  In this case skip sending
 	// the flat file info and proceed directly to sending the file data.
 	if fileTransfer.Options == nil {
-		if _, err = io.Copy(w, fw.Ffo); err != nil {
+		if _, err = io.Copy(w, ffo); err != nil {
 			return fmt.Errorf("send flat file object: %v", err)
 		}
 	}
 
-	file, err := fw.dataForkReader()
-	if err != nil {
-		return fmt.Errorf("open data fork reader: %v", err)
-	}
+	//dataForkReader, err := fw.dataForkReader()
+	//if err != nil {
+	//	return fmt.Errorf("open data fork reader: %v", err)
+	//}
+	defer fw.DataFork.Close()
 
-	br := bufio.NewReader(file)
-	if _, err := br.Discard(int(dataOffset)); err != nil {
+	if _, err := fw.DataFork.Seek(dataOffset, 0); err != nil {
 		return fmt.Errorf("seek to resume offsent: %v", err)
 	}
 
-	if _, err = io.Copy(w, io.TeeReader(br, fileTransfer.bytesSentCounter)); err != nil {
+	if _, err = io.Copy(w, io.TeeReader(fw.DataFork, fileTransfer.bytesSentCounter)); err != nil {
 		return fmt.Errorf("send data fork: %v", err)
 	}
 
-	// If the client requested to resume transfer, do not send the resource fork header.
-	if fileTransfer.FileResumeData == nil {
-		err = binary.Write(w, binary.BigEndian, fw.rsrcForkHeader())
-		if err != nil {
-			return fmt.Errorf("send resource fork header: %v", err)
+	if fw.RsrcFork != nil {
+		// Send the resource fork header, unless it's a resume transfer.
+		if fileTransfer.FileResumeData == nil {
+			err = binary.Write(w, binary.BigEndian, ffo.FlatFileResForkHeader)
+			if err != nil {
+				return fmt.Errorf("send resource fork header: %v", err)
+			}
 		}
+
+		_, _ = io.Copy(w, io.TeeReader(fw.RsrcFork, fileTransfer.bytesSentCounter))
 	}
-
-	rFile, _ := fw.rsrcForkFile()
-	//if err != nil {
-	//	// return fmt.Errorf("open resource fork file: %v", err)
-	//}
-
-	_, _ = io.Copy(w, io.TeeReader(rFile, fileTransfer.bytesSentCounter))
-	//if err != nil {
-	//	// return fmt.Errorf("send resource fork data: %v", err)
-	//}
 
 	return nil
 }
 
 func UploadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfer, fileStore FileStore, rLogger *slog.Logger, preserveForks bool) error {
-	var file *os.File
+	//var file *os.File
 
 	// A file upload has two possible cases:
 	// 1) Upload a new file
@@ -314,43 +309,30 @@ func UploadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfe
 
 	// Check for existing file.  If found, do not proceed.  This is an invalid scenario, as the file upload transaction
 	// handler should have returned an error to the client indicating there was an existing file present.
-	_, err := os.Stat(fullPath)
-	if err == nil {
-		return fmt.Errorf("existing file found: %s", fullPath)
-	}
-	if errors.Is(err, fs.ErrNotExist) {
-		// If not found, open or create a new .incomplete file
-		file, err = os.OpenFile(fullPath+IncompleteFileSuffix, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-		if err != nil {
-			return err
-		}
-	}
-
-	defer file.Close()
-
-	f, err := NewFileWrapper(fileStore, fullPath, 0)
+	//_, err := os.Stat(fullPath)
+	//if err == nil {
+	//	return fmt.Errorf("existing file found: %s", fullPath)
+	//}
+	//if errors.Is(err, fs.ErrNotExist) {
+	//	// If not found, open or create a new .incomplete file
+	//	file, err = os.OpenFile(fullPath+IncompleteFileSuffix, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	//	if err != nil {
+	//		return err
+	//	}
+	//}
+	//
+	//defer file.Close()
+	f, err := NewFile(fileStore, fullPath, os.O_CREATE|os.O_RDWR, os.O_CREATE|os.O_RDWR, os.O_CREATE|os.O_RDWR, 0)
 	if err != nil {
 		return err
 	}
 
-	rLogger.Debug("File upload started", "dstFile", fullPath)
-
-	rForkWriter := io.Discard
-	iForkWriter := io.Discard
-	if preserveForks {
-		rForkWriter, err = f.rsrcForkWriter()
-		if err != nil {
-			return err
-		}
-
-		iForkWriter, err = f.InfoForkWriter()
-		if err != nil {
-			return err
-		}
+	if err := receiveFile(rwc, f, fileTransfer.bytesSentCounter); err != nil {
+		return fmt.Errorf("receive file: %v", err)
 	}
 
-	if err := receiveFile(rwc, file, rForkWriter, iForkWriter, fileTransfer.bytesSentCounter); err != nil {
-		return fmt.Errorf("receive file: %v", err)
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close file: %v", err)
 	}
 
 	if err := fileStore.Rename(fullPath+".incomplete", fullPath); err != nil {
@@ -413,10 +395,12 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 			return nil
 		}
 
-		hlFile, err := NewFileWrapper(fileStore, path, 0)
+		hlFile, err := NewFile(fileStore, path, os.O_RDONLY, os.O_RDONLY, os.O_RDONLY, 0)
 		if err != nil {
 			return err
 		}
+
+		ffo, _ := hlFile.FlattenedFileObject()
 
 		subPath := path[basePathLen+1:]
 
@@ -466,17 +450,17 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 
 		rLogger.Info("File download started",
 			"fileName", info.Name(),
-			"TransferSize", fmt.Sprintf("%x", hlFile.Ffo.TransferSize(dataOffset)),
+			"TransferSize", fmt.Sprintf("%x", ffo.TransferSize(dataOffset)),
 		)
 
 		// Send file size to client
-		if _, err := rwc.Write(hlFile.Ffo.TransferSize(dataOffset)); err != nil {
+		if _, err := rwc.Write(ffo.TransferSize(dataOffset)); err != nil {
 			rLogger.Error(err.Error())
 			return fmt.Errorf("error sending file size: %w", err)
 		}
 
 		// Send ffo bytes to client
-		_, err = io.Copy(rwc, hlFile.Ffo)
+		_, err = io.Copy(rwc, ffo)
 		if err != nil {
 			return fmt.Errorf("error sending flat file object: %w", err)
 		}
@@ -491,20 +475,22 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 			return fmt.Errorf("error sending file: %w", err)
 		}
 
-		if nextAction[1] != 2 && hlFile.Ffo.FlatFileHeader.ForkCount[1] == 3 {
-			err = binary.Write(rwc, binary.BigEndian, hlFile.rsrcForkHeader())
+		if nextAction[1] != 2 && ffo.FlatFileHeader.ForkCount[1] == 3 {
+			err = binary.Write(rwc, binary.BigEndian, ffo.FlatFileResForkHeader)
 			if err != nil {
 				return fmt.Errorf("error sending resource fork header: %w", err)
 			}
 
-			rFile, err := hlFile.rsrcForkFile()
-			if err != nil {
-				return fmt.Errorf("error opening resource fork: %w", err)
-			}
+			//rFile, err := hlFile.rsrcForkReader()
+			//if err != nil {
+			//	return fmt.Errorf("error opening resource fork: %w", err)
+			//}
 
-			if _, err = io.Copy(rwc, io.TeeReader(rFile, fileTransfer.bytesSentCounter)); err != nil {
+			if _, err = io.Copy(rwc, io.TeeReader(hlFile.RsrcFork, fileTransfer.bytesSentCounter)); err != nil {
 				return fmt.Errorf("error sending resource fork: %w", err)
 			}
+
+			//_ = rFile.Close()
 		}
 
 		// Read the client's Next Action request.  This is always 3, I think?
@@ -600,12 +586,12 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 				offset := make([]byte, 4)
 				binary.BigEndian.PutUint32(offset, uint32(incompleteFile.Size()))
 
-				file, err := os.OpenFile(fullPath+"/"+fu.FormattedPath()+IncompleteFileSuffix, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-				if err != nil {
-					return err
-				}
+				//file, err := os.OpenFile(fullPath+"/"+fu.FormattedPath()+IncompleteFileSuffix, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				//if err != nil {
+				//	return err
+				//}
 
-				fileResumeData := NewFileResumeData([]ForkInfoList{*NewForkInfoList(offset)})
+				fileResumeData := NewFileResumeData([]ForkInfoList{NewForkInfoList(offset)})
 
 				b, _ := fileResumeData.BinaryMarshal()
 
@@ -620,7 +606,11 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 					return err
 				}
 
-				if err := receiveFile(rwc, file, io.Discard, io.Discard, fileTransfer.bytesSentCounter); err != nil {
+				hlFile, err := NewFile(fileStore, fullPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0)
+				if err != nil {
+					return err
+				}
+				if err := receiveFile(rwc, hlFile, fileTransfer.bytesSentCounter); err != nil {
 					rLogger.Error(err.Error())
 				}
 
@@ -631,37 +621,19 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 
 			case DlFldrActionSendFile:
 				if _, err := io.ReadFull(rwc, fileSize); err != nil {
-					return err
+					return fmt.Errorf("read incoming file size: %v", err)
 				}
 
 				filePath := filepath.Join(fullPath, fu.FormattedPath())
 
-				hlFile, err := NewFileWrapper(fileStore, filePath, 0)
+				hlFile, err := NewFile(fileStore, filePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, os.O_CREATE|os.O_EXCL|os.O_WRONLY, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0)
 				if err != nil {
 					return err
 				}
 
 				rLogger.Info("Starting file transfer", "path", filePath, "fileNum", i+1, "fileSize", binary.BigEndian.Uint32(fileSize))
 
-				incWriter, err := hlFile.incFileWriter()
-				if err != nil {
-					return err
-				}
-
-				rForkWriter := io.Discard
-				iForkWriter := io.Discard
-				if preserveForks {
-					iForkWriter, err = hlFile.InfoForkWriter()
-					if err != nil {
-						return err
-					}
-
-					rForkWriter, err = hlFile.rsrcForkWriter()
-					if err != nil {
-						return err
-					}
-				}
-				if err := receiveFile(rwc, incWriter, rForkWriter, iForkWriter, fileTransfer.bytesSentCounter); err != nil {
+				if err := receiveFile(rwc, hlFile, fileTransfer.bytesSentCounter); err != nil {
 					return err
 				}
 

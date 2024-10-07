@@ -607,7 +607,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 			"Folder upload started",
 			"dstPath", fullPath,
 			"TransferSize", binary.BigEndian.Uint32(fileTransfer.TransferSize),
-			"FolderItemCount", fileTransfer.FolderItemCount,
+			//"FolderItemCount", fileTransfer.FolderItemCount,
 		)
 
 		err = UploadFolderHandler(rwc, fullPath, fileTransfer, s.FS, rLogger, s.Config.PreserveResourceForks)

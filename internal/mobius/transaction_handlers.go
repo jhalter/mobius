@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/jhalter/mobius/hotline"
 	"golang.org/x/text/encoding/charmap"
 	"io"
@@ -209,10 +210,12 @@ func HandleGetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		return res
 	}
 
-	fw, err := hotline.NewFileWrapper(cc.Server.FS, fullFilePath, 0)
+	fw, err := hotline.NewFile(cc.Server.FS, fullFilePath, os.O_RDONLY, os.O_RDONLY, os.O_RDONLY, 0)
 	if err != nil {
 		return res
 	}
+
+	ffo, _ := fw.FlattenedFileObject()
 
 	encodedName, err := txtEncoder.String(fw.Name)
 	if err != nil {
@@ -221,21 +224,21 @@ func HandleGetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 
 	fields := []hotline.Field{
 		hotline.NewField(hotline.FieldFileName, []byte(encodedName)),
-		hotline.NewField(hotline.FieldFileTypeString, fw.Ffo.FlatFileInformationFork.FriendlyType()),
-		hotline.NewField(hotline.FieldFileCreatorString, fw.Ffo.FlatFileInformationFork.FriendlyCreator()),
-		hotline.NewField(hotline.FieldFileType, fw.Ffo.FlatFileInformationFork.TypeSignature[:]),
-		hotline.NewField(hotline.FieldFileCreateDate, fw.Ffo.FlatFileInformationFork.CreateDate[:]),
-		hotline.NewField(hotline.FieldFileModifyDate, fw.Ffo.FlatFileInformationFork.ModifyDate[:]),
+		hotline.NewField(hotline.FieldFileTypeString, ffo.FlatFileInformationFork.FriendlyType()),
+		hotline.NewField(hotline.FieldFileCreatorString, ffo.FlatFileInformationFork.FriendlyCreator()),
+		hotline.NewField(hotline.FieldFileType, ffo.FlatFileInformationFork.TypeSignature[:]),
+		hotline.NewField(hotline.FieldFileCreateDate, ffo.FlatFileInformationFork.CreateDate[:]),
+		hotline.NewField(hotline.FieldFileModifyDate, ffo.FlatFileInformationFork.ModifyDate[:]),
 	}
 
 	// Include the optional FileComment field if there is a comment.
-	if len(fw.Ffo.FlatFileInformationFork.Comment) != 0 {
-		fields = append(fields, hotline.NewField(hotline.FieldFileComment, fw.Ffo.FlatFileInformationFork.Comment))
+	if len(ffo.FlatFileInformationFork.Comment) != 0 {
+		fields = append(fields, hotline.NewField(hotline.FieldFileComment, ffo.FlatFileInformationFork.Comment))
 	}
 
 	// Include the FileSize field for files.
-	if fw.Ffo.FlatFileInformationFork.TypeSignature != fileTypeFLDR {
-		fields = append(fields, hotline.NewField(hotline.FieldFileSize, fw.TotalSize()))
+	if ffo.FlatFileInformationFork.TypeSignature != fileTypeFLDR {
+		fields = append(fields, hotline.NewField(hotline.FieldFileSize, fw.Size()))
 	}
 
 	res = append(res, cc.NewReply(t, fields...))
@@ -263,10 +266,14 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		return res
 	}
 
-	hlFile, err := hotline.NewFileWrapper(cc.Server.FS, fullFilePath, 0)
+	hlFile, err := hotline.NewFile(cc.Server.FS, fullFilePath, os.O_CREATE|os.O_RDWR, os.O_RDONLY, os.O_RDONLY, 0)
 	if err != nil {
+		cc.Logger.Error("init file", err)
 		return res
 	}
+	ffo, _ := hlFile.FlattenedFileObject()
+	hlFile.Close()
+
 	if t.GetField(hotline.FieldFileComment).Data != nil {
 		switch mode := fi.Mode(); {
 		case mode.IsDir():
@@ -279,26 +286,34 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 			}
 		}
 
-		if err := hlFile.Ffo.FlatFileInformationFork.SetComment(t.GetField(hotline.FieldFileComment).Data); err != nil {
-			return res
-		}
-		w, err := hlFile.InfoForkWriter()
+		ffo.FlatFileInformationFork.Comment = t.GetField(hotline.FieldFileComment).Data
+		binary.BigEndian.PutUint16(
+			ffo.FlatFileInformationFork.CommentSize[:],
+			uint16(len(ffo.FlatFileInformationFork.Comment)),
+		)
+
+		hlFile, err := hotline.NewFile(cc.Server.FS, fullFilePath, 0, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0, 0)
 		if err != nil {
-			return res
+			panic(err)
 		}
-		_, err = io.Copy(w, &hlFile.Ffo.FlatFileInformationFork)
+
+		_, err = io.Copy(hlFile.InfoFork, &ffo.FlatFileInformationFork)
 		if err != nil {
+			cc.Logger.Error("set file comment: %v", err)
 			return res
 		}
 	}
 
 	fullNewFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, t.GetField(hotline.FieldFileNewName).Data)
 	if err != nil {
+		cc.Logger.Error("read path: %v", err)
+
 		return nil
 	}
 
 	fileNewName := t.GetField(hotline.FieldFileNewName).Data
 
+	spew.Dump("fileNewName", fileNewName)
 	if fileNewName != nil {
 		switch mode := fi.Mode(); {
 		case mode.IsDir():
@@ -308,33 +323,38 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 			err = os.Rename(fullFilePath, fullNewFilePath)
 			if os.IsNotExist(err) {
 				return cc.NewErrReply(t, "Cannot rename folder "+string(fileName)+" because it does not exist or cannot be found.")
-
 			}
 		case mode.IsRegular():
 			if !cc.Authorize(hotline.AccessRenameFile) {
 				return cc.NewErrReply(t, "You are not allowed to rename files.")
 			}
+			spew.Dump("🥓")
 			fileDir, err := hotline.ReadPath(cc.FileRoot(), filePath, []byte{})
 			if err != nil {
+				cc.Logger.Error("Error reading path", "err", err)
+
 				return nil
 			}
-			hlFile.Name, err = txtDecoder.String(string(fileNewName))
+			newName, err := txtDecoder.String(string(fileNewName))
 			if err != nil {
+				cc.Logger.Error("Error decoding string", "err", err)
 				return res
 			}
+			spew.Dump("🥓🥓🥓")
 
-			err = hlFile.Move(fileDir)
+			err = hlFile.Move(filepath.Join(fileDir, newName))
+			spew.Dump(err)
 			if os.IsNotExist(err) {
 				return cc.NewErrReply(t, "Cannot rename file "+string(fileName)+" because it does not exist or cannot be found.")
 			}
 			if err != nil {
+				cc.Logger.Error("Error moving file", "err", err)
 				return res
 			}
 		}
 	}
 
-	res = append(res, cc.NewReply(t))
-	return res
+	return append(res, cc.NewReply(t))
 }
 
 // HandleDeleteFile deletes a file or folder
@@ -351,12 +371,12 @@ func HandleDeleteFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 		return res
 	}
 
-	hlFile, err := hotline.NewFileWrapper(cc.Server.FS, fullFilePath, 0)
+	hlFile, err := hotline.NewFile(cc.Server.FS, fullFilePath, os.O_EXCL, 0, 0, 0)
 	if err != nil {
 		return res
 	}
 
-	fi, err := hlFile.DataFile()
+	fi, err := hlFile.Stat()
 	if err != nil {
 		return cc.NewErrReply(t, "Cannot delete file "+string(fileName)+" because it does not exist or cannot be found.")
 	}
@@ -394,16 +414,17 @@ func HandleMoveFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 		return res
 	}
 
-	cc.Logger.Info("Move file", "src", filePath+"/"+fileName, "dst", fileNewPath+"/"+fileName)
+	cc.Logger.Info("Move file", "src", filePath, "dst", fileNewPath+"/"+fileName)
 
-	hlFile, err := hotline.NewFileWrapper(cc.Server.FS, filePath, 0)
+	hlFile, err := hotline.NewFile(cc.Server.FS, filePath, os.O_RDWR, os.O_RDWR, os.O_RDWR, 0)
 	if err != nil {
+		cc.Logger.Error(err.Error())
 		return res
 	}
 
-	fi, err := hlFile.DataFile()
+	fi, err := hlFile.Stat()
 	if err != nil {
-		return cc.NewErrReply(t, "Cannot delete file "+fileName+" because it does not exist or cannot be found.")
+		return cc.NewErrReply(t, "Cannot move file "+fileName+" because it does not exist or cannot be found.")
 	}
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
@@ -415,8 +436,10 @@ func HandleMoveFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 			return cc.NewErrReply(t, "You are not allowed to move files.")
 		}
 	}
-	if err := hlFile.Move(fileNewPath); err != nil {
-		return res
+	if err := hlFile.Move(filepath.Join(fileNewPath, hlFile.Name)); err != nil {
+		cc.Logger.Error("File move failed", "err", err.Error())
+
+		return cc.NewErrReply(t, err.Error())
 	}
 	// TODO: handle other possible errors; e.g. file delete fails due to permission issue
 
@@ -1286,12 +1309,14 @@ func HandleDownloadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 		return res
 	}
 
-	hlFile, err := hotline.NewFileWrapper(cc.Server.FS, fullFilePath, dataOffset)
+	hlFile, err := hotline.NewFile(cc.Server.FS, fullFilePath, 0, 0, 0, dataOffset)
 	if err != nil {
 		return res
 	}
 
-	xferSize := hlFile.Ffo.TransferSize(0)
+	ffo, _ := hlFile.FlattenedFileObject()
+
+	xferSize := ffo.TransferSize(0)
 
 	ft := cc.NewFileTransfer(
 		hotline.FileDownload,
@@ -1314,14 +1339,14 @@ func HandleDownloadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 	// The value will always be 2
 	if t.GetField(hotline.FieldFileTransferOptions).Data != nil {
 		ft.Options = t.GetField(hotline.FieldFileTransferOptions).Data
-		xferSize = hlFile.Ffo.FlatFileDataForkHeader.DataSize[:]
+		xferSize = ffo.FlatFileDataForkHeader.DataSize[:]
 	}
 
 	res = append(res, cc.NewReply(t,
 		hotline.NewField(hotline.FieldRefNum, ft.RefNum[:]),
 		hotline.NewField(hotline.FieldWaitingCount, []byte{0x00, 0x00}), // TODO: Implement waiting count
 		hotline.NewField(hotline.FieldTransferSize, xferSize),
-		hotline.NewField(hotline.FieldFileSize, hlFile.Ffo.FlatFileDataForkHeader.DataSize[:]),
+		hotline.NewField(hotline.FieldFileSize, ffo.FlatFileDataForkHeader.DataSize[:]),
 	))
 
 	return res
@@ -1456,7 +1481,7 @@ func HandleUploadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 		binary.BigEndian.PutUint32(offset, uint32(fileInfo.Size()))
 
 		fileResumeData := hotline.NewFileResumeData([]hotline.ForkInfoList{
-			*hotline.NewForkInfoList(offset),
+			hotline.NewForkInfoList(offset),
 		})
 
 		b, _ := fileResumeData.BinaryMarshal()
@@ -1541,6 +1566,7 @@ func HandleGetFileNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res 
 		return cc.NewErrReply(t, "You are not allowed to view drop boxes.")
 	}
 
+	spew.Dump(fullPath)
 	fileNames, err := hotline.GetFileNameList(fullPath, cc.Server.Config.IgnoreFiles)
 	if err != nil {
 		return res
