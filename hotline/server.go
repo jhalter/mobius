@@ -603,10 +603,20 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 			s.Stats.Decrement(StatUploadsInProgress)
 		}()
 
+		var transferSizeValue uint32
+		switch len(fileTransfer.TransferSize) {
+			case 2: // 16-bit
+				transferSizeValue = uint32(binary.BigEndian.Uint16(fileTransfer.TransferSize))
+			case 4: // 32-bit
+				transferSizeValue = binary.BigEndian.Uint32(fileTransfer.TransferSize)
+			default:
+				rLogger.Warn("Unexpected TransferSize length: %d bytes", len(fileTransfer.TransferSize))
+		}
+
 		rLogger.Info(
 			"Folder upload started",
 			"dstPath", fullPath,
-			"TransferSize", binary.BigEndian.Uint32(fileTransfer.TransferSize),
+			"TransferSize", transferSizeValue,
 			"FolderItemCount", fileTransfer.FolderItemCount,
 		)
 
