@@ -3,10 +3,9 @@ package mobius
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/jhalter/mobius/hotline"
-	"golang.org/x/text/encoding/charmap"
 	"io"
 	"math/big"
 	"os"
@@ -14,7 +13,18 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/jhalter/mobius/hotline"
+	"golang.org/x/text/encoding/charmap"
 )
+
+// This function is used to extract the IP address from a given address string, exluding the port.
+func extractIP(addr string) string {
+	if idx := strings.LastIndex(addr, ":"); idx != -1 {
+		return addr[:idx]
+	}
+	return addr
+}
 
 // Converts bytes from Mac Roman encoding to UTF-8
 var txtDecoder = charmap.Macintosh.NewDecoder()
@@ -852,6 +862,27 @@ func HandleTranAgreed(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 		}
 	}
 
+	if cc.Server.Redis != nil {
+		login := cc.Account.Login
+		ip := extractIP(cc.RemoteAddr)
+		// Remove old entry (login::ip)
+		cc.Server.Redis.SRem(context.Background(), "mobius:online", login+"::"+ip)
+		// Add new entry with login, nickname, ip
+		cc.Server.Redis.SAdd(context.Background(), "mobius:online", login+":"+string(cc.UserName)+":"+ip)
+		// Ban check for nickname
+		bannedNick, _ := cc.Server.Redis.SIsMember(context.Background(), "mobius:banned:nicknames", string(cc.UserName)).Result()
+		if bannedNick {
+			// Remove all possible online entries for this login and IP
+			cc.Server.Redis.SRem(context.Background(), "mobius:online", login+"::"+ip)
+			cc.Server.Redis.SRem(context.Background(), "mobius:online", login+":"+string(cc.UserName)+":"+ip)
+			// If we track the previous nickname, remove that too:
+			// cc.Server.Redis.SRem(context.Background(), "mobius:online", login+":"+oldNickname+":"+ip)
+			cc.Server.Redis.SAdd(context.Background(), "mobius:banned:ips", ip)
+			cc.Disconnect()
+			return res
+		}
+	}
+
 	cc.Icon = t.GetField(hotline.FieldUserIconID).Data
 
 	cc.Logger = cc.Logger.With("Name", string(cc.UserName))
@@ -1477,7 +1508,33 @@ func HandleSetClientUserInfo(cc *hotline.ClientConn, t *hotline.Transaction) (re
 		cc.Icon = t.GetField(hotline.FieldUserIconID).Data
 	}
 	if cc.Authorize(hotline.AccessAnyName) {
+		oldNickname := string(cc.UserName)
+		newNickname := string(t.GetField(hotline.FieldUserName).Data)
 		cc.UserName = t.GetField(hotline.FieldUserName).Data
+		if cc.Server.Redis != nil {
+			login := cc.Account.Login
+			ip := extractIP(cc.RemoteAddr)
+			// Remove old entry (login:oldnickname:ip) and (login::ip)
+			cc.Server.Redis.SRem(context.Background(), "mobius:online", login+"::"+ip)
+			if oldNickname != "" {
+				cc.Server.Redis.SRem(context.Background(), "mobius:online", login+":"+oldNickname+":"+ip)
+			}
+			// Add new entry
+			cc.Server.Redis.SAdd(context.Background(), "mobius:online", login+":"+newNickname+":"+ip)
+			// Ban check for nickname
+			bannedNick, _ := cc.Server.Redis.SIsMember(context.Background(), "mobius:banned:nicknames", newNickname).Result()
+			if bannedNick {
+				// Remove all possible online entries for this login and IP
+				cc.Server.Redis.SRem(context.Background(), "mobius:online", login+"::"+ip)
+				cc.Server.Redis.SRem(context.Background(), "mobius:online", login+":"+newNickname+":"+ip)
+				if oldNickname != "" {
+					cc.Server.Redis.SRem(context.Background(), "mobius:online", login+":"+oldNickname+":"+ip)
+				}
+				cc.Server.Redis.SAdd(context.Background(), "mobius:banned:ips", ip)
+				cc.Disconnect()
+				return res
+			}
+		}
 	}
 
 	// the options field is only passed by the client versions > 1.2.3.
