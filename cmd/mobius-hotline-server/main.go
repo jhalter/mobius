@@ -5,9 +5,6 @@ import (
 	"embed"
 	"flag"
 	"fmt"
-	"github.com/jhalter/mobius/hotline"
-	"github.com/jhalter/mobius/internal/mobius"
-	"github.com/oleksandr/bonjour"
 	"io"
 	"log"
 	"os"
@@ -15,6 +12,10 @@ import (
 	"path"
 	"path/filepath"
 	"syscall"
+
+	"github.com/jhalter/mobius/hotline"
+	"github.com/jhalter/mobius/internal/mobius"
+	"github.com/oleksandr/bonjour"
 )
 
 //go:embed mobius/config
@@ -35,6 +36,10 @@ func main() {
 	netInterface := flag.String("interface", "", "IP addr of interface to listen on.  Defaults to all interfaces.")
 	basePort := flag.Int("bind", 5500, "Base Hotline server port.  File transfer port is base port + 1.")
 	apiAddr := flag.String("api-addr", "", "Enable HTTP API endpoint on address and port")
+	apiKey := flag.String("api-key", "", "API key required for HTTP API authentication")
+	redisAddr := flag.String("redis-addr", "", "Redis server address for API features")
+	redisPassword := flag.String("redis-password", "", "Redis password, if required")
+	redisDB := flag.Int("redis-db", 0, "Redis DB number, defaults to 0")
 	configDir := flag.String("config", configSearchPaths(), "Path to config root")
 	printVersion := flag.Bool("version", false, "Print version and exit")
 	logLevel := flag.String("log-level", "info", "Log level")
@@ -139,10 +144,17 @@ func main() {
 			slogger.Error(fmt.Sprintf("Error reloading agreement: %v", err))
 			os.Exit(1)
 		}
+
+		// Let's try to reload the banner
+		bannerPath := filepath.Join(*configDir, config.BannerFile)
+		srv.Banner, err = os.ReadFile(bannerPath)
+		if err != nil {
+			slogger.Error(fmt.Sprintf("Error reloading banner: %v", err))
+		}
 	}
 
 	if *apiAddr != "" {
-		sh := mobius.NewAPIServer(srv, reloadFunc, slogger)
+		sh := mobius.NewAPIServer(srv, reloadFunc, slogger, *apiKey, *redisAddr, *redisPassword, *redisDB)
 		go sh.Serve(*apiAddr)
 	}
 
