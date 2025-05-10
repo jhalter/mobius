@@ -8,8 +8,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"golang.org/x/text/encoding/charmap"
-	"golang.org/x/time/rate"
 	"io"
 	"log"
 	"log/slog"
@@ -18,6 +16,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/redis/go-redis/v9"
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/time/rate"
 )
 
 type contextKey string
@@ -64,6 +66,8 @@ type Server struct {
 	BanList         BanMgr
 
 	MessageBoard io.ReadWriteSeeker
+
+	Redis *redis.Client
 }
 
 type Option = func(s *Server)
@@ -269,33 +273,57 @@ func (s *Server) registerWithTrackers(ctx context.Context) {
 		s.Logger.Info("Tracker registration enabled", "trackers", s.Config.Trackers)
 	}
 
+	// Do the first registration immediately
+	if s.Config.EnableTrackerRegistration {
+		for _, t := range s.Config.Trackers {
+			tr := &TrackerRegistration{
+				UserCount:   len(s.ClientMgr.List()),
+				PassID:      s.TrackerPassID,
+				Name:        s.Config.Name,
+				Description: s.Config.Description,
+			}
+			binary.BigEndian.PutUint16(tr.Port[:], uint16(s.Port))
+
+			splitAddr := strings.Split(":", t)
+			if len(splitAddr) == 3 {
+				tr.Password = splitAddr[2]
+			}
+
+			if err := register(&RealDialer{}, t, tr); err != nil {
+				s.Logger.Error(fmt.Sprintf("Unable to register with tracker %v", t), "error", err)
+			}
+		}
+	}
+
+	ticker := time.NewTicker(trackerUpdateFrequency * time.Second)
+	defer ticker.Stop()
+
 	for {
-		if s.Config.EnableTrackerRegistration {
-			for _, t := range s.Config.Trackers {
-				tr := &TrackerRegistration{
-					UserCount:   len(s.ClientMgr.List()),
-					PassID:      s.TrackerPassID,
-					Name:        s.Config.Name,
-					Description: s.Config.Description,
-				}
-				binary.BigEndian.PutUint16(tr.Port[:], uint16(s.Port))
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if s.Config.EnableTrackerRegistration {
+				for _, t := range s.Config.Trackers {
+					tr := &TrackerRegistration{
+						UserCount:   len(s.ClientMgr.List()),
+						PassID:      s.TrackerPassID,
+						Name:        s.Config.Name,
+						Description: s.Config.Description,
+					}
+					binary.BigEndian.PutUint16(tr.Port[:], uint16(s.Port))
 
-				// Check the tracker string for a password.  This is janky but avoids a breaking change to the Config
-				// Trackers field.
-				splitAddr := strings.Split(":", t)
-				if len(splitAddr) == 3 {
-					tr.Password = splitAddr[2]
-				}
+					splitAddr := strings.Split(":", t)
+					if len(splitAddr) == 3 {
+						tr.Password = splitAddr[2]
+					}
 
-				if err := register(&RealDialer{}, t, tr); err != nil {
-					s.Logger.Error(fmt.Sprintf("Unable to register with tracker %v", t), "error", err)
+					if err := register(&RealDialer{}, t, tr); err != nil {
+						s.Logger.Error(fmt.Sprintf("Unable to register with tracker %v", t), "error", err)
+					}
 				}
 			}
 		}
-		// Using time.Ticker with for/select would be more idiomatic, but it's super annoying that it doesn't tick on
-		// first pass.  Revist, maybe.
-		// https://github.com/golang/go/issues/17601
-		time.Sleep(trackerUpdateFrequency * time.Second)
 	}
 }
 
@@ -372,24 +400,6 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		return fmt.Errorf("perform handshake: %w", err)
 	}
 
-	// Check if remoteAddr is present in the ban list
-	ipAddr := strings.Split(remoteAddr, ":")[0]
-	if isBanned, banUntil := s.BanList.IsBanned(ipAddr); isBanned {
-		// permaban
-		if banUntil == nil {
-			sendBanMessage(rwc, "You are permanently banned on this server")
-			s.Logger.Debug("Disconnecting permanently banned IP", "remoteAddr", ipAddr)
-			return nil
-		}
-
-		// temporary ban
-		if time.Now().Before(*banUntil) {
-			sendBanMessage(rwc, "You are temporarily banned on this server")
-			s.Logger.Debug("Disconnecting temporarily banned IP", "remoteAddr", ipAddr)
-			return nil
-		}
-	}
-
 	// Create a new scanner for parsing incoming bytes into transaction tokens
 	scanner := bufio.NewScanner(rwc)
 	scanner.Split(transactionScanner)
@@ -406,16 +416,65 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		return fmt.Errorf("error writing login transaction: %w", err)
 	}
 
-	c := s.NewClientConn(rwc, remoteAddr)
-	defer c.Disconnect()
-
-	encodedPassword := clientLogin.GetField(FieldUserPassword).Data
-	c.Version = clientLogin.GetField(FieldVersion).Data
-
 	login := clientLogin.GetField(FieldUserLogin).DecodeObfuscatedString()
 	if login == "" {
 		login = GuestAccount
 	}
+
+	// Check if remoteAddr is present in the ban list, we do this after we have the login name
+	ipAddr := strings.Split(remoteAddr, ":")[0]
+	if s.Redis != nil {
+		// Redis-based ban check
+		bannedUser, _ := s.Redis.SIsMember(ctx, "mobius:banned:users", login).Result()
+		bannedIP, _ := s.Redis.SIsMember(ctx, "mobius:banned:ips", ipAddr).Result()
+		if bannedUser {
+			s.Redis.SAdd(ctx, "mobius:banned:ips", ipAddr)
+			sendBanMessage(rwc, "You are banned on this server")
+			s.Logger.Debug("Disconnecting banned user", "login", login, "ip", ipAddr)
+			return nil
+		}
+		if bannedIP {
+			sendBanMessage(rwc, "You are banned on this server")
+			s.Logger.Debug("Disconnecting banned IP", "ip", ipAddr)
+			return nil
+		}
+	} else {
+		// Fallback to in-memory ban list
+		if isBanned, banUntil := s.BanList.IsBanned(ipAddr); isBanned {
+			// permaban
+			if banUntil == nil {
+				sendBanMessage(rwc, "You are permanently banned on this server")
+				s.Logger.Debug("Disconnecting permanently banned IP", "remoteAddr", ipAddr)
+				return nil
+			}
+			// temporary ban
+			if time.Now().Before(*banUntil) {
+				sendBanMessage(rwc, "You are temporarily banned on this server")
+				s.Logger.Debug("Disconnecting temporarily banned IP", "remoteAddr", ipAddr)
+				return nil
+			}
+		}
+	}
+
+	c := s.NewClientConn(rwc, remoteAddr)
+	// Add the client to the list of connected clients
+	if s.Redis != nil {
+		s.Redis.SAdd(context.Background(), "mobius:online", login+"::"+ipAddr)
+	}
+
+	// Remove the client from the list of connected clients when they disconnect
+	defer func() {
+		if s.Redis != nil {
+			s.Redis.SRem(context.Background(), "mobius:online", login+"::"+ipAddr)
+			if len(c.UserName) != 0 {
+				s.Redis.SRem(context.Background(), "mobius:online", login+":"+string(c.UserName)+":"+ipAddr)
+			}
+		}
+		c.Disconnect()
+	}()
+
+	encodedPassword := clientLogin.GetField(FieldUserPassword).Data
+	c.Version = clientLogin.GetField(FieldVersion).Data
 
 	c.Logger = s.Logger.With("ip", ipAddr, "login", login)
 
@@ -485,6 +544,14 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		// part of TranAgreed
 		c.Logger = c.Logger.With("name", string(c.UserName))
 		c.Logger.Info("Login successful")
+
+		// Update the Redis set with the new information
+		if s.Redis != nil && len(c.UserName) != 0 {
+			// Remove old entry (login::ip)
+			s.Redis.SRem(context.Background(), "mobius:online", login+"::"+ipAddr)
+			// Add new entry with login, nickname, ip
+			s.Redis.SAdd(context.Background(), "mobius:online", login+":"+string(c.UserName)+":"+ipAddr)
+		}
 
 		// Notify other clients on the server that the new user has logged in.  For 1.5+ clients we don't have this
 		// information yet, so we do it in TranAgreed instead
@@ -605,12 +672,12 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 
 		var transferSizeValue uint32
 		switch len(fileTransfer.TransferSize) {
-			case 2: // 16-bit
-				transferSizeValue = uint32(binary.BigEndian.Uint16(fileTransfer.TransferSize))
-			case 4: // 32-bit
-				transferSizeValue = binary.BigEndian.Uint32(fileTransfer.TransferSize)
-			default:
-				rLogger.Warn("Unexpected TransferSize length: %d bytes", len(fileTransfer.TransferSize))
+		case 2: // 16-bit
+			transferSizeValue = uint32(binary.BigEndian.Uint16(fileTransfer.TransferSize))
+		case 4: // 32-bit
+			transferSizeValue = binary.BigEndian.Uint32(fileTransfer.TransferSize)
+		default:
+			rLogger.Warn("Unexpected TransferSize length", "bytes", len(fileTransfer.TransferSize))
 		}
 
 		rLogger.Info(
