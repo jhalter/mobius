@@ -318,15 +318,16 @@ func UploadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfe
 	if err == nil {
 		return fmt.Errorf("existing file found: %s", fullPath)
 	}
-	if errors.Is(err, fs.ErrNotExist) {
-		// If not found, open or create a new .incomplete file
-		file, err = os.OpenFile(fullPath+IncompleteFileSuffix, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-		if err != nil {
-			return err
-		}
+
+	if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("check file existence: %w", err)
 	}
 
-	defer file.Close()
+	// If not found, open or create a new .incomplete file
+	file, err = os.OpenFile(fullPath+IncompleteFileSuffix, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("open temp file for uploade: %w", err)
+	}
 
 	f, err := NewFileWrapper(fileStore, fullPath, 0)
 	if err != nil {
@@ -350,9 +351,16 @@ func UploadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfe
 	}
 
 	if err := receiveFile(rwc, file, rForkWriter, iForkWriter, fileTransfer.bytesSentCounter); err != nil {
+		_ = file.Close() // Close on error
 		return fmt.Errorf("receive file: %v", err)
 	}
 
+	// Close the file before attempting to rename it.
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close file: %v", err)
+	}
+
+	// Rename the temporary upload file to the final file name.
 	if err := fileStore.Rename(fullPath+".incomplete", fullPath); err != nil {
 		return fmt.Errorf("rename incomplete file: %v", err)
 	}
@@ -665,6 +673,12 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 					return err
 				}
 
+				// Close the file before attempting to rename it.
+				if err := incWriter.Close(); err != nil {
+					return fmt.Errorf("close file: %v", err)
+				}
+
+				// Rename the temporary upload file to the final file name.
 				if err := os.Rename(filePath+".incomplete", filePath); err != nil {
 					return err
 				}
