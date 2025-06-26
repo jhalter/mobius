@@ -27,3 +27,6 @@ dist/*
 
 # Ignore the bind mounted config directory
 config/*
+
+# Claude Code IDE files
+.claude
