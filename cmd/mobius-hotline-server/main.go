@@ -40,7 +40,7 @@ func main() {
 	redisAddr := flag.String("redis-addr", "", "Redis server address for API features")
 	redisPassword := flag.String("redis-password", "", "Redis password, if required")
 	redisDB := flag.Int("redis-db", 0, "Redis DB number, defaults to 0")
-	configDir := flag.String("config", configSearchPaths(), "Path to config root")
+	configDir := flag.String("config", findConfigPath(), "Path to config root")
 	printVersion := flag.Bool("version", false, "Print version and exit")
 	logLevel := flag.String("log-level", "info", "Log level")
 	logFile := flag.String("log-file", "", "Path to log file")
@@ -192,60 +192,72 @@ func main() {
 	log.Fatal(srv.ListenAndServe(ctx))
 }
 
-func configSearchPaths() string {
+// findConfigPath searches for an existing config directory from the predefined search order.
+// Returns the first directory that exists, or falls back to "config" as the default.
+func findConfigPath() string {
 	for _, cfgPath := range mobius.ConfigSearchOrder {
-		if _, err := os.Stat(cfgPath); err == nil {
+		if info, err := os.Stat(cfgPath); err == nil && info.IsDir() {
 			return cfgPath
 		}
 	}
 
+	// Default fallback - will be created by --init flag if needed
 	return "config"
 }
 
-// copyDir recursively copies a directory tree, attempting to preserve permissions.
+// copyDir recursively copies a directory tree from embedded filesystem to local filesystem.
 func copyDir(src, dst string) error {
+	return copyDirRecursive(src, dst)
+}
+
+// copyDirRecursive handles the recursive copying logic.
+func copyDirRecursive(src, dst string) error {
 	entries, err := cfgTemplate.ReadDir(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read source directory %s: %w", src, err)
 	}
-	for _, dirEntry := range entries {
-		if dirEntry.IsDir() {
-			if err := os.MkdirAll(path.Join(dst, dirEntry.Name()), 0777); err != nil {
-				panic(err)
-			}
-			subdirEntries, _ := cfgTemplate.ReadDir(path.Join(src, dirEntry.Name()))
-			for _, subDirEntry := range subdirEntries {
-				f, err := os.Create(path.Join(dst, dirEntry.Name(), subDirEntry.Name()))
-				if err != nil {
-					return err
-				}
 
-				srcFile, err := cfgTemplate.Open(path.Join(src, dirEntry.Name(), subDirEntry.Name()))
-				if err != nil {
-					return fmt.Errorf("error copying srcFile: %w", err)
-				}
-				_, err = io.Copy(f, srcFile)
-				if err != nil {
-					return err
-				}
-				_ = f.Close()
+	for _, entry := range entries {
+		srcPath := path.Join(src, entry.Name())
+		dstPath := path.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			// Create directory with proper permissions
+			if err := os.MkdirAll(dstPath, 0755); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", dstPath, err)
+			}
+			
+			// Recursively copy subdirectory
+			if err := copyDirRecursive(srcPath, dstPath); err != nil {
+				return fmt.Errorf("failed to copy subdirectory %s: %w", srcPath, err)
 			}
 		} else {
-			f, err := os.Create(path.Join(dst, dirEntry.Name()))
-			if err != nil {
-				return err
+			// Copy file
+			if err := copyFile(srcPath, dstPath); err != nil {
+				return fmt.Errorf("failed to copy file %s to %s: %w", srcPath, dstPath, err)
 			}
-
-			srcFile, err := cfgTemplate.Open(path.Join(src, dirEntry.Name()))
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(f, srcFile)
-			if err != nil {
-				return err
-			}
-			_ = f.Close()
 		}
+	}
+
+	return nil
+}
+
+// copyFile copies a single file from embedded filesystem to local filesystem.
+func copyFile(src, dst string) error {
+	srcFile, err := cfgTemplate.Open(src)
+	if err != nil {
+		return fmt.Errorf("failed to open source file: %w", err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("failed to create destination file: %w", err)
+	}
+	defer dstFile.Close()
+
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return fmt.Errorf("failed to copy file contents: %w", err)
 	}
 
 	return nil
