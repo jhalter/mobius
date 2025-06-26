@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"os"
-	"path/filepath"
+	"path"
 	"sync"
 	"testing"
 	"time"
@@ -26,9 +26,9 @@ func TestNewBanFile(t *testing.T) {
 	}{
 		{
 			name: "Valid path with valid content",
-			args: args{path: filepath.Join(cwd, "test", "config", "Banlist.yaml")},
+			args: args{path: path.Join(cwd, "test", "config", "Banlist.yaml")},
 			want: &BanFile{
-				filePath: filepath.Join(cwd, "test", "config", "Banlist.yaml"),
+				filePath: path.Join(cwd, "test", "config", "Banlist.yaml"),
 				banList:  map[string]*time.Time{"192.168.86.29": &testTime},
 			},
 			wantErr: assert.NoError,
@@ -55,7 +55,7 @@ func TestAdd(t *testing.T) {
 	defer os.RemoveAll(tmpDir) // Clean up the temporary directory.
 
 	// Path to the temporary ban file.
-	tmpFilePath := filepath.Join(tmpDir, "banfile.yaml")
+	tmpFilePath := path.Join(tmpDir, "banfile.yaml")
 
 	// Initialize BanFile.
 	bf := &BanFile{

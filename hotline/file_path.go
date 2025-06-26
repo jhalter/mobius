@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
+	"path"
 	"strings"
 )
 
@@ -112,13 +112,13 @@ func ReadPath(fileRoot string, filePath, fileName []byte) (fullPath string, err 
 
 	var subPath string
 	for _, pathItem := range fp.Items {
-		subPath = filepath.Join("/", subPath, string(pathItem.Name))
+		subPath = path.Join("/", subPath, string(pathItem.Name))
 	}
 
-	fullPath = filepath.Join(
+	fullPath = path.Join(
 		fileRoot,
 		subPath,
-		filepath.Join("/", string(fileName)),
+		path.Join("/", string(fileName)),
 	)
 	fullPath, err = txtDecoder.String(fullPath)
 	if err != nil {

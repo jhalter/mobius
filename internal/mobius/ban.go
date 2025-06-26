@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"os"
-	"path/filepath"
+	"path"
 	"sync"
 	"time"
 )
@@ -64,7 +64,7 @@ func (bf *BanFile) Add(ip string, until *time.Time) error {
 		return fmt.Errorf("marshal yaml: %v", err)
 	}
 
-	err = os.WriteFile(filepath.Join(bf.filePath), out, 0644)
+	err = os.WriteFile(path.Join(bf.filePath), out, 0644)
 	if err != nil {
 		return fmt.Errorf("write file: %v", err)
 	}

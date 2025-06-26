@@ -37,7 +37,7 @@ func NewYAMLAccountManager(accountDir string) (*YAMLAccountManager, error) {
 		accounts:   make(map[string]hotline.Account),
 	}
 
-	matches, err := filepath.Glob(filepath.Join(accountDir, "*.yaml"))
+	matches, err := filepath.Glob(path.Join(accountDir, "*.yaml"))
 	if err != nil {
 		return nil, fmt.Errorf("list account files: %w", err)
 	}
@@ -77,7 +77,7 @@ func (am *YAMLAccountManager) Create(account hotline.Account) error {
 
 	// Create account file, returning an error if one already exists.
 	file, err := os.OpenFile(
-		filepath.Join(am.accountDir, path.Join("/", account.Login+".yaml")),
+		path.Join(am.accountDir, path.Join("/", account.Login+".yaml")),
 		os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644,
 	)
 	if err != nil {
@@ -107,8 +107,8 @@ func (am *YAMLAccountManager) Update(account hotline.Account, newLogin string) e
 	// If the login has changed, rename the account file.
 	if account.Login != newLogin {
 		err := os.Rename(
-			filepath.Join(am.accountDir, path.Join("/", account.Login)+".yaml"),
-			filepath.Join(am.accountDir, path.Join("/", newLogin)+".yaml"),
+			path.Join(am.accountDir, path.Join("/", account.Login)+".yaml"),
+			path.Join(am.accountDir, path.Join("/", newLogin)+".yaml"),
 		)
 		if err != nil {
 			return fmt.Errorf("error renaming account file: %w", err)
@@ -124,7 +124,7 @@ func (am *YAMLAccountManager) Update(account hotline.Account, newLogin string) e
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(am.accountDir, newLogin+".yaml"), out, 0644); err != nil {
+	if err := os.WriteFile(path.Join(am.accountDir, newLogin+".yaml"), out, 0644); err != nil {
 		return fmt.Errorf("error writing account file: %w", err)
 	}
 
@@ -161,7 +161,7 @@ func (am *YAMLAccountManager) Delete(login string) error {
 	am.mu.Lock()
 	defer am.mu.Unlock()
 
-	err := os.Remove(filepath.Join(am.accountDir, path.Join("/", login+".yaml")))
+	err := os.Remove(path.Join(am.accountDir, path.Join("/", login+".yaml")))
 	if err != nil {
 		return fmt.Errorf("delete account file: %v", err)
 	}

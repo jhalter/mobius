@@ -2,7 +2,7 @@ package main
 
 import (
 	"os"
-	"path/filepath"
+	"path"
 	"testing"
 
 	"github.com/jhalter/mobius/internal/mobius"
@@ -30,7 +30,7 @@ func TestCopyDir(t *testing.T) {
 	}
 
 	for _, expectedFile := range expectedFiles {
-		fullPath := filepath.Join(dstDir, expectedFile)
+		fullPath := path.Join(dstDir, expectedFile)
 		assert.FileExists(t, fullPath, "Expected file %s to exist", expectedFile)
 		
 		// Verify file is not empty
@@ -46,7 +46,7 @@ func TestCopyDir(t *testing.T) {
 	}
 
 	for _, expectedDir := range expectedDirs {
-		fullPath := filepath.Join(dstDir, expectedDir)
+		fullPath := path.Join(dstDir, expectedDir)
 		info, err := os.Stat(fullPath)
 		require.NoError(t, err)
 		assert.True(t, info.IsDir(), "Expected %s to be a directory", expectedDir)
@@ -69,11 +69,11 @@ func TestCopyDirRecursive(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify nested structure is copied correctly
-	nestedPath := filepath.Join(dstDir, "Users", "admin.yaml")
+	nestedPath := path.Join(dstDir, "Users", "admin.yaml")
 	assert.FileExists(t, nestedPath)
 	
 	// Verify nested Files directory
-	filesDir := filepath.Join(dstDir, "Files")
+	filesDir := path.Join(dstDir, "Files")
 	info, err := os.Stat(filesDir)
 	require.NoError(t, err)
 	assert.True(t, info.IsDir())
@@ -81,7 +81,7 @@ func TestCopyDirRecursive(t *testing.T) {
 
 func TestCopyFile(t *testing.T) {
 	dstDir := t.TempDir()
-	dstFile := filepath.Join(dstDir, "copied.yaml")
+	dstFile := path.Join(dstDir, "copied.yaml")
 
 	// Copy a single file from embedded config
 	err := copyFile("mobius/config/config.yaml", dstFile)
@@ -99,7 +99,7 @@ func TestCopyFile(t *testing.T) {
 func TestCopyFileErrors(t *testing.T) {
 	t.Run("source file does not exist", func(t *testing.T) {
 		dstDir := t.TempDir()
-		err := copyFile("nonexistent.txt", filepath.Join(dstDir, "dest.txt"))
+		err := copyFile("nonexistent.txt", path.Join(dstDir, "dest.txt"))
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to open source file")
 	})
@@ -118,7 +118,7 @@ func TestCopyDirPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check directory permissions
-	info, err := os.Stat(filepath.Join(dstDir, "Users"))
+	info, err := os.Stat(path.Join(dstDir, "Users"))
 	require.NoError(t, err)
 	assert.True(t, info.IsDir())
 	

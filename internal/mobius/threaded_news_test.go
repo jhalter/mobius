@@ -5,7 +5,7 @@ import (
 	"github.com/jhalter/mobius/hotline"
 	"github.com/stretchr/testify/assert"
 	"os"
-	"path/filepath"
+	"path"
 	"sync"
 	"testing"
 )
@@ -164,7 +164,7 @@ func TestThreadedNewsYAML_CreateGrouping(t *testing.T) {
 	defer os.RemoveAll(tmpDir) // Clean up the temporary directory.
 
 	// Path to the temporary ban file.
-	tmpFilePath := filepath.Join(tmpDir, "ThreadedNews.yaml")
+	tmpFilePath := path.Join(tmpDir, "ThreadedNews.yaml")
 
 	type fields struct {
 		ThreadedNews hotline.ThreadedNews

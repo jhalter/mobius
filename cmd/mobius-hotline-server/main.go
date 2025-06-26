@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"path/filepath"
 	"syscall"
 
 	"github.com/jhalter/mobius/hotline"
@@ -108,7 +107,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv.AccountManager, err = mobius.NewYAMLAccountManager(filepath.Join(*configDir, "Users/"))
+	srv.AccountManager, err = mobius.NewYAMLAccountManager(path.Join(*configDir, "Users/"))
 	if err != nil {
 		slogger.Error(fmt.Sprintf("Error loading accounts: %v", err))
 		os.Exit(1)
@@ -120,7 +119,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	bannerPath := filepath.Join(*configDir, config.BannerFile)
+	bannerPath := path.Join(*configDir, config.BannerFile)
 	srv.Banner, err = os.ReadFile(bannerPath)
 	if err != nil {
 		slogger.Error(fmt.Sprintf("Error loading accounts: %v", err))
@@ -146,7 +145,7 @@ func main() {
 		}
 
 		// Let's try to reload the banner
-		bannerPath := filepath.Join(*configDir, config.BannerFile)
+		bannerPath := path.Join(*configDir, config.BannerFile)
 		srv.Banner, err = os.ReadFile(bannerPath)
 		if err != nil {
 			slogger.Error(fmt.Sprintf("Error reloading banner: %v", err))

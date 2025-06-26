@@ -10,7 +10,6 @@ import (
 	"math/big"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -453,7 +452,7 @@ func HandleNewFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 		}
 
 		for _, pathItem := range newFp.Items {
-			subPath = filepath.Join("/", subPath, string(pathItem.Name))
+			subPath = path.Join("/", subPath, string(pathItem.Name))
 		}
 	}
 	newFolderPath := path.Join(cc.FileRoot(), subPath, folderName)

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"math"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -200,7 +201,7 @@ func (fu *folderUpload) FormattedPath() string {
 		pathData = pathData[3+segLen:]
 	}
 
-	return filepath.Join(pathSegments...)
+	return path.Join(pathSegments...)
 }
 
 type FileHeader struct {
@@ -566,8 +567,8 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 		}
 
 		if fu.IsFolder == [2]byte{0, 1} {
-			if _, err := os.Stat(filepath.Join(fullPath, fu.FormattedPath())); os.IsNotExist(err) {
-				if err := os.Mkdir(filepath.Join(fullPath, fu.FormattedPath()), 0777); err != nil {
+			if _, err := os.Stat(path.Join(fullPath, fu.FormattedPath())); os.IsNotExist(err) {
+				if err := os.Mkdir(path.Join(fullPath, fu.FormattedPath()), 0777); err != nil {
 					return err
 				}
 			}
@@ -580,7 +581,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 			nextAction := DlFldrActionSendFile
 
 			// Check if we have the full file already.  If so, send dlFldrAction_NextFile to client to skip.
-			_, err := os.Stat(filepath.Join(fullPath, fu.FormattedPath()))
+			_, err := os.Stat(path.Join(fullPath, fu.FormattedPath()))
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
@@ -589,7 +590,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 			}
 
 			//  Check if we have a partial file already.  If so, send dlFldrAction_ResumeFile to client to resume upload.
-			incompleteFile, err := os.Stat(filepath.Join(fullPath, fu.FormattedPath()+IncompleteFileSuffix))
+			incompleteFile, err := os.Stat(path.Join(fullPath, fu.FormattedPath()+IncompleteFileSuffix))
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
@@ -642,7 +643,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 					return err
 				}
 
-				filePath := filepath.Join(fullPath, fu.FormattedPath())
+				filePath := path.Join(fullPath, fu.FormattedPath())
 
 				hlFile, err := NewFileWrapper(fileStore, filePath, 0)
 				if err != nil {
