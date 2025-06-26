@@ -114,10 +114,9 @@ func (am *YAMLAccountManager) Update(account hotline.Account, newLogin string) e
 			return fmt.Errorf("error renaming account file: %w", err)
 		}
 
+		delete(am.accounts, account.Login)
 		account.Login = newLogin
 		am.accounts[newLogin] = account
-
-		delete(am.accounts, account.Login)
 	}
 
 	out, err := yaml.Marshal(&account)
