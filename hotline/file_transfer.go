@@ -2,6 +2,7 @@ package hotline
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
@@ -188,17 +189,41 @@ type folderUpload struct {
 //	return n + 6, nil
 //}
 
+// pathSegmentScanner implements bufio.SplitFunc for parsing path segments
+func pathSegmentScanner(data []byte, _ bool) (advance int, token []byte, err error) {
+	if len(data) < 3 {
+		return 0, nil, nil
+	}
+
+	segLen := int(data[2])
+	totalLen := 3 + segLen
+
+	if len(data) < totalLen {
+		return 0, nil, nil
+	}
+
+	return totalLen, data[0:totalLen], nil
+}
+
 func (fu *folderUpload) FormattedPath() string {
 	pathItemLen := binary.BigEndian.Uint16(fu.PathItemCount[:])
 
-	var pathSegments []string
-	pathData := fu.FileNamePath
+	if pathItemLen == 0 {
+		return ""
+	}
 
-	// TODO: implement scanner interface instead?
-	for i := uint16(0); i < pathItemLen; i++ {
-		segLen := pathData[2]
-		pathSegments = append(pathSegments, string(pathData[3:3+segLen]))
-		pathData = pathData[3+segLen:]
+	var pathSegments []string
+	scanner := bufio.NewScanner(bytes.NewReader(fu.FileNamePath))
+	scanner.Split(pathSegmentScanner)
+
+	for scanner.Scan() && len(pathSegments) < int(pathItemLen) {
+		segmentData := scanner.Bytes()
+		if len(segmentData) >= 3 {
+			segLen := int(segmentData[2])
+			if len(segmentData) >= 3+segLen {
+				pathSegments = append(pathSegments, string(segmentData[3:3+segLen]))
+			}
+		}
 	}
 
 	return path.Join(pathSegments...)

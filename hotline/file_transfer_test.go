@@ -175,3 +175,94 @@ func TestFileHeader_Payload(t *testing.T) {
 		})
 	}
 }
+
+func Test_folderUpload_FormattedPath(t *testing.T) {
+	tests := []struct {
+		name           string
+		pathItemCount  [2]byte
+		fileNamePath   []byte
+		want           string
+	}{
+		{
+			name:          "empty path",
+			pathItemCount: [2]byte{0x00, 0x00},
+			fileNamePath:  []byte{},
+			want:          "",
+		},
+		{
+			name:          "single path segment",
+			pathItemCount: [2]byte{0x00, 0x01},
+			fileNamePath: []byte{
+				0x00, 0x00, // path separator
+				0x03,             // segment length
+				0x66, 0x6f, 0x6f, // "foo"
+			},
+			want: "foo",
+		},
+		{
+			name:          "multiple path segments",
+			pathItemCount: [2]byte{0x00, 0x03},
+			fileNamePath: []byte{
+				0x00, 0x00, // path separator
+				0x04,                   // segment length
+				0x68, 0x6f, 0x6d, 0x65, // "home"
+				0x00, 0x00, // path separator
+				0x04,                   // segment length
+				0x75, 0x73, 0x65, 0x72, // "user"
+				0x00, 0x00, // path separator
+				0x09,                                           // segment length
+				0x64, 0x6f, 0x63, 0x75, 0x6d, 0x65, 0x6e, 0x74, 0x73, // "documents"
+			},
+			want: "home/user/documents",
+		},
+		{
+			name:          "path with spaces",
+			pathItemCount: [2]byte{0x00, 0x02},
+			fileNamePath: []byte{
+				0x00, 0x00, // path separator
+				0x07,                               // segment length
+				0x4d, 0x79, 0x20, 0x46, 0x69, 0x6c, 0x65, // "My File"
+				0x00, 0x00, // path separator
+				0x0d,                                                             // segment length (13 bytes)
+				0x49, 0x6d, 0x70, 0x6f, 0x72, 0x74, 0x61, 0x6e, 0x74, 0x2e, 0x74, 0x78, 0x74, // "Important.txt"
+			},
+			want: "My File/Important.txt",
+		},
+		{
+			name:          "single character segments",
+			pathItemCount: [2]byte{0x00, 0x03},
+			fileNamePath: []byte{
+				0x00, 0x00, // path separator
+				0x01,       // segment length
+				0x61,       // "a"
+				0x00, 0x00, // path separator
+				0x01,       // segment length
+				0x62,       // "b"
+				0x00, 0x00, // path separator
+				0x01,       // segment length
+				0x63,       // "c"
+			},
+			want: "a/b/c",
+		},
+		{
+			name:          "path with special characters",
+			pathItemCount: [2]byte{0x00, 0x01},
+			fileNamePath: []byte{
+				0x00, 0x00, // path separator
+				0x08,                                     // segment length
+				0x74, 0x65, 0x73, 0x74, 0x40, 0x24, 0x25, 0x26, // "test@$%&"
+			},
+			want: "test@$%&",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fu := &folderUpload{
+				PathItemCount: tt.pathItemCount,
+				FileNamePath:  tt.fileNamePath,
+			}
+			got := fu.FormattedPath()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
