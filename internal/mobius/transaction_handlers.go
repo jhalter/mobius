@@ -78,6 +78,14 @@ func RegisterHandlers(srv *hotline.Server) {
 	srv.HandleFunc(hotline.TranDownloadBanner, HandleDownloadBanner)
 }
 
+// HandleChatSend processes chat messages and distributes them to appropriate clients.
+//
+// Fields used in the request:
+// * 101	Data				Required - Chat message content
+// * 109	Chat Options		Optional - Set to [0,1] for /me formatted messages
+// * 114	Chat ID				Optional - Private chat ID (omitted for public chat)
+//
+// Fields used in the reply:
 func HandleChatSend(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessSendChat) {
 		return cc.NewErrReply(t, "You are not allowed to participate in chat.")
@@ -209,6 +217,21 @@ func HandleSendInstantMsg(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 
 var fileTypeFLDR = [4]byte{0x66, 0x6c, 0x64, 0x72}
 
+// HandleGetFileInfo returns detailed information about a file or folder.
+//
+// Fields used in the request:
+// * 201	File Name			Required - Name of the file or folder
+// * 202	File Path			Optional - Path to the file or folder
+//
+// Fields used in the reply:
+// * 201	File Name			File name (encoded)
+// * 205	File Type String		Friendly file type description
+// * 206	File Creator String		Friendly creator description
+// * 213	File Type			File type signature
+// * 208	File Create Date		File creation date
+// * 209	File Modify Date		File modification date
+// * 210	File Comment		Optional - File comment if present
+// * 207	File Size			Optional - File size (only for files, not folders)
 func HandleGetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	fileName := t.GetField(hotline.FieldFileName).Data
 	filePath := t.GetField(hotline.FieldFilePath).Data
@@ -433,6 +456,14 @@ func HandleMoveFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 	return res
 }
 
+// HandleNewFolder creates a new folder at the specified path.
+//
+// Fields used in the request:
+// * 201	File Name			Required - Name of the new folder
+// * 202	File Path			Optional - Path where the folder should be created
+//
+// Fields used in the reply:
+// None
 func HandleNewFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessCreateFolder) {
 		return cc.NewErrReply(t, "You are not allowed to create folders.")
@@ -476,6 +507,16 @@ func HandleNewFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 	return append(res, cc.NewReply(t))
 }
 
+// HandleSetUser modifies an existing user account's properties.
+//
+// Fields used in the request:
+// * 105	User Login			Required - Login name of the account to modify
+// * 102	User Name			Required - Display name for the account
+// * 110	User Access			Required - Access permissions bitmap
+// * 106	User Password		Optional - New password (omitted to clear password)
+//
+// Fields used in the reply:
+// None
 func HandleSetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessModifyUser) {
 		return cc.NewErrReply(t, "You are not allowed to modify accounts.")
@@ -535,6 +576,16 @@ func HandleSetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 	return append(res, cc.NewReply(t))
 }
 
+// HandleGetUser retrieves account information for a specific user.
+//
+// Fields used in the request:
+// * 105	User Login			Required - Login name of the account to retrieve
+//
+// Fields used in the reply:
+// * 102	User Name			Account display name
+// * 105	User Login			Account login name (encoded)
+// * 106	User Password		Account password hash
+// * 110	User Access			Access permissions bitmap
 func HandleGetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessOpenUser) {
 		return cc.NewErrReply(t, "You are not allowed to view accounts.")
@@ -553,6 +604,13 @@ func HandleGetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 	))
 }
 
+// HandleListUsers returns a list of all user accounts on the server.
+//
+// Fields used in the request:
+// None
+//
+// Fields used in the reply:
+// * 101	Data				Repeated - Serialized account data for each user
 func HandleListUsers(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessOpenUser) {
 		return cc.NewErrReply(t, "You are not allowed to view accounts.")
@@ -581,6 +639,21 @@ func HandleListUsers(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 // The Transaction sent by the client includes one data field per user that was modified.  This data field in turn
 // contains another data field encoded in its payload with a varying number of sub fields depending on which action is
 // performed.  This seems to be the only place in the Hotline protocol where a data field contains another data field.
+// HandleUpdateUser processes batch user account operations from the v1.5+ multi-user editor.
+// This handler supports creating, deleting, and modifying multiple user accounts in a single transaction.
+//
+// Fields used in the request:
+// * 101	Data				Repeated - Each contains encoded sub-fields for one user operation
+//
+// Sub-fields for user operations:
+// * 101	Data				Optional - Original login name (for rename operations)
+// * 105	User Login			Required - Login name (new name for renames)
+// * 102	User Name			Optional - Display name (for create/modify)
+// * 106	User Password		Optional - Password (for create/modify)
+// * 110	User Access			Optional - Access permissions (for create/modify)
+//
+// Fields used in the reply:
+// None
 func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	for _, field := range t.Fields {
 		var subFields []hotline.Field
@@ -726,7 +799,16 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	return append(res, cc.NewReply(t))
 }
 
-// HandleNewUser creates a new user account
+// HandleNewUser creates a new user account.
+//
+// Fields used in the request:
+// * 105	User Login			Required - Login name for the new account
+// * 102	User Name			Required - Display name for the account
+// * 106	User Password		Required - Password for the account
+// * 110	User Access			Required - Access permissions bitmap
+//
+// Fields used in the reply:
+// None
 func HandleNewUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessCreateUser) {
 		return cc.NewErrReply(t, "You are not allowed to create new accounts.")
@@ -761,6 +843,13 @@ func HandleNewUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 	return append(res, cc.NewReply(t))
 }
 
+// HandleDeleteUser deletes a user account and disconnects any logged-in sessions.
+//
+// Fields used in the request:
+// * 105	User Login			Required - Login name of the account to delete
+//
+// Fields used in the reply:
+// None
 func HandleDeleteUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessDeleteUser) {
 		return cc.NewErrReply(t, "You are not allowed to delete accounts.")
@@ -792,7 +881,13 @@ func HandleDeleteUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	return append(res, cc.NewReply(t))
 }
 
-// HandleUserBroadcast sends an Administrator Message to all connected clients of the server
+// HandleUserBroadcast sends an administrator message to all connected clients.
+//
+// Fields used in the request:
+// * 101	Data				Required - Broadcast message content
+//
+// Fields used in the reply:
+// None
 func HandleUserBroadcast(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessBroadcast) {
 		return cc.NewErrReply(t, "You are not allowed to send broadcast messages.")
@@ -833,6 +928,13 @@ func HandleGetClientInfoText(cc *hotline.ClientConn, t *hotline.Transaction) (re
 	))
 }
 
+// HandleGetUserNameList returns a list of all currently connected users.
+//
+// Fields used in the request:
+// None
+//
+// Fields used in the reply:
+// * 300	Username With Info		Repeated - User information for each connected client
 func HandleGetUserNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	var fields []hotline.Field
 	for _, c := range cc.Server.ClientMgr.List() {
@@ -852,6 +954,17 @@ func HandleGetUserNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res 
 	return []hotline.Transaction{cc.NewReply(t, fields...)}
 }
 
+// HandleTranAgreed completes the login process after the client agrees to server terms.
+// This handler finalizes user authentication and notifies other clients of the new user.
+//
+// Fields used in the request:
+// * 102	User Name			Optional - Desired display name
+// * 104	User Icon ID		Optional - User icon identifier
+// * 113	Options				Optional - User preference flags (refuse PM, refuse chat, auto-reply)
+// * 215	Automatic Response		Optional - Auto-reply message text
+//
+// Fields used in the reply:
+// None
 func HandleTranAgreed(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if t.GetField(hotline.FieldUserName).Data != nil {
 		if cc.Authorize(hotline.AccessAnyName) {
@@ -960,6 +1073,14 @@ func HandleTranOldPostNews(cc *hotline.ClientConn, t *hotline.Transaction) (res 
 	return append(res, cc.NewReply(t))
 }
 
+// HandleDisconnectUser disconnects a specified user, optionally with a ban.
+//
+// Fields used in the request:
+// * 103	User ID				Required - ID of the user to disconnect
+// * 113	Options				Optional - Ban options ([0,1]=temporary ban, [0,2]=permanent ban)
+//
+// Fields used in the reply:
+// None
 func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessDisconUser) {
 		return cc.NewErrReply(t, "You are not allowed to disconnect users.")
@@ -1024,9 +1145,13 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 	return append(res, cc.NewReply(t))
 }
 
-// HandleGetNewsCatNameList returns a list of news categories for a path
+// HandleGetNewsCatNameList returns a list of news categories for the specified path.
+//
 // Fields used in the request:
-// 325	News path	(Optional)
+// * 325	News Path			Optional - Path to the news category (root if omitted)
+//
+// Fields used in the reply:
+// * 323	News Category List Data		Repeated - Category information for each subcategory
 func HandleGetNewsCatNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsReadArt) {
 		return cc.NewErrReply(t, "You are not allowed to read news.")
@@ -1051,6 +1176,14 @@ func HandleGetNewsCatNameList(cc *hotline.ClientConn, t *hotline.Transaction) (r
 	return append(res, cc.NewReply(t, fields...))
 }
 
+// HandleNewNewsCat creates a new news category.
+//
+// Fields used in the request:
+// * 322	News Category Name		Required - Name of the new category
+// * 325	News Path			Optional - Parent path for the new category
+//
+// Fields used in the reply:
+// None
 func HandleNewNewsCat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsCreateCat) {
 		return cc.NewErrReply(t, "You are not allowed to create news categories.")
@@ -1070,9 +1203,14 @@ func HandleNewNewsCat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	return []hotline.Transaction{cc.NewReply(t)}
 }
 
+// HandleNewNewsFldr creates a new news folder (bundle).
+//
 // Fields used in the request:
-// 322	News category Name
-// 325	News path
+// * 201	File Name			Required - Name of the new news folder
+// * 325	News Path			Optional - Parent path for the new folder
+//
+// Fields used in the reply:
+// None
 func HandleNewNewsFldr(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsCreateFldr) {
 		return cc.NewErrReply(t, "You are not allowed to create news folders.")
@@ -1092,13 +1230,13 @@ func HandleNewNewsFldr(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 	return append(res, cc.NewReply(t))
 }
 
-// HandleGetNewsArtData gets the list of article names at the specified news path.
-
+// HandleGetNewsArtNameList returns a list of article names at the specified news path.
+//
 // Fields used in the request:
-// 325	News path	Optional
-
+// * 325	News Path			Optional - Path to the news category
+//
 // Fields used in the reply:
-// 321	News article list data	Optional
+// * 321	News Article List Data		Optional - List of articles in the category
 func HandleGetNewsArtNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsReadArt) {
 		return cc.NewErrReply(t, "You are not allowed to read news.")
@@ -1119,24 +1257,23 @@ func HandleGetNewsArtNameList(cc *hotline.ClientConn, t *hotline.Transaction) (r
 	return append(res, cc.NewReply(t, hotline.NewField(hotline.FieldNewsArtListData, b)))
 }
 
-// HandleGetNewsArtData requests information about the specific news article.
-// Fields used in the request:
+// HandleGetNewsArtData retrieves the content and metadata of a specific news article.
 //
-// Request fields
-// 325	News path
-// 326	News article Type
-// 327	News article data flavor
+// Fields used in the request:
+// * 325	News Path			Required - Path to the news category
+// * 326	News Article ID			Required - ID of the article to retrieve
+// * 327	News Article Data Flavor	Optional - Data format ("text/plain")
 //
 // Fields used in the reply:
-// 328	News article title
-// 329	News article poster
-// 330	News article date
-// 331	Previous article Type
-// 332	Next article Type
-// 335	Parent article Type
-// 336	First child article Type
-// 327	News article data flavor	"Should be “text/plain”
-// 333	News article data	Optional (if data flavor is “text/plain”)
+// * 328	News Article Title		Article title
+// * 329	News Article Poster		Author of the article
+// * 330	News Article Date		Publication date
+// * 331	Previous Article ID		ID of previous article in thread
+// * 332	Next Article ID			ID of next article in thread
+// * 335	Parent Article ID		ID of parent article
+// * 336	First Child Article ID		ID of first reply article
+// * 327	News Article Data Flavor	Data format ("text/plain")
+// * 333	News Article Data		Optional - Article content (if flavor is "text/plain")
 func HandleGetNewsArtData(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsReadArt) {
 		return cc.NewErrReply(t, "You are not allowed to read news.")
@@ -1172,8 +1309,10 @@ func HandleGetNewsArtData(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 }
 
 // HandleDelNewsItem deletes a threaded news folder or category.
+//
 // Fields used in the request:
-// 325	News path
+// * 325	News Path			Required - Path to the news item to delete
+//
 // Fields used in the reply:
 // None
 func HandleDelNewsItem(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
@@ -1204,10 +1343,14 @@ func HandleDelNewsItem(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 }
 
 // HandleDelNewsArt deletes a threaded news article.
-// Request Fields
-// 325	News path
-// 326	News article Type
-// 337	News article recursive delete	- Delete child articles (1) or not (0)
+//
+// Fields used in the request:
+// * 325	News Path			Required - Path to the news category
+// * 326	News Article ID			Required - ID of the article to delete
+// * 337	News Article Recursive Delete	Optional - Delete child articles (1) or not (0)
+//
+// Fields used in the reply:
+// None
 func HandleDelNewsArt(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsDeleteArt) {
 		return cc.NewErrReply(t, "You are not allowed to delete news articles.")
@@ -1235,13 +1378,18 @@ func HandleDelNewsArt(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	return []hotline.Transaction{cc.NewReply(t)}
 }
 
-// Request fields
-// 325	News path
-// 326	News article Type	 						Type of the parent article?
-// 328	News article title
-// 334	News article flags
-// 327	News article data flavor		Currently “text/plain”
-// 333	News article data
+// HandlePostNewsArt creates a new threaded news article.
+//
+// Fields used in the request:
+// * 325	News Path			Required - Path to the news category
+// * 326	News Article ID			Optional - ID of parent article (0 for new thread)
+// * 328	News Article Title		Required - Article title
+// * 334	News Article Flags		Optional - Article flags
+// * 327	News Article Data Flavor	Required - Data format ("text/plain")
+// * 333	News Article Data		Required - Article content
+//
+// Fields used in the reply:
+// None
 func HandlePostNewsArt(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsPostArt) {
 		return cc.NewErrReply(t, "You are not allowed to post news articles.")
@@ -1276,7 +1424,13 @@ func HandlePostNewsArt(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 	return append(res, cc.NewReply(t))
 }
 
-// HandleGetMsgs returns the flat news data
+// HandleGetMsgs returns the flat news data (message board content).
+//
+// Fields used in the request:
+// None
+//
+// Fields used in the reply:
+// * 101	Data				Complete message board content
 func HandleGetMsgs(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsReadArt) {
 		return cc.NewErrReply(t, "You are not allowed to read news.")
@@ -1292,6 +1446,19 @@ func HandleGetMsgs(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 	return append(res, cc.NewReply(t, hotline.NewField(hotline.FieldData, newsData)))
 }
 
+// HandleDownloadFile initiates a file download transfer.
+//
+// Fields used in the request:
+// * 201	File Name			Required - Name of the file to download
+// * 202	File Path			Optional - Path to the file
+// * 203	File Resume Data		Optional - Resume information for partial downloads
+// * 204	File Transfer Options		Optional - Set to 2 for file preview
+//
+// Fields used in the reply:
+// * 107	Ref Num				Transfer reference number
+// * 116	Waiting Count			Number of users ahead in download queue
+// * 108	Transfer Size			Total bytes to transfer
+// * 207	File Size			Actual file size
 func HandleDownloadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessDownloadFile) {
 		return cc.NewErrReply(t, "You are not allowed to download files.")
@@ -1358,6 +1525,17 @@ func HandleDownloadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 }
 
 // Download all files from the specified folder and sub-folders
+// HandleDownloadFolder initiates a folder download transfer (all files and subfolders).
+//
+// Fields used in the request:
+// * 201	File Name			Required - Name of the folder to download
+// * 202	File Path			Optional - Path to the folder
+//
+// Fields used in the reply:
+// * 107	Ref Num				Transfer reference number
+// * 108	Transfer Size			Total bytes to transfer
+// * 220	Folder Item Count		Number of items in the folder
+// * 116	Waiting Count			Number of users ahead in download queue
 func HandleDownloadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessDownloadFolder) {
 		return cc.NewErrReply(t, "You are not allowed to download folders.")
@@ -1401,6 +1579,17 @@ func HandleDownloadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 // 108	hotline.Transfer size	Total size of all items in the folder
 // 220	Folder item count
 // 204	File transfer options	"Optional Currently set to 1" (TODO: ??)
+// HandleUploadFolder initiates a folder upload transfer.
+//
+// Fields used in the request:
+// * 201	File Name			Required - Name of the folder to upload
+// * 202	File Path			Optional - Destination path on server
+// * 108	Transfer Size			Required - Total size of all items in the folder
+// * 220	Folder Item Count		Required - Number of items in the folder
+// * 204	File Transfer Options		Optional - Currently set to 1
+//
+// Fields used in the reply:
+// * 107	Ref Num				Transfer reference number
 func HandleUploadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessUploadFolder) {
 		return cc.NewErrReply(t, "You are not allowed to upload folders.")
@@ -1432,13 +1621,17 @@ func HandleUploadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 	return append(res, cc.NewReply(t, hotline.NewField(hotline.FieldRefNum, fileTransfer.RefNum[:])))
 }
 
-// HandleUploadFile
+// HandleUploadFile initiates a file upload transfer.
+//
 // Fields used in the request:
-// 201	File Name
-// 202	File path
-// 204	File transfer options	"Optional
-// Used only to resume download, currently has value 2"
-// 108	File transfer size	"Optional used if download is not resumed"
+// * 201	File Name			Required - Name of the file to upload
+// * 202	File Path			Optional - Destination path on server
+// * 204	File Transfer Options		Optional - Set to 2 for resume upload
+// * 108	Transfer Size			Optional - File size (not sent for resume)
+//
+// Fields used in the reply:
+// * 107	Ref Num				Transfer reference number
+// * 203	File Resume Data		Optional - Resume information (for resumed uploads)
 func HandleUploadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessUploadFile) {
 		return cc.NewErrReply(t, "You are not allowed to upload files.")
@@ -1500,6 +1693,16 @@ func HandleUploadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	return res
 }
 
+// HandleSetClientUserInfo updates the current client's user information and preferences.
+//
+// Fields used in the request:
+// * 104	User Icon ID			Optional - New user icon
+// * 102	User Name			Optional - New display name (requires appropriate access)
+// * 113	Options				Optional - User preference flags (refuse PM, refuse chat, auto-reply)
+// * 215	Automatic Response		Optional - Auto-reply message text
+//
+// Fields used in the reply:
+// None
 func HandleSetClientUserInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if len(t.GetField(hotline.FieldUserIconID).Data) == 4 {
 		cc.Icon = t.GetField(hotline.FieldUserIconID).Data[2:]
@@ -1566,15 +1769,27 @@ func HandleSetClientUserInfo(cc *hotline.ClientConn, t *hotline.Transaction) (re
 	return res
 }
 
-// HandleKeepAlive responds to keepalive transactions with an empty reply
-// * HL 1.9.2 Client sends keepalive msg every 3 minutes
-// * HL 1.2.3 Client doesn't send keepalives
+// HandleKeepAlive responds to client keepalive messages to maintain the connection.
+// HL 1.9.2 clients send keepalive messages every 3 minutes, while HL 1.2.3 clients do not.
+//
+// Fields used in the request:
+// None
+//
+// Fields used in the reply:
+// None
 func HandleKeepAlive(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	res = append(res, cc.NewReply(t))
 
 	return res
 }
 
+// HandleGetFileNameList returns a list of files and folders in the specified directory.
+//
+// Fields used in the request:
+// * 202	File Path			Optional - Path to list (root if omitted)
+//
+// Fields used in the reply:
+// * 200	File Name With Info		Repeated - File information for each item
 func HandleGetFileNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	fullPath, err := hotline.ReadPath(
 		cc.FileRoot(),
@@ -1619,7 +1834,17 @@ func HandleGetFileNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res 
 // If Accepted is clicked:
 // 1. ClientB sends TranJoinChat with FieldChatID
 
-// HandleInviteNewChat invites users to new private chat
+// HandleInviteNewChat creates a new private chat and invites a user to join.
+//
+// Fields used in the request:
+// * 103	User ID				Required - ID of the user to invite
+//
+// Fields used in the reply:
+// * 114	Chat ID				New chat room identifier
+// * 102	User Name			Inviting user's name
+// * 103	User ID				Inviting user's ID
+// * 104	User Icon ID			Inviting user's icon
+// * 112	User Flags			Inviting user's flags
 func HandleInviteNewChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessOpenChat) {
 		return cc.NewErrReply(t, "You are not allowed to request private chat.")
@@ -1669,6 +1894,18 @@ func HandleInviteNewChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []
 	)
 }
 
+// HandleInviteToChat invites a user to an existing private chat.
+//
+// Fields used in the request:
+// * 103	User ID				Required - ID of the user to invite
+// * 114	Chat ID				Required - Existing chat room identifier
+//
+// Fields used in the reply:
+// * 114	Chat ID				Chat room identifier
+// * 102	User Name			Inviting user's name
+// * 103	User ID				Inviting user's ID
+// * 104	User Icon ID			Inviting user's icon
+// * 112	User Flags			Inviting user's flags
 func HandleInviteToChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessOpenChat) {
 		return cc.NewErrReply(t, "You are not allowed to request private chat.")
@@ -1697,6 +1934,13 @@ func HandleInviteToChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 	}
 }
 
+// HandleRejectChatInvite processes a user's rejection of a private chat invitation.
+//
+// Fields used in the request:
+// * 114	Chat ID				Required - Chat room identifier of the rejected invitation
+//
+// Fields used in the reply:
+// None
 func HandleRejectChatInvite(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	chatID := [4]byte(t.GetField(hotline.FieldChatID).Data)
 
@@ -1714,11 +1958,14 @@ func HandleRejectChatInvite(cc *hotline.ClientConn, t *hotline.Transaction) (res
 	return res
 }
 
-// HandleJoinChat is sent from a v1.8+ Hotline client when the joins a private chat
+// HandleJoinChat processes a user joining a private chat room.
+//
+// Fields used in the request:
+// * 114	Chat ID				Required - Chat room identifier to join
+//
 // Fields used in the reply:
-// * 115	Chat subject
-// * 300	User Name with info (Optional)
-// * 300 	(more user names with info)
+// * 115	Chat Subject			Current chat room subject
+// * 300	Username With Info		Repeated - Information for each user in the chat
 func HandleJoinChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	chatID := t.GetField(hotline.FieldChatID).Data
 
@@ -1758,11 +2005,13 @@ func HandleJoinChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 	return append(res, cc.NewReply(t, replyFields...))
 }
 
-// HandleLeaveChat is sent from a v1.8+ Hotline client when the user exits a private chat
-// Fields used in the request:
-//   - 114	FieldChatID
+// HandleLeaveChat processes a user leaving a private chat room.
 //
-// Reply is not expected.
+// Fields used in the request:
+// * 114	Chat ID				Required - Chat room identifier to leave
+//
+// Fields used in the reply:
+// None
 func HandleLeaveChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	chatID := t.GetField(hotline.FieldChatID).Data
 
@@ -1783,11 +2032,14 @@ func HandleLeaveChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 	return res
 }
 
-// HandleSetChatSubject is sent from a v1.8+ Hotline client when the user sets a private chat subject
+// HandleSetChatSubject sets the subject/topic for a private chat room.
+//
 // Fields used in the request:
-// * 114	Chat Type
-// * 115	Chat subject
-// Reply is not expected.
+// * 114	Chat ID				Required - Chat room identifier
+// * 115	Chat Subject			Required - New chat room subject
+//
+// Fields used in the reply:
+// None
 func HandleSetChatSubject(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	chatID := t.GetField(hotline.FieldChatID).Data
 
@@ -1808,11 +2060,12 @@ func HandleSetChatSubject(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 	return res
 }
 
-// HandleMakeAlias makes a file alias using the specified path.
+// HandleMakeAlias creates a symbolic link (alias) to a file or folder.
+//
 // Fields used in the request:
-// 201	File Name
-// 202	File path
-// 212	File new path	Destination path
+// * 201	File Name			Required - Name of the file to create an alias of
+// * 202	File Path			Required - Path to the source file
+// * 212	File New Path			Required - Destination path for the alias
 //
 // Fields used in the reply:
 // None
@@ -1842,12 +2095,14 @@ func HandleMakeAlias(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 	return res
 }
 
-// HandleDownloadBanner handles requests for a new banner from the server
+// HandleDownloadBanner initiates a download of the server banner image.
+//
 // Fields used in the request:
 // None
+//
 // Fields used in the reply:
-// 107	FieldRefNum			Used later for transfer
-// 108	FieldTransferSize	Size of data to be downloaded
+// * 107	Ref Num				Transfer reference number
+// * 108	Transfer Size			Size of banner data to download
 func HandleDownloadBanner(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	ft := cc.NewFileTransfer(hotline.BannerDownload, "", []byte{}, []byte{}, make([]byte, 4))
 	binary.BigEndian.PutUint32(ft.TransferSize, uint32(len(cc.Server.Banner)))
