@@ -17,6 +17,78 @@ import (
 	"golang.org/x/text/encoding/charmap"
 )
 
+// Public error message constants for reuse by other packages
+const (
+	// Authorization error messages
+	ErrMsgNotAllowedParticipateChat      = "You are not allowed to participate in chat."
+	ErrMsgNotAllowedSendPrivateMsg       = "You are not allowed to send private messages."
+	ErrMsgNotAllowedReadNews             = "You are not allowed to read news."
+	ErrMsgNotAllowedPostNews             = "You are not allowed to post news."
+	ErrMsgNotAllowedCreateAccounts       = "You are not allowed to create new accounts."
+	ErrMsgNotAllowedViewAccounts         = "You are not allowed to view accounts."
+	ErrMsgNotAllowedModifyAccounts       = "You are not allowed to modify accounts."
+	ErrMsgNotAllowedDeleteAccounts       = "You are not allowed to delete accounts."
+	ErrMsgNotAllowedRequestPrivateChat   = "You are not allowed to request private chat."
+	ErrMsgNotAllowedCreateNewsCategories = "You are not allowed to create news categories."
+	ErrMsgNotAllowedDeleteNewsArticles   = "You are not allowed to delete news articles."
+	ErrMsgNotAllowedSetCommentsFiles     = "You are not allowed to set comments for files."
+	ErrMsgNotAllowedSetCommentsFolders   = "You are not allowed to set comments for folders."
+	ErrMsgNotAllowedRenameFiles          = "You are not allowed to rename files."
+	ErrMsgNotAllowedRenameFolders        = "You are not allowed to rename folders."
+	ErrMsgNotAllowedDeleteFiles          = "You are not allowed to delete files."
+	ErrMsgNotAllowedDeleteFolders        = "You are not allowed to delete folders."
+	ErrMsgNotAllowedMoveFiles            = "You are not allowed to move files."
+	ErrMsgNotAllowedMoveFolders          = "You are not allowed to move folders."
+	ErrMsgNotAllowedCreateFolders        = "You are not allowed to create folders."
+	ErrMsgNotAllowedSendBroadcast        = "You are not allowed to send broadcast messages."
+	ErrMsgNotAllowedGetClientInfo        = "You are not allowed to get client info."
+	ErrMsgNotAllowedDisconnectUsers      = "You are not allowed to disconnect users."
+	ErrMsgNotAllowedCreateNewsfolders    = "You are not allowed to create news folders."
+	ErrMsgNotAllowedDeleteNewsCategories = "You are not allowed to delete news categories."
+	ErrMsgNotAllowedDeleteNewsFolders    = "You are not allowed to delete news folders."
+	ErrMsgNotAllowedPostNewsArticles     = "You are not allowed to post news articles."
+	ErrMsgNotAllowedDownloadFiles        = "You are not allowed to download files."
+	ErrMsgNotAllowedDownloadFolders      = "You are not allowed to download folders."
+	ErrMsgNotAllowedUploadFiles          = "You are not allowed to upload files."
+	ErrMsgNotAllowedUploadFolders        = "You are not allowed to upload folders."
+	ErrMsgNotAllowedViewDropBoxes        = "You are not allowed to view drop boxes."
+	ErrMsgNotAllowedMakeAliases          = "You are not allowed to make aliases."
+
+	// Account error messages
+	ErrMsgAccountDeleted    = "You are logged in with an account which was deleted."
+	ErrMsgAccountExists     = "Cannot create account because there is already an account with that login."
+	ErrMsgAccountMoreAccess = "Cannot create account with more access than yourself."
+	ErrMsgAccountNotExist   = "Account does not exist."
+
+	// Account error templates (for dynamic content)
+	ErrMsgAccountExistsTemplate = "Cannot create account %s because there is already an account with that login."
+
+	// File operation error templates
+	ErrMsgCannotRenameFileNotFound   = "Cannot rename file %s because it does not exist or cannot be found."
+	ErrMsgCannotRenameFolderNotFound = "Cannot rename folder %s because it does not exist or cannot be found."
+	ErrMsgCannotDeleteFileNotFound   = "Cannot delete file %s because it does not exist or cannot be found."
+
+	// File operation error templates (for dynamic content)
+	ErrMsgFolderCreateConflictTemplate = "Cannot create folder \"%s\" because there is already a file or folder with that Name."
+	ErrMsgFolderCreateErrorTemplate    = "Cannot create folder \"%s\" because an error occurred."
+
+	// Upload restriction templates (these need dynamic content)
+	ErrMsgUploadRestrictedTemplate   = "Cannot accept upload of the %s \"%v\" because you are only allowed to upload to the \"Uploads\" folder."
+	ErrMsgFileUploadConflictTemplate = "Cannot accept upload because there is already a file named \"%v\". Try choosing a different Name."
+
+	// Chat/messaging templates (these need dynamic content)
+	ErrMsgDoesNotAcceptTemplate = "%s does not accept %s."
+
+	// Ban messages
+	ErrMsgTemporaryBan = "You are temporarily banned on this server"
+	ErrMsgPermanentBan = "You are permanently banned on this server"
+
+	// General error messages
+	ErrMsgAccountNotFound = "Account not found."
+	ErrMsgUserNotFound = "User not found."
+	ErrMsgCreateAlias = "Error creating alias"
+)
+
 // This function is used to extract the IP address from a given address string, exluding the port.
 func extractIP(addr string) string {
 	if idx := strings.LastIndex(addr, ":"); idx != -1 {
@@ -88,7 +160,7 @@ func RegisterHandlers(srv *hotline.Server) {
 // Fields used in the reply:
 func HandleChatSend(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessSendChat) {
-		return cc.NewErrReply(t, "You are not allowed to participate in chat.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedParticipateChat)
 	}
 
 	// Truncate long usernames
@@ -156,7 +228,7 @@ func HandleChatSend(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 // None
 func HandleSendInstantMsg(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessSendPrivMsg) {
-		return cc.NewErrReply(t, "You are not allowed to send private messages.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedSendPrivateMsg)
 	}
 
 	msg := t.GetField(hotline.FieldData)
@@ -188,7 +260,7 @@ func HandleSendInstantMsg(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 			hotline.NewTransaction(
 				hotline.TranServerMsg,
 				cc.ID,
-				hotline.NewField(hotline.FieldData, []byte(string(otherClient.UserName)+" does not accept private messages.")),
+				hotline.NewField(hotline.FieldData, []byte(fmt.Sprintf(ErrMsgDoesNotAcceptTemplate, string(otherClient.UserName), "private messages"))),
 				hotline.NewField(hotline.FieldUserName, otherClient.UserName),
 				hotline.NewField(hotline.FieldUserID, otherClient.ID[:]),
 				hotline.NewField(hotline.FieldOptions, []byte{0, 2}),
@@ -303,11 +375,11 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		switch mode := fi.Mode(); {
 		case mode.IsDir():
 			if !cc.Authorize(hotline.AccessSetFolderComment) {
-				return cc.NewErrReply(t, "You are not allowed to set comments for folders.")
+				return cc.NewErrReply(t, ErrMsgNotAllowedSetCommentsFolders)
 			}
 		case mode.IsRegular():
 			if !cc.Authorize(hotline.AccessSetFileComment) {
-				return cc.NewErrReply(t, "You are not allowed to set comments for files.")
+				return cc.NewErrReply(t, ErrMsgNotAllowedSetCommentsFiles)
 			}
 		}
 
@@ -335,16 +407,16 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		switch mode := fi.Mode(); {
 		case mode.IsDir():
 			if !cc.Authorize(hotline.AccessRenameFolder) {
-				return cc.NewErrReply(t, "You are not allowed to rename folders.")
+				return cc.NewErrReply(t, ErrMsgNotAllowedRenameFolders)
 			}
 			err = os.Rename(fullFilePath, fullNewFilePath)
 			if os.IsNotExist(err) {
-				return cc.NewErrReply(t, "Cannot rename folder "+string(fileName)+" because it does not exist or cannot be found.")
+				return cc.NewErrReply(t, fmt.Sprintf(ErrMsgCannotRenameFolderNotFound, string(fileName)))
 
 			}
 		case mode.IsRegular():
 			if !cc.Authorize(hotline.AccessRenameFile) {
-				return cc.NewErrReply(t, "You are not allowed to rename files.")
+				return cc.NewErrReply(t, ErrMsgNotAllowedRenameFiles)
 			}
 			fileDir, err := hotline.ReadPath(cc.FileRoot(), filePath, []byte{})
 			if err != nil {
@@ -357,7 +429,7 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 
 			err = hlFile.Move(fileDir)
 			if os.IsNotExist(err) {
-				return cc.NewErrReply(t, "Cannot rename file "+string(fileName)+" because it does not exist or cannot be found.")
+				return cc.NewErrReply(t, fmt.Sprintf(ErrMsgCannotRenameFileNotFound, string(fileName)))
 			}
 			if err != nil {
 				return res
@@ -390,17 +462,17 @@ func HandleDeleteFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 
 	fi, err := hlFile.DataFile()
 	if err != nil {
-		return cc.NewErrReply(t, "Cannot delete file "+string(fileName)+" because it does not exist or cannot be found.")
+		return cc.NewErrReply(t, fmt.Sprintf(ErrMsgCannotDeleteFileNotFound, string(fileName)))
 	}
 
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
 		if !cc.Authorize(hotline.AccessDeleteFolder) {
-			return cc.NewErrReply(t, "You are not allowed to delete folders.")
+			return cc.NewErrReply(t, ErrMsgNotAllowedDeleteFolders)
 		}
 	case mode.IsRegular():
 		if !cc.Authorize(hotline.AccessDeleteFile) {
-			return cc.NewErrReply(t, "You are not allowed to delete files.")
+			return cc.NewErrReply(t, ErrMsgNotAllowedDeleteFiles)
 		}
 	}
 
@@ -435,16 +507,16 @@ func HandleMoveFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 
 	fi, err := hlFile.DataFile()
 	if err != nil {
-		return cc.NewErrReply(t, "Cannot delete file "+fileName+" because it does not exist or cannot be found.")
+		return cc.NewErrReply(t, fmt.Sprintf(ErrMsgCannotDeleteFileNotFound, fileName))
 	}
 	switch mode := fi.Mode(); {
 	case mode.IsDir():
 		if !cc.Authorize(hotline.AccessMoveFolder) {
-			return cc.NewErrReply(t, "You are not allowed to move folders.")
+			return cc.NewErrReply(t, ErrMsgNotAllowedMoveFolders)
 		}
 	case mode.IsRegular():
 		if !cc.Authorize(hotline.AccessMoveFile) {
-			return cc.NewErrReply(t, "You are not allowed to move files.")
+			return cc.NewErrReply(t, ErrMsgNotAllowedMoveFiles)
 		}
 	}
 	if err := hlFile.Move(fileNewPath); err != nil {
@@ -466,7 +538,7 @@ func HandleMoveFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 // None
 func HandleNewFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessCreateFolder) {
-		return cc.NewErrReply(t, "You are not allowed to create folders.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedCreateFolders)
 	}
 	folderName := string(t.GetField(hotline.FieldFileName).Data)
 
@@ -495,12 +567,12 @@ func HandleNewFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 	// TODO: check path and folder Name lengths
 
 	if _, err := cc.Server.FS.Stat(newFolderPath); !os.IsNotExist(err) {
-		msg := fmt.Sprintf("Cannot create folder \"%s\" because there is already a file or folder with that Name.", folderName)
+		msg := fmt.Sprintf(ErrMsgFolderCreateConflictTemplate, folderName)
 		return cc.NewErrReply(t, msg)
 	}
 
 	if err := cc.Server.FS.Mkdir(newFolderPath, 0777); err != nil {
-		msg := fmt.Sprintf("Cannot create folder \"%s\" because an error occurred.", folderName)
+		msg := fmt.Sprintf(ErrMsgFolderCreateErrorTemplate, folderName)
 		return cc.NewErrReply(t, msg)
 	}
 
@@ -519,7 +591,7 @@ func HandleNewFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 // None
 func HandleSetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessModifyUser) {
-		return cc.NewErrReply(t, "You are not allowed to modify accounts.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedModifyAccounts)
 	}
 
 	login := t.GetField(hotline.FieldUserLogin).DecodeObfuscatedString()
@@ -529,7 +601,7 @@ func HandleSetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 
 	account := cc.Server.AccountManager.Get(login)
 	if account == nil {
-		return cc.NewErrReply(t, "Account not found.")
+		return cc.NewErrReply(t, ErrMsgAccountNotFound)
 	}
 	account.Name = userName
 	copy(account.Access[:], newAccessLvl)
@@ -588,12 +660,12 @@ func HandleSetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 // * 110	User Access			Access permissions bitmap
 func HandleGetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessOpenUser) {
-		return cc.NewErrReply(t, "You are not allowed to view accounts.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedViewAccounts)
 	}
 
 	account := cc.Server.AccountManager.Get(string(t.GetField(hotline.FieldUserLogin).Data))
 	if account == nil {
-		return cc.NewErrReply(t, "Account does not exist.")
+		return cc.NewErrReply(t, ErrMsgAccountNotExist)
 	}
 
 	return append(res, cc.NewReply(t,
@@ -613,7 +685,7 @@ func HandleGetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 // * 101	Data				Repeated - Serialized account data for each user
 func HandleListUsers(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessOpenUser) {
-		return cc.NewErrReply(t, "You are not allowed to view accounts.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedViewAccounts)
 	}
 
 	var userFields []hotline.Field
@@ -675,7 +747,7 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 		// If there's only one subfield, that indicates this is a delete operation for the login in FieldData
 		if len(subFields) == 1 {
 			if !cc.Authorize(hotline.AccessDeleteUser) {
-				return cc.NewErrReply(t, "You are not allowed to delete accounts.")
+				return cc.NewErrReply(t, ErrMsgNotAllowedDeleteAccounts)
 			}
 
 			login := string(hotline.EncodeString(hotline.GetField(hotline.FieldData, &subFields).Data))
@@ -693,7 +765,7 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 
 					res = append(res,
 						hotline.NewTransaction(hotline.TranServerMsg, [2]byte{},
-							hotline.NewField(hotline.FieldData, []byte("You are logged in with an account which was deleted.")),
+							hotline.NewField(hotline.FieldData, []byte(ErrMsgAccountDeleted)),
 							hotline.NewField(hotline.FieldChatOptions, []byte{0}),
 						),
 					)
@@ -733,7 +805,7 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 
 			// Account exists, so this is an update action.
 			if !cc.Authorize(hotline.AccessModifyUser) {
-				return cc.NewErrReply(t, "You are not allowed to modify accounts.")
+				return cc.NewErrReply(t, ErrMsgNotAllowedModifyAccounts)
 			}
 
 			// This part is a bit tricky. There are three possibilities:
@@ -765,7 +837,7 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 			}
 		} else {
 			if !cc.Authorize(hotline.AccessCreateUser) {
-				return cc.NewErrReply(t, "You are not allowed to create new accounts.")
+				return cc.NewErrReply(t, ErrMsgNotAllowedCreateAccounts)
 			}
 
 			cc.Logger.Info("CreateUser", "login", userLogin)
@@ -791,7 +863,7 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 
 			err := cc.Server.AccountManager.Create(*account)
 			if err != nil {
-				return cc.NewErrReply(t, "Cannot create account because there is already an account with that login.")
+				return cc.NewErrReply(t, ErrMsgAccountExists)
 			}
 		}
 	}
@@ -811,14 +883,14 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 // None
 func HandleNewUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessCreateUser) {
-		return cc.NewErrReply(t, "You are not allowed to create new accounts.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedCreateAccounts)
 	}
 
 	login := t.GetField(hotline.FieldUserLogin).DecodeObfuscatedString()
 
 	// If the account already exists, reply with an error.
 	if account := cc.Server.AccountManager.Get(login); account != nil {
-		return cc.NewErrReply(t, "Cannot create account "+login+" because there is already an account with that login.")
+		return cc.NewErrReply(t, fmt.Sprintf(ErrMsgAccountExistsTemplate, login))
 	}
 
 	var newAccess hotline.AccessBitmap
@@ -828,7 +900,7 @@ func HandleNewUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 	for i := 0; i < 64; i++ {
 		if newAccess.IsSet(i) {
 			if !cc.Authorize(i) {
-				return cc.NewErrReply(t, "Cannot create account with more access than yourself.")
+				return cc.NewErrReply(t, ErrMsgAccountMoreAccess)
 			}
 		}
 	}
@@ -837,7 +909,7 @@ func HandleNewUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 
 	err := cc.Server.AccountManager.Create(*account)
 	if err != nil {
-		return cc.NewErrReply(t, "Cannot create account because there is already an account with that login.")
+		return cc.NewErrReply(t, ErrMsgAccountExists)
 	}
 
 	return append(res, cc.NewReply(t))
@@ -852,7 +924,7 @@ func HandleNewUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 // None
 func HandleDeleteUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessDeleteUser) {
-		return cc.NewErrReply(t, "You are not allowed to delete accounts.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedDeleteAccounts)
 	}
 
 	login := t.GetField(hotline.FieldUserLogin).DecodeObfuscatedString()
@@ -866,7 +938,7 @@ func HandleDeleteUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 		if client.Account.Login == login {
 			res = append(res,
 				hotline.NewTransaction(hotline.TranServerMsg, client.ID,
-					hotline.NewField(hotline.FieldData, []byte("You are logged in with an account which was deleted.")),
+					hotline.NewField(hotline.FieldData, []byte(ErrMsgAccountDeleted)),
 					hotline.NewField(hotline.FieldChatOptions, []byte{2}),
 				),
 			)
@@ -890,7 +962,7 @@ func HandleDeleteUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 // None
 func HandleUserBroadcast(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessBroadcast) {
-		return cc.NewErrReply(t, "You are not allowed to send broadcast messages.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedSendBroadcast)
 	}
 
 	cc.SendAll(
@@ -912,14 +984,14 @@ func HandleUserBroadcast(cc *hotline.ClientConn, t *hotline.Transaction) (res []
 // 101	Data		User info text string
 func HandleGetClientInfoText(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessGetClientInfo) {
-		return cc.NewErrReply(t, "You are not allowed to get client info.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedGetClientInfo)
 	}
 
 	clientID := t.GetField(hotline.FieldUserID).Data
 
 	clientConn := cc.Server.ClientMgr.Get(hotline.ClientID(clientID))
 	if clientConn == nil {
-		return cc.NewErrReply(t, "User not found.")
+		return cc.NewErrReply(t, ErrMsgUserNotFound)
 	}
 
 	return append(res, cc.NewReply(t,
@@ -1042,7 +1114,7 @@ func HandleTranAgreed(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 // 101	Data
 func HandleTranOldPostNews(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsPostArt) {
-		return cc.NewErrReply(t, "You are not allowed to post news.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedPostNews)
 	}
 
 	newsDateTemplate := hotline.NewsDateFormat
@@ -1083,7 +1155,7 @@ func HandleTranOldPostNews(cc *hotline.ClientConn, t *hotline.Transaction) (res 
 // None
 func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessDisconUser) {
-		return cc.NewErrReply(t, "You are not allowed to disconnect users.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedDisconnectUsers)
 	}
 
 	clientID := [2]byte(t.GetField(hotline.FieldUserID).Data)
@@ -1105,7 +1177,7 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 			res = append(res, hotline.NewTransaction(
 				hotline.TranServerMsg,
 				clientConn.ID,
-				hotline.NewField(hotline.FieldData, []byte("You are temporarily banned on this server")),
+				hotline.NewField(hotline.FieldData, []byte(ErrMsgTemporaryBan)),
 				hotline.NewField(hotline.FieldChatOptions, []byte{0, 0}),
 			))
 
@@ -1124,7 +1196,7 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 			res = append(res, hotline.NewTransaction(
 				hotline.TranServerMsg,
 				clientConn.ID,
-				hotline.NewField(hotline.FieldData, []byte("You are permanently banned on this server")),
+				hotline.NewField(hotline.FieldData, []byte(ErrMsgPermanentBan)),
 				hotline.NewField(hotline.FieldChatOptions, []byte{0, 0}),
 			))
 
@@ -1154,7 +1226,7 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 // * 323	News Category List Data		Repeated - Category information for each subcategory
 func HandleGetNewsCatNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsReadArt) {
-		return cc.NewErrReply(t, "You are not allowed to read news.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedReadNews)
 	}
 
 	pathStrs, err := t.GetField(hotline.FieldNewsPath).DecodeNewsPath()
@@ -1186,7 +1258,7 @@ func HandleGetNewsCatNameList(cc *hotline.ClientConn, t *hotline.Transaction) (r
 // None
 func HandleNewNewsCat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsCreateCat) {
-		return cc.NewErrReply(t, "You are not allowed to create news categories.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedCreateNewsCategories)
 	}
 
 	name := string(t.GetField(hotline.FieldNewsCatName).Data)
@@ -1213,7 +1285,7 @@ func HandleNewNewsCat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 // None
 func HandleNewNewsFldr(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsCreateFldr) {
-		return cc.NewErrReply(t, "You are not allowed to create news folders.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedCreateNewsfolders)
 	}
 
 	name := string(t.GetField(hotline.FieldFileName).Data)
@@ -1239,7 +1311,7 @@ func HandleNewNewsFldr(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 // * 321	News Article List Data		Optional - List of articles in the category
 func HandleGetNewsArtNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsReadArt) {
-		return cc.NewErrReply(t, "You are not allowed to read news.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedReadNews)
 	}
 
 	pathStrs, err := t.GetField(hotline.FieldNewsPath).DecodeNewsPath()
@@ -1276,7 +1348,7 @@ func HandleGetNewsArtNameList(cc *hotline.ClientConn, t *hotline.Transaction) (r
 // * 333	News Article Data		Optional - Article content (if flavor is "text/plain")
 func HandleGetNewsArtData(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsReadArt) {
-		return cc.NewErrReply(t, "You are not allowed to read news.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedReadNews)
 	}
 
 	newsPath, err := t.GetField(hotline.FieldNewsPath).DecodeNewsPath()
@@ -1326,11 +1398,11 @@ func HandleDelNewsItem(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 
 	if item.Type == [2]byte{0, 3} {
 		if !cc.Authorize(hotline.AccessNewsDeleteCat) {
-			return cc.NewErrReply(t, "You are not allowed to delete news categories.")
+			return cc.NewErrReply(t, ErrMsgNotAllowedDeleteNewsCategories)
 		}
 	} else {
 		if !cc.Authorize(hotline.AccessNewsDeleteFldr) {
-			return cc.NewErrReply(t, "You are not allowed to delete news folders.")
+			return cc.NewErrReply(t, ErrMsgNotAllowedDeleteNewsFolders)
 		}
 	}
 
@@ -1353,7 +1425,7 @@ func HandleDelNewsItem(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 // None
 func HandleDelNewsArt(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsDeleteArt) {
-		return cc.NewErrReply(t, "You are not allowed to delete news articles.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedDeleteNewsArticles)
 
 	}
 
@@ -1392,7 +1464,7 @@ func HandleDelNewsArt(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 // None
 func HandlePostNewsArt(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsPostArt) {
-		return cc.NewErrReply(t, "You are not allowed to post news articles.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedPostNewsArticles)
 	}
 
 	pathStrs, err := t.GetField(hotline.FieldNewsPath).DecodeNewsPath()
@@ -1433,7 +1505,7 @@ func HandlePostNewsArt(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 // * 101	Data				Complete message board content
 func HandleGetMsgs(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessNewsReadArt) {
-		return cc.NewErrReply(t, "You are not allowed to read news.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedReadNews)
 	}
 
 	_, _ = cc.Server.MessageBoard.Seek(0, 0)
@@ -1461,7 +1533,7 @@ func HandleGetMsgs(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 // * 207	File Size			Actual file size
 func HandleDownloadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessDownloadFile) {
-		return cc.NewErrReply(t, "You are not allowed to download files.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedDownloadFiles)
 	}
 
 	fileName := t.GetField(hotline.FieldFileName).Data
@@ -1538,7 +1610,7 @@ func HandleDownloadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 // * 116	Waiting Count			Number of users ahead in download queue
 func HandleDownloadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessDownloadFolder) {
-		return cc.NewErrReply(t, "You are not allowed to download folders.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedDownloadFolders)
 	}
 
 	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), t.GetField(hotline.FieldFilePath).Data, t.GetField(hotline.FieldFileName).Data)
@@ -1592,7 +1664,7 @@ func HandleDownloadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 // * 107	Ref Num				Transfer reference number
 func HandleUploadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessUploadFolder) {
-		return cc.NewErrReply(t, "You are not allowed to upload folders.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedUploadFolders)
 	}
 
 	var fp hotline.FilePath
@@ -1605,7 +1677,7 @@ func HandleUploadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 	// Handle special cases for Upload and Drop Box folders
 	if !cc.Authorize(hotline.AccessUploadAnywhere) {
 		if !fp.IsUploadDir() && !fp.IsDropbox() {
-			return cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload of the folder \"%v\" because you are only allowed to upload to the \"Uploads\" folder.", string(t.GetField(hotline.FieldFileName).Data)))
+			return cc.NewErrReply(t, fmt.Sprintf(ErrMsgUploadRestrictedTemplate, "folder", string(t.GetField(hotline.FieldFileName).Data)))
 		}
 	}
 
@@ -1634,7 +1706,7 @@ func HandleUploadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 // * 203	File Resume Data		Optional - Resume information (for resumed uploads)
 func HandleUploadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessUploadFile) {
-		return cc.NewErrReply(t, "You are not allowed to upload files.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedUploadFiles)
 	}
 
 	fileName := t.GetField(hotline.FieldFileName).Data
@@ -1652,7 +1724,7 @@ func HandleUploadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	// Handle special cases for Upload and Drop Box folders
 	if !cc.Authorize(hotline.AccessUploadAnywhere) {
 		if !fp.IsUploadDir() && !fp.IsDropbox() {
-			return cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload of the file \"%v\" because you are only allowed to upload to the \"Uploads\" folder.", string(fileName)))
+			return cc.NewErrReply(t, fmt.Sprintf(ErrMsgUploadRestrictedTemplate, "file", string(fileName)))
 		}
 	}
 	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName)
@@ -1661,7 +1733,7 @@ func HandleUploadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	}
 
 	if _, err := cc.Server.FS.Stat(fullFilePath); err == nil {
-		return cc.NewErrReply(t, fmt.Sprintf("Cannot accept upload because there is already a file named \"%v\".  Try choosing a different Name.", string(fileName)))
+		return cc.NewErrReply(t, fmt.Sprintf(ErrMsgFileUploadConflictTemplate, string(fileName)))
 	}
 
 	ft := cc.NewFileTransfer(hotline.FileUpload, cc.FileRoot(), fileName, filePath, transferSize)
@@ -1809,7 +1881,7 @@ func HandleGetFileNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res 
 
 	// Handle special case for drop box folders
 	if fp.IsDropbox() && !cc.Authorize(hotline.AccessViewDropBoxes) {
-		return cc.NewErrReply(t, "You are not allowed to view drop boxes.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedViewDropBoxes)
 	}
 
 	fileNames, err := hotline.GetFileNameList(fullPath, cc.Server.Config.IgnoreFiles)
@@ -1847,7 +1919,7 @@ func HandleGetFileNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res 
 // * 112	User Flags			Inviting user's flags
 func HandleInviteNewChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessOpenChat) {
-		return cc.NewErrReply(t, "You are not allowed to request private chat.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedRequestPrivateChat)
 	}
 
 	// Client to Invite
@@ -1864,7 +1936,7 @@ func HandleInviteNewChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []
 			hotline.NewTransaction(
 				hotline.TranServerMsg,
 				cc.ID,
-				hotline.NewField(hotline.FieldData, []byte(string(targetClient.UserName)+" does not accept private chats.")),
+				hotline.NewField(hotline.FieldData, []byte(fmt.Sprintf(ErrMsgDoesNotAcceptTemplate, string(targetClient.UserName), "private chats"))),
 				hotline.NewField(hotline.FieldUserName, targetClient.UserName),
 				hotline.NewField(hotline.FieldUserID, targetClient.ID[:]),
 				hotline.NewField(hotline.FieldOptions, []byte{0, 2}),
@@ -1908,7 +1980,7 @@ func HandleInviteNewChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []
 // * 112	User Flags			Inviting user's flags
 func HandleInviteToChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessOpenChat) {
-		return cc.NewErrReply(t, "You are not allowed to request private chat.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedRequestPrivateChat)
 	}
 
 	// Client to Invite
@@ -2071,7 +2143,7 @@ func HandleSetChatSubject(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 // None
 func HandleMakeAlias(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessMakeAlias) {
-		return cc.NewErrReply(t, "You are not allowed to make aliases.")
+		return cc.NewErrReply(t, ErrMsgNotAllowedMakeAliases)
 	}
 	fileName := t.GetField(hotline.FieldFileName).Data
 	filePath := t.GetField(hotline.FieldFilePath).Data
@@ -2088,7 +2160,7 @@ func HandleMakeAlias(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 	}
 
 	if err := cc.Server.FS.Symlink(fullFilePath, fullNewFilePath); err != nil {
-		return cc.NewErrReply(t, "Error creating alias")
+		return cc.NewErrReply(t, ErrMsgCreateAlias)
 	}
 
 	res = append(res, cc.NewReply(t))
