@@ -1,0 +1,52 @@
+name: Update Homebrew Formulas
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-homebrew:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Calculate SHA256 and update formulas
+        env:
+          GITHUB_TOKEN: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          SHA=$(curl -Ls https://github.com/jhalter/mobius/archive/refs/tags/$TAG.tar.gz | shasum -a 256 | cut -d' ' -f1)
+          
+          echo "Updating Homebrew formulas for version $TAG with SHA $SHA"
+          
+          # Update client formula
+          echo "Updating client formula..."
+          gh api repos/jhalter/homebrew-mobius-hotline-client/contents/mobius-hotline-client.rb \
+            --jq '.content' | base64 -d > client.rb
+          
+          CURRENT_CLIENT_SHA=$(gh api repos/jhalter/homebrew-mobius-hotline-client/contents/mobius-hotline-client.rb --jq '.sha')
+          
+          sed -i "s/version \".*\"/version \"${TAG#v}\"/" client.rb
+          sed -i "s/sha256 \".*\"/sha256 \"$SHA\"/" client.rb
+          
+          gh api repos/jhalter/homebrew-mobius-hotline-client/contents/mobius-hotline-client.rb \
+            -X PUT \
+            -f message="Update to $TAG" \
+            -f content="$(base64 -w 0 client.rb)" \
+            -f sha="$CURRENT_CLIENT_SHA"
+          
+          # Update server formula
+          echo "Updating server formula..."
+          gh api repos/jhalter/homebrew-mobius-hotline-server/contents/mobius-hotline-server.rb \
+            --jq '.content' | base64 -d > server.rb
+          
+          CURRENT_SERVER_SHA=$(gh api repos/jhalter/homebrew-mobius-hotline-server/contents/mobius-hotline-server.rb --jq '.sha')
+          
+          sed -i "s/version \".*\"/version \"${TAG#v}\"/" server.rb
+          sed -i "s/sha256 \".*\"/sha256 \"$SHA\"/" server.rb
+          
+          gh api repos/jhalter/homebrew-mobius-hotline-server/contents/mobius-hotline-server.rb \
+            -X PUT \
+            -f message="Update to $TAG" \
+            -f content="$(base64 -w 0 server.rb)" \
+            -f sha="$CURRENT_SERVER_SHA"
+          
+          echo "Successfully updated both Homebrew formulas to $TAG"
