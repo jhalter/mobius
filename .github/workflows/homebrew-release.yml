@@ -24,6 +24,7 @@ jobs:
           
           CURRENT_CLIENT_SHA=$(gh api repos/jhalter/homebrew-mobius-hotline-client/contents/mobius-hotline-client.rb --jq '.sha')
           
+          sed -i "s|url \"https://github.com/jhalter/mobius/archive/refs/tags/v.*\.tar\.gz\"|url \"https://github.com/jhalter/mobius/archive/refs/tags/$TAG.tar.gz\"|" client.rb
           sed -i "s/version \".*\"/version \"${TAG#v}\"/" client.rb
           sed -i "s/sha256 \".*\"/sha256 \"$SHA\"/" client.rb
           
@@ -40,6 +41,7 @@ jobs:
           
           CURRENT_SERVER_SHA=$(gh api repos/jhalter/homebrew-mobius-hotline-server/contents/mobius-hotline-server.rb --jq '.sha')
           
+          sed -i "s|url \"https://github.com/jhalter/mobius/archive/refs/tags/v.*\.tar\.gz\"|url \"https://github.com/jhalter/mobius/archive/refs/tags/$TAG.tar.gz\"|" server.rb
           sed -i "s/version \".*\"/version \"${TAG#v}\"/" server.rb
           sed -i "s/sha256 \".*\"/sha256 \"$SHA\"/" server.rb
           
