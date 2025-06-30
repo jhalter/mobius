@@ -275,7 +275,7 @@ func (t *Transaction) Size() []byte {
 	return bs
 }
 
-func (t *Transaction) GetField(id [2]byte) *Field {
+func (t *Transaction) GetField(id FieldType) *Field {
 	for _, field := range t.Fields {
 		if id == field.Type {
 			return &field

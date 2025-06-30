@@ -9,77 +9,80 @@ import (
 	"slices"
 )
 
+// FieldType represents a Hotline protocol field type identifier
+type FieldType [2]byte
+
 // List of Hotline protocol field types taken from the official 1.9 protocol document
 var (
-	FieldError               = [2]byte{0x00, 0x64} // 100
-	FieldData                = [2]byte{0x00, 0x65} // 101
-	FieldUserName            = [2]byte{0x00, 0x66} // 102
-	FieldUserID              = [2]byte{0x00, 0x67} // 103
-	FieldUserIconID          = [2]byte{0x00, 0x68} // 104
-	FieldUserLogin           = [2]byte{0x00, 0x69} // 105
-	FieldUserPassword        = [2]byte{0x00, 0x6A} // 106
-	FieldRefNum              = [2]byte{0x00, 0x6B} // 107
-	FieldTransferSize        = [2]byte{0x00, 0x6C} // 108
-	FieldChatOptions         = [2]byte{0x00, 0x6D} // 109
-	FieldUserAccess          = [2]byte{0x00, 0x6E} // 110
-	FieldUserFlags           = [2]byte{0x00, 0x70} // 112
-	FieldOptions             = [2]byte{0x00, 0x71} // 113
-	FieldChatID              = [2]byte{0x00, 0x72} // 114
-	FieldChatSubject         = [2]byte{0x00, 0x73} // 115
-	FieldWaitingCount        = [2]byte{0x00, 0x74} // 116
-	FieldBannerType          = [2]byte{0x00, 0x98} // 152
-	FieldNoServerAgreement   = [2]byte{0x00, 0x98} // 152
-	FieldVersion             = [2]byte{0x00, 0xA0} // 160
-	FieldCommunityBannerID   = [2]byte{0x00, 0xA1} // 161
-	FieldServerName          = [2]byte{0x00, 0xA2} // 162
-	FieldFileNameWithInfo    = [2]byte{0x00, 0xC8} // 200
-	FieldFileName            = [2]byte{0x00, 0xC9} // 201
-	FieldFilePath            = [2]byte{0x00, 0xCA} // 202
-	FieldFileResumeData      = [2]byte{0x00, 0xCB} // 203
-	FieldFileTransferOptions = [2]byte{0x00, 0xCC} // 204
-	FieldFileTypeString      = [2]byte{0x00, 0xCD} // 205
-	FieldFileCreatorString   = [2]byte{0x00, 0xCE} // 206
-	FieldFileSize            = [2]byte{0x00, 0xCF} // 207
-	FieldFileCreateDate      = [2]byte{0x00, 0xD0} // 208
-	FieldFileModifyDate      = [2]byte{0x00, 0xD1} // 209
-	FieldFileComment         = [2]byte{0x00, 0xD2} // 210
-	FieldFileNewName         = [2]byte{0x00, 0xD3} // 211
-	FieldFileNewPath         = [2]byte{0x00, 0xD4} // 212
-	FieldFileType            = [2]byte{0x00, 0xD5} // 213
-	FieldQuotingMsg          = [2]byte{0x00, 0xD6} // 214
-	FieldAutomaticResponse   = [2]byte{0x00, 0xD7} // 215
-	FieldFolderItemCount     = [2]byte{0x00, 0xDC} // 220
-	FieldUsernameWithInfo    = [2]byte{0x01, 0x2C} // 300
-	FieldNewsArtListData     = [2]byte{0x01, 0x41} // 321
-	FieldNewsCatName         = [2]byte{0x01, 0x42} // 322
-	FieldNewsCatListData15   = [2]byte{0x01, 0x43} // 323
-	FieldNewsPath            = [2]byte{0x01, 0x45} // 325
-	FieldNewsArtID           = [2]byte{0x01, 0x46} // 326
-	FieldNewsArtDataFlav     = [2]byte{0x01, 0x47} // 327
-	FieldNewsArtTitle        = [2]byte{0x01, 0x48} // 328
-	FieldNewsArtPoster       = [2]byte{0x01, 0x49} // 329
-	FieldNewsArtDate         = [2]byte{0x01, 0x4A} // 330
-	FieldNewsArtPrevArt      = [2]byte{0x01, 0x4B} // 331
-	FieldNewsArtNextArt      = [2]byte{0x01, 0x4C} // 332
-	FieldNewsArtData         = [2]byte{0x01, 0x4D} // 333
-	FieldNewsArtParentArt    = [2]byte{0x01, 0x4F} // 335
-	FieldNewsArt1stChildArt  = [2]byte{0x01, 0x50} // 336
-	FieldNewsArtRecurseDel   = [2]byte{0x01, 0x51} // 337
+	FieldError               = FieldType{0x00, 0x64} // 100
+	FieldData                = FieldType{0x00, 0x65} // 101
+	FieldUserName            = FieldType{0x00, 0x66} // 102
+	FieldUserID              = FieldType{0x00, 0x67} // 103
+	FieldUserIconID          = FieldType{0x00, 0x68} // 104
+	FieldUserLogin           = FieldType{0x00, 0x69} // 105
+	FieldUserPassword        = FieldType{0x00, 0x6A} // 106
+	FieldRefNum              = FieldType{0x00, 0x6B} // 107
+	FieldTransferSize        = FieldType{0x00, 0x6C} // 108
+	FieldChatOptions         = FieldType{0x00, 0x6D} // 109
+	FieldUserAccess          = FieldType{0x00, 0x6E} // 110
+	FieldUserFlags           = FieldType{0x00, 0x70} // 112
+	FieldOptions             = FieldType{0x00, 0x71} // 113
+	FieldChatID              = FieldType{0x00, 0x72} // 114
+	FieldChatSubject         = FieldType{0x00, 0x73} // 115
+	FieldWaitingCount        = FieldType{0x00, 0x74} // 116
+	FieldBannerType          = FieldType{0x00, 0x98} // 152
+	FieldNoServerAgreement   = FieldType{0x00, 0x98} // 152
+	FieldVersion             = FieldType{0x00, 0xA0} // 160
+	FieldCommunityBannerID   = FieldType{0x00, 0xA1} // 161
+	FieldServerName          = FieldType{0x00, 0xA2} // 162
+	FieldFileNameWithInfo    = FieldType{0x00, 0xC8} // 200
+	FieldFileName            = FieldType{0x00, 0xC9} // 201
+	FieldFilePath            = FieldType{0x00, 0xCA} // 202
+	FieldFileResumeData      = FieldType{0x00, 0xCB} // 203
+	FieldFileTransferOptions = FieldType{0x00, 0xCC} // 204
+	FieldFileTypeString      = FieldType{0x00, 0xCD} // 205
+	FieldFileCreatorString   = FieldType{0x00, 0xCE} // 206
+	FieldFileSize            = FieldType{0x00, 0xCF} // 207
+	FieldFileCreateDate      = FieldType{0x00, 0xD0} // 208
+	FieldFileModifyDate      = FieldType{0x00, 0xD1} // 209
+	FieldFileComment         = FieldType{0x00, 0xD2} // 210
+	FieldFileNewName         = FieldType{0x00, 0xD3} // 211
+	FieldFileNewPath         = FieldType{0x00, 0xD4} // 212
+	FieldFileType            = FieldType{0x00, 0xD5} // 213
+	FieldQuotingMsg          = FieldType{0x00, 0xD6} // 214
+	FieldAutomaticResponse   = FieldType{0x00, 0xD7} // 215
+	FieldFolderItemCount     = FieldType{0x00, 0xDC} // 220
+	FieldUsernameWithInfo    = FieldType{0x01, 0x2C} // 300
+	FieldNewsArtListData     = FieldType{0x01, 0x41} // 321
+	FieldNewsCatName         = FieldType{0x01, 0x42} // 322
+	FieldNewsCatListData15   = FieldType{0x01, 0x43} // 323
+	FieldNewsPath            = FieldType{0x01, 0x45} // 325
+	FieldNewsArtID           = FieldType{0x01, 0x46} // 326
+	FieldNewsArtDataFlav     = FieldType{0x01, 0x47} // 327
+	FieldNewsArtTitle        = FieldType{0x01, 0x48} // 328
+	FieldNewsArtPoster       = FieldType{0x01, 0x49} // 329
+	FieldNewsArtDate         = FieldType{0x01, 0x4A} // 330
+	FieldNewsArtPrevArt      = FieldType{0x01, 0x4B} // 331
+	FieldNewsArtNextArt      = FieldType{0x01, 0x4C} // 332
+	FieldNewsArtData         = FieldType{0x01, 0x4D} // 333
+	FieldNewsArtParentArt    = FieldType{0x01, 0x4F} // 335
+	FieldNewsArt1stChildArt  = FieldType{0x01, 0x50} // 336
+	FieldNewsArtRecurseDel   = FieldType{0x01, 0x51} // 337
 
 	// These fields are documented, but seemingly unused.
-	// FieldUserAlias           = [2]byte{0x00, 0x6F} // 111
-	// FieldNewsArtFlags        = [2]byte{0x01, 0x4E} // 334
+	// FieldUserAlias           = FieldType{0x00, 0x6F} // 111
+	// FieldNewsArtFlags        = FieldType{0x01, 0x4E} // 334
 )
 
 type Field struct {
-	Type      [2]byte // Type of field
-	FieldSize [2]byte // Size of the data field
-	Data      []byte  // Field data
+	Type      FieldType // Type of field
+	FieldSize [2]byte   // Size of the data field
+	Data      []byte    // Field data
 
 	readOffset int // Internal offset to track read progress
 }
 
-func NewField(fieldType [2]byte, data []byte) Field {
+func NewField(fieldType FieldType, data []byte) Field {
 	f := Field{
 		Type: fieldType,
 		Data: make([]byte, len(data)),
@@ -185,7 +188,7 @@ func (f *Field) Write(p []byte) (int, error) {
 	return minFieldLen + dataSize, nil
 }
 
-func GetField(id [2]byte, fields *[]Field) *Field {
+func GetField(id FieldType, fields *[]Field) *Field {
 	for _, field := range *fields {
 		if id == field.Type {
 			return &field

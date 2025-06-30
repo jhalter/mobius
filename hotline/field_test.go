@@ -102,7 +102,7 @@ func Test_fieldScanner(t *testing.T) {
 
 func TestField_Read(t *testing.T) {
 	type fields struct {
-		ID         [2]byte
+		Type       FieldType
 		FieldSize  [2]byte
 		Data       []byte
 		readOffset int
@@ -121,7 +121,7 @@ func TestField_Read(t *testing.T) {
 		{
 			name: "returns field bytes",
 			fields: fields{
-				ID:        [2]byte{0x00, 0x62},
+				Type:      FieldType{0x00, 0x62},
 				FieldSize: [2]byte{0x00, 0x03},
 				Data:      []byte("hai!"),
 			},
@@ -139,7 +139,7 @@ func TestField_Read(t *testing.T) {
 		{
 			name: "returns field bytes from readOffset",
 			fields: fields{
-				ID:         [2]byte{0x00, 0x62},
+				Type:       FieldType{0x00, 0x62},
 				FieldSize:  [2]byte{0x00, 0x03},
 				Data:       []byte("hai!"),
 				readOffset: 4,
@@ -156,7 +156,7 @@ func TestField_Read(t *testing.T) {
 		{
 			name: "returns io.EOF when all bytes read",
 			fields: fields{
-				ID:         [2]byte{0x00, 0x62},
+				Type:       FieldType{0x00, 0x62},
 				FieldSize:  [2]byte{0x00, 0x03},
 				Data:       []byte("hai!"),
 				readOffset: 8,
@@ -172,7 +172,7 @@ func TestField_Read(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := &Field{
-				Type:       tt.fields.ID,
+				Type:       tt.fields.Type,
 				FieldSize:  tt.fields.FieldSize,
 				Data:       tt.fields.Data,
 				readOffset: tt.fields.readOffset,
