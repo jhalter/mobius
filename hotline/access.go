@@ -73,125 +73,53 @@ func (bits *AccessBitmap) UnmarshalYAML(unmarshal func(interface{}) error) error
 	case map[string]interface{}:
 		// Mobius versions >= v0.17.0 store the user access bitmap as map[string]bool to provide a human-readable view of
 		// the account permissions.
-		if f, ok := v["DeleteFile"].(bool); ok && f {
-			bits.Set(AccessDeleteFile)
+		accessMap := map[string]int{
+			"DeleteFile":           AccessDeleteFile,
+			"UploadFile":           AccessUploadFile,
+			"DownloadFile":         AccessDownloadFile,
+			"RenameFile":           AccessRenameFile,
+			"MoveFile":             AccessMoveFile,
+			"CreateFolder":         AccessCreateFolder,
+			"DeleteFolder":         AccessDeleteFolder,
+			"RenameFolder":         AccessRenameFolder,
+			"MoveFolder":           AccessMoveFolder,
+			"ReadChat":             AccessReadChat,
+			"SendChat":             AccessSendChat,
+			"OpenChat":             AccessOpenChat,
+			"CloseChat":            AccessCloseChat,
+			"ShowInList":           AccessShowInList,
+			"CreateUser":           AccessCreateUser,
+			"DeleteUser":           AccessDeleteUser,
+			"OpenUser":             AccessOpenUser,
+			"ModifyUser":           AccessModifyUser,
+			"ChangeOwnPass":        AccessChangeOwnPass,
+			"NewsReadArt":          AccessNewsReadArt,
+			"NewsPostArt":          AccessNewsPostArt,
+			"DisconnectUser":       AccessDisconUser,
+			"CannotBeDisconnected": AccessCannotBeDiscon,
+			"GetClientInfo":        AccessGetClientInfo,
+			"UploadAnywhere":       AccessUploadAnywhere,
+			"AnyName":              AccessAnyName,
+			"NoAgreement":          AccessNoAgreement,
+			"SetFileComment":       AccessSetFileComment,
+			"SetFolderComment":     AccessSetFolderComment,
+			"ViewDropBoxes":        AccessViewDropBoxes,
+			"MakeAlias":            AccessMakeAlias,
+			"Broadcast":            AccessBroadcast,
+			"NewsDeleteArt":        AccessNewsDeleteArt,
+			"NewsCreateCat":        AccessNewsCreateCat,
+			"NewsDeleteCat":        AccessNewsDeleteCat,
+			"NewsCreateFldr":       AccessNewsCreateFldr,
+			"NewsDeleteFldr":       AccessNewsDeleteFldr,
+			"SendPrivMsg":          AccessSendPrivMsg,
+			"UploadFolder":         AccessUploadFolder,
+			"DownloadFolder":       AccessDownloadFolder,
 		}
-		if f, ok := v["UploadFile"].(bool); ok && f {
-			bits.Set(AccessUploadFile)
-		}
-		if f, ok := v["DownloadFile"].(bool); ok && f {
-			bits.Set(AccessDownloadFile)
-		}
-		if f, ok := v["UploadFolder"].(bool); ok && f {
-			bits.Set(AccessUploadFolder)
-		}
-		if f, ok := v["DownloadFolder"].(bool); ok && f {
-			bits.Set(AccessDownloadFolder)
-		}
-		if f, ok := v["RenameFile"].(bool); ok && f {
-			bits.Set(AccessRenameFile)
-		}
-		if f, ok := v["MoveFile"].(bool); ok && f {
-			bits.Set(AccessMoveFile)
-		}
-		if f, ok := v["CreateFolder"].(bool); ok && f {
-			bits.Set(AccessCreateFolder)
-		}
-		if f, ok := v["DeleteFolder"].(bool); ok && f {
-			bits.Set(AccessDeleteFolder)
-		}
-		if f, ok := v["RenameFolder"].(bool); ok && f {
-			bits.Set(AccessRenameFolder)
-		}
-		if f, ok := v["MoveFolder"].(bool); ok && f {
-			bits.Set(AccessMoveFolder)
-		}
-		if f, ok := v["ReadChat"].(bool); ok && f {
-			bits.Set(AccessReadChat)
-		}
-		if f, ok := v["SendChat"].(bool); ok && f {
-			bits.Set(AccessSendChat)
-		}
-		if f, ok := v["OpenChat"].(bool); ok && f {
-			bits.Set(AccessOpenChat)
-		}
-		if f, ok := v["CloseChat"].(bool); ok && f {
-			bits.Set(AccessCloseChat)
-		}
-		if f, ok := v["ShowInList"].(bool); ok && f {
-			bits.Set(AccessShowInList)
-		}
-		if f, ok := v["CreateUser"].(bool); ok && f {
-			bits.Set(AccessCreateUser)
-		}
-		if f, ok := v["DeleteUser"].(bool); ok && f {
-			bits.Set(AccessDeleteUser)
-		}
-		if f, ok := v["OpenUser"].(bool); ok && f {
-			bits.Set(AccessOpenUser)
-		}
-		if f, ok := v["ModifyUser"].(bool); ok && f {
-			bits.Set(AccessModifyUser)
-		}
-		if f, ok := v["ChangeOwnPass"].(bool); ok && f {
-			bits.Set(AccessChangeOwnPass)
-		}
-		if f, ok := v["NewsReadArt"].(bool); ok && f {
-			bits.Set(AccessNewsReadArt)
-		}
-		if f, ok := v["NewsPostArt"].(bool); ok && f {
-			bits.Set(AccessNewsPostArt)
-		}
-		if f, ok := v["DisconnectUser"].(bool); ok && f {
-			bits.Set(AccessDisconUser)
-		}
-		if f, ok := v["CannotBeDisconnected"].(bool); ok && f {
-			bits.Set(AccessCannotBeDiscon)
-		}
-		if f, ok := v["GetClientInfo"].(bool); ok && f {
-			bits.Set(AccessGetClientInfo)
-		}
-		if f, ok := v["UploadAnywhere"].(bool); ok && f {
-			bits.Set(AccessUploadAnywhere)
-		}
-		if f, ok := v["AnyName"].(bool); ok && f {
-			bits.Set(AccessAnyName)
-		}
-		if f, ok := v["NoAgreement"].(bool); ok && f {
-			bits.Set(AccessNoAgreement)
-		}
-		if f, ok := v["SetFileComment"].(bool); ok && f {
-			bits.Set(AccessSetFileComment)
-		}
-		if f, ok := v["SetFolderComment"].(bool); ok && f {
-			bits.Set(AccessSetFolderComment)
-		}
-		if f, ok := v["ViewDropBoxes"].(bool); ok && f {
-			bits.Set(AccessViewDropBoxes)
-		}
-		if f, ok := v["MakeAlias"].(bool); ok && f {
-			bits.Set(AccessMakeAlias)
-		}
-		if f, ok := v["Broadcast"].(bool); ok && f {
-			bits.Set(AccessBroadcast)
-		}
-		if f, ok := v["NewsDeleteArt"].(bool); ok && f {
-			bits.Set(AccessNewsDeleteArt)
-		}
-		if f, ok := v["NewsCreateCat"].(bool); ok && f {
-			bits.Set(AccessNewsCreateCat)
-		}
-		if f, ok := v["NewsDeleteCat"].(bool); ok && f {
-			bits.Set(AccessNewsDeleteCat)
-		}
-		if f, ok := v["NewsCreateFldr"].(bool); ok && f {
-			bits.Set(AccessNewsCreateFldr)
-		}
-		if f, ok := v["NewsDeleteFldr"].(bool); ok && f {
-			bits.Set(AccessNewsDeleteFldr)
-		}
-		if f, ok := v["SendPrivMsg"].(bool); ok && f {
-			bits.Set(AccessSendPrivMsg)
+
+		for key, accessBit := range accessMap {
+			if flag, ok := v[key].(bool); ok && flag {
+				bits.Set(accessBit)
+			}
 		}
 	}
 
