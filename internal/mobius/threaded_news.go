@@ -195,7 +195,7 @@ func (n *ThreadedNewsYAML) DeleteArticle(newsPath []string, articleID uint32, _ 
 	return n.writeFile()
 }
 
-func (n *ThreadedNewsYAML) ListArticles(newsPath []string) hotline.NewsArtListData {
+func (n *ThreadedNewsYAML) ListArticles(newsPath []string) (hotline.NewsArtListData, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 

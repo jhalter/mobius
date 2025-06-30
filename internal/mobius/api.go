@@ -263,7 +263,8 @@ func (srv *APIServer) ReloadHandler(reloadFunc func()) func(w http.ResponseWrite
 func (srv *APIServer) RenderStats(w http.ResponseWriter, _ *http.Request) {
 	u, err := json.Marshal(srv.hlServer.CurrentStats())
 	if err != nil {
-		panic(err)
+		http.Error(w, "failed to marshal stats", http.StatusInternalServerError)
+		return
 	}
 
 	_, _ = w.Write(u)

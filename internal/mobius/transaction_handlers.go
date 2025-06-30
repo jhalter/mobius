@@ -1319,7 +1319,10 @@ func HandleGetNewsArtNameList(cc *hotline.ClientConn, t *hotline.Transaction) (r
 		return res
 	}
 
-	nald := cc.Server.ThreadedNewsMgr.ListArticles(pathStrs)
+	nald, err := cc.Server.ThreadedNewsMgr.ListArticles(pathStrs)
+	if err != nil {
+		return res
+	}
 
 	b, err := io.ReadAll(&nald)
 	if err != nil {

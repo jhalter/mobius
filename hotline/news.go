@@ -14,7 +14,7 @@ var (
 )
 
 type ThreadedNewsMgr interface {
-	ListArticles(newsPath []string) NewsArtListData
+	ListArticles(newsPath []string) (NewsArtListData, error)
 	GetArticle(newsPath []string, articleID uint32) *NewsArtData
 	DeleteArticle(newsPath []string, articleID uint32, recursive bool) error
 	PostArticle(newsPath []string, parentArticleID uint32, article NewsArtData) error
@@ -41,7 +41,7 @@ type NewsCategoryListData15 struct {
 	readOffset int // Internal offset to track read progress
 }
 
-func (newscat *NewsCategoryListData15) GetNewsArtListData() NewsArtListData {
+func (newscat *NewsCategoryListData15) GetNewsArtListData() (NewsArtListData, error) {
 	var newsArts []NewsArtList
 	var newsArtsPayload []byte
 
@@ -70,8 +70,7 @@ func (newscat *NewsCategoryListData15) GetNewsArtListData() NewsArtListData {
 	for _, v := range newsArts {
 		b, err := io.ReadAll(&v)
 		if err != nil {
-			// TODO
-			panic(err)
+			return NewsArtListData{}, err
 		}
 		newsArtsPayload = append(newsArtsPayload, b...)
 	}
@@ -81,7 +80,7 @@ func (newscat *NewsCategoryListData15) GetNewsArtListData() NewsArtListData {
 		Name:        []byte{},
 		Description: []byte{},
 		NewsArtList: newsArtsPayload,
-	}
+	}, nil
 }
 
 // NewsArtData represents an individual news article.
@@ -242,10 +241,10 @@ type MockThreadNewsMgr struct {
 	mock.Mock
 }
 
-func (m *MockThreadNewsMgr) ListArticles(newsPath []string) NewsArtListData {
+func (m *MockThreadNewsMgr) ListArticles(newsPath []string) (NewsArtListData, error) {
 	args := m.Called(newsPath)
 
-	return args.Get(0).(NewsArtListData)
+	return args.Get(0).(NewsArtListData), args.Error(1)
 }
 
 func (m *MockThreadNewsMgr) GetArticle(newsPath []string, articleID uint32) *NewsArtData {
