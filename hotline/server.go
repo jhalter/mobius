@@ -228,7 +228,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 			}
 
 			go func() {
-				ipAddr := strings.Split(conn.RemoteAddr().(*net.TCPAddr).String(), ":")[0]
+				ipAddr, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 
 				connCtx := context.WithValue(ctx, contextKeyReq, requestCtx{
 					remoteAddr: conn.RemoteAddr().String(),
@@ -422,7 +422,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	}
 
 	// Check if remoteAddr is present in the ban list, we do this after we have the login name
-	ipAddr := strings.Split(remoteAddr, ":")[0]
+	ipAddr, _, _ := net.SplitHostPort(remoteAddr)
 	if s.Redis != nil {
 		// Redis-based ban check
 		bannedUser, _ := s.Redis.SIsMember(ctx, "mobius:banned:users", login).Result()
