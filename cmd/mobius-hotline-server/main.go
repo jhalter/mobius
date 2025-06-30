@@ -59,11 +59,11 @@ func main() {
 	if *init {
 		if _, err := os.Stat(path.Join(*configDir, "/config.yaml")); os.IsNotExist(err) {
 			if err := os.MkdirAll(*configDir, 0750); err != nil {
-				slogger.Error(fmt.Sprintf("error creating config dir: %s", err))
+				slogger.Error("Error creating config dir", "err", err)
 				os.Exit(1)
 			}
 			if err := copyDir(path.Join("mobius", "config"), *configDir); err != nil {
-				slogger.Error(fmt.Sprintf("error copying config dir: %s", err))
+				slogger.Error("Error copying config dir", "err", err)
 				os.Exit(1)
 			}
 			slogger.Info("Config dir initialized at " + *configDir)
@@ -74,7 +74,7 @@ func main() {
 
 	config, err := mobius.LoadConfig(path.Join(*configDir, "config.yaml"))
 	if err != nil {
-		slogger.Error(fmt.Sprintf("Error loading config: %v", err))
+		slogger.Error("Error loading config", "err", err)
 		os.Exit(1)
 	}
 
@@ -85,44 +85,44 @@ func main() {
 		hotline.WithConfig(*config),
 	)
 	if err != nil {
-		slogger.Error(fmt.Sprintf("Error starting server: %s", err))
+		slogger.Error("Error starting server", "err", err)
 		os.Exit(1)
 	}
 
 	srv.MessageBoard, err = mobius.NewFlatNews(path.Join(*configDir, "MessageBoard.txt"))
 	if err != nil {
-		slogger.Error(fmt.Sprintf("Error loading message board: %v", err))
+		slogger.Error("Error loading message board", "err", err)
 		os.Exit(1)
 	}
 
 	srv.BanList, err = mobius.NewBanFile(path.Join(*configDir, "Banlist.yaml"))
 	if err != nil {
-		slogger.Error(fmt.Sprintf("Error loading ban list: %v", err))
+		slogger.Error("Error loading ban list", "err", err)
 		os.Exit(1)
 	}
 
 	srv.ThreadedNewsMgr, err = mobius.NewThreadedNewsYAML(path.Join(*configDir, "ThreadedNews.yaml"))
 	if err != nil {
-		slogger.Error(fmt.Sprintf("Error loading news: %v", err))
+		slogger.Error("Error loading news", "err", err)
 		os.Exit(1)
 	}
 
 	srv.AccountManager, err = mobius.NewYAMLAccountManager(path.Join(*configDir, "Users/"))
 	if err != nil {
-		slogger.Error(fmt.Sprintf("Error loading accounts: %v", err))
+		slogger.Error("Error loading accounts", "err", err)
 		os.Exit(1)
 	}
 
 	srv.Agreement, err = mobius.NewAgreement(*configDir, "\r")
 	if err != nil {
-		slogger.Error(fmt.Sprintf("Error loading agreement: %v", err))
+		slogger.Error("Error loading agreement", "err", err)
 		os.Exit(1)
 	}
 
 	bannerPath := path.Join(*configDir, config.BannerFile)
 	srv.Banner, err = os.ReadFile(bannerPath)
 	if err != nil {
-		slogger.Error(fmt.Sprintf("Error loading accounts: %v", err))
+		slogger.Error("Error loading banner", "err", err)
 		os.Exit(1)
 	}
 
@@ -140,15 +140,14 @@ func main() {
 		}
 
 		if err := srv.Agreement.(*mobius.Agreement).Reload(); err != nil {
-			slogger.Error(fmt.Sprintf("Error reloading agreement: %v", err))
-			os.Exit(1)
+			slogger.Error("Error reloading agreement", "err", err)
 		}
 
 		// Let's try to reload the banner
 		bannerPath := path.Join(*configDir, config.BannerFile)
 		srv.Banner, err = os.ReadFile(bannerPath)
 		if err != nil {
-			slogger.Error(fmt.Sprintf("Error reloading banner: %v", err))
+			slogger.Error("Error reloading banner", "err", err)
 		}
 	}
 
