@@ -24,6 +24,8 @@ func loadFromYAMLFile(path string, data interface{}) error {
 	return decoder.Decode(data)
 }
 
+// YAMLAccountManager implements AccountManager interface using YAML files for persistence.
+// It maintains an in-memory cache of accounts and synchronizes with YAML files on disk.
 type YAMLAccountManager struct {
 	accounts   map[string]hotline.Account
 	accountDir string
@@ -31,6 +33,9 @@ type YAMLAccountManager struct {
 	mu sync.Mutex
 }
 
+// NewYAMLAccountManager creates a new YAML-based account manager that loads existing
+// accounts from .yaml files in the specified directory. It also performs migration
+// from old access flag format to new AccessBitmap format when needed.
 func NewYAMLAccountManager(accountDir string) (*YAMLAccountManager, error) {
 	accountMgr := YAMLAccountManager{
 		accountDir: accountDir,
@@ -71,6 +76,8 @@ func NewYAMLAccountManager(accountDir string) (*YAMLAccountManager, error) {
 	return &accountMgr, nil
 }
 
+// Create adds a new account by writing it to a YAML file and updating the in-memory cache.
+// Returns an error if an account with the same login already exists.
 func (am *YAMLAccountManager) Create(account hotline.Account) error {
 	am.mu.Lock()
 	defer am.mu.Unlock()
@@ -100,6 +107,8 @@ func (am *YAMLAccountManager) Create(account hotline.Account) error {
 	return nil
 }
 
+// Update modifies an existing account with new data and optionally renames it.
+// If newLogin differs from account.Login, the account file is renamed accordingly.
 func (am *YAMLAccountManager) Update(account hotline.Account, newLogin string) error {
 	am.mu.Lock()
 	defer am.mu.Unlock()
@@ -133,6 +142,8 @@ func (am *YAMLAccountManager) Update(account hotline.Account, newLogin string) e
 	return nil
 }
 
+// Get retrieves an account by login from the in-memory cache.
+// Returns nil if the account is not found.
 func (am *YAMLAccountManager) Get(login string) *hotline.Account {
 	am.mu.Lock()
 	defer am.mu.Unlock()
@@ -145,6 +156,7 @@ func (am *YAMLAccountManager) Get(login string) *hotline.Account {
 	return &account
 }
 
+// List returns all accounts from the in-memory cache as a slice.
 func (am *YAMLAccountManager) List() []hotline.Account {
 	am.mu.Lock()
 	defer am.mu.Unlock()
@@ -157,6 +169,7 @@ func (am *YAMLAccountManager) List() []hotline.Account {
 	return accounts
 }
 
+// Delete removes an account by deleting its YAML file and removing it from the cache.
 func (am *YAMLAccountManager) Delete(login string) error {
 	am.mu.Lock()
 	defer am.mu.Unlock()
@@ -171,34 +184,40 @@ func (am *YAMLAccountManager) Delete(login string) error {
 	return nil
 }
 
+// MockAccountManager provides a test double implementation of AccountManager using testify/mock.
 type MockAccountManager struct {
 	mock.Mock
 }
 
+// Create mocks the Create method for testing.
 func (m *MockAccountManager) Create(account hotline.Account) error {
 	args := m.Called(account)
 
 	return args.Error(0)
 }
 
+// Update mocks the Update method for testing.
 func (m *MockAccountManager) Update(account hotline.Account, newLogin string) error {
 	args := m.Called(account, newLogin)
 
 	return args.Error(0)
 }
 
+// Get mocks the Get method for testing.
 func (m *MockAccountManager) Get(login string) *hotline.Account {
 	args := m.Called(login)
 
 	return args.Get(0).(*hotline.Account)
 }
 
+// List mocks the List method for testing.
 func (m *MockAccountManager) List() []hotline.Account {
 	args := m.Called()
 
 	return args.Get(0).([]hotline.Account)
 }
 
+// Delete mocks the Delete method for testing.
 func (m *MockAccountManager) Delete(login string) error {
 	args := m.Called(login)
 
