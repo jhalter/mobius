@@ -1,0 +1,278 @@
+openapi: 3.0.3
+info:
+  title: Mobius API
+  description: REST API for managing a Hotline server
+  version: 1.0.0
+  contact:
+    name: Mobius
+    url: https://github.com/jhalter/mobius
+servers:
+  - url: http://localhost:5603
+    description: Local development server
+security:
+  - ApiKeyAuth: []
+paths:
+  /api/v1/online:
+    get:
+      summary: Get online users
+      description: Returns a list of currently online users with their login, nickname, and IP address
+      responses:
+        '200':
+          description: List of online users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    login:
+                      type: string
+                      description: User's login name
+                    nickname:
+                      type: string
+                      description: User's display nickname
+                    ip:
+                      type: string
+                      description: User's IP address
+                  example:
+                    login: "admin"
+                    nickname: "Administrator"
+                    ip: "192.168.1.100"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/ban:
+    post:
+      summary: Ban a user
+      description: Ban a user by username, nickname, or IP address. At least one field must be provided.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: Username to ban
+                nickname:
+                  type: string
+                  description: Nickname to ban
+                ip:
+                  type: string
+                  description: IP address to ban
+              example:
+                username: "baduser"
+      responses:
+        '200':
+          description: User banned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    example: "banned"
+        '400':
+          description: Bad request - missing required fields
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "username, nickname, or ip required"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/unban:
+    post:
+      summary: Unban a user
+      description: Remove a ban for a user by username, nickname, or IP address. At least one field must be provided.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: Username to unban
+                nickname:
+                  type: string
+                  description: Nickname to unban
+                ip:
+                  type: string
+                  description: IP address to unban
+              example:
+                username: "baduser"
+      responses:
+        '200':
+          description: User unbanned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    example: "unbanned"
+        '400':
+          description: Bad request - missing required fields
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "username, nickname, or ip required"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/banned/ips:
+    get:
+      summary: List banned IP addresses
+      description: Returns a list of all banned IP addresses
+      responses:
+        '200':
+          description: List of banned IP addresses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                example: ["192.168.1.100", "10.0.0.5"]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Internal server error
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "failed to fetch banned IPs"
+  /api/v1/banned/usernames:
+    get:
+      summary: List banned usernames
+      description: Returns a list of all banned usernames
+      responses:
+        '200':
+          description: List of banned usernames
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                example: ["baduser", "spammer"]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Internal server error
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "failed to fetch banned usernames"
+  /api/v1/banned/nicknames:
+    get:
+      summary: List banned nicknames
+      description: Returns a list of all banned nicknames
+      responses:
+        '200':
+          description: List of banned nicknames
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                example: ["BadNick", "Spammer123"]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Internal server error
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "failed to fetch banned nicknames"
+  /api/v1/reload:
+    post:
+      summary: Reload server configuration
+      description: Triggers a reload of the server configuration
+      responses:
+        '200':
+          description: Configuration reloaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    example: "config reloaded"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/shutdown:
+    post:
+      summary: Shutdown server
+      description: Gracefully shutdown the server with a message
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+              example: "Server maintenance"
+      responses:
+        '200':
+          description: Server shutting down
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg:
+                    type: string
+                    example: "server shutting down"
+        '400':
+          description: Bad request - missing shutdown message
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/stats:
+    get:
+      summary: Get server statistics
+      description: Returns current server statistics and metrics
+      responses:
+        '200':
+          description: Server statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Server statistics object (structure depends on implementation)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Internal server error
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "failed to marshal stats"
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "unauthorized"

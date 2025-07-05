@@ -34,6 +34,8 @@ func (lrw *logResponseWriter) Write(b []byte) (int, error) {
 	return lrw.ResponseWriter.Write(b)
 }
 
+// APIServer provides REST API endpoints for managing a Hotline server.
+// It supports user management, banning operations, and server administration.
 type APIServer struct {
 	hlServer *hotline.Server
 	logger   *slog.Logger
@@ -61,6 +63,8 @@ func (srv *APIServer) logMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// NewAPIServer creates a new APIServer instance with the specified configuration.
+// It sets up all API routes and middleware, and optionally connects to Redis for persistent storage.
 func NewAPIServer(hlServer *hotline.Server, reloadFunc func(), logger *slog.Logger, apiKey string, redisAddr string, redisPassword string, redisDB int) *APIServer {
 	srv := APIServer{
 		hlServer: hlServer,
@@ -98,6 +102,8 @@ func NewAPIServer(hlServer *hotline.Server, reloadFunc func(), logger *slog.Logg
 	return &srv
 }
 
+// OnlineHandler returns a list of currently online users with their login, nickname, and IP address.
+// GET /api/v1/online
 func (srv *APIServer) OnlineHandler(w http.ResponseWriter, r *http.Request) {
 	var users []map[string]string
 
@@ -128,12 +134,17 @@ func (srv *APIServer) OnlineHandler(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(users)
 }
 
+// BanRequest represents a ban/unban request payload.
+// At least one field (Username, Nickname, or IP) must be provided.
 type BanRequest struct {
 	Username string `json:"username,omitempty"`
 	Nickname string `json:"nickname,omitempty"`
 	IP       string `json:"ip,omitempty"`
 }
 
+// BanHandler bans a user by username, nickname, or IP address.
+// The user will be disconnected if currently online and added to the ban list.
+// POST /api/v1/ban
 func (srv *APIServer) BanHandler(w http.ResponseWriter, r *http.Request) {
 	var req BanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -172,6 +183,8 @@ func (srv *APIServer) BanHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(`{"msg":"banned"}`))
 }
 
+// UnbanHandler removes a ban for a user by username, nickname, or IP address.
+// POST /api/v1/unban
 func (srv *APIServer) UnbanHandler(w http.ResponseWriter, r *http.Request) {
 	var req BanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -201,6 +214,8 @@ func (srv *APIServer) UnbanHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(`{"msg":"unbanned"}`))
 }
 
+// ListBannedIPsHandler returns a list of all banned IP addresses.
+// GET /api/v1/banned/ips
 func (srv *APIServer) ListBannedIPsHandler(w http.ResponseWriter, r *http.Request) {
 	if srv.redis != nil {
 		ips, err := srv.redis.SMembers(r.Context(), "mobius:banned:ips").Result()
@@ -214,6 +229,8 @@ func (srv *APIServer) ListBannedIPsHandler(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// ListBannedUsernamesHandler returns a list of all banned usernames.
+// GET /api/v1/banned/usernames
 func (srv *APIServer) ListBannedUsernamesHandler(w http.ResponseWriter, r *http.Request) {
 	if srv.redis != nil {
 		users, err := srv.redis.SMembers(r.Context(), "mobius:banned:users").Result()
@@ -227,6 +244,8 @@ func (srv *APIServer) ListBannedUsernamesHandler(w http.ResponseWriter, r *http.
 	}
 }
 
+// ListBannedNicknamesHandler returns a list of all banned nicknames.
+// GET /api/v1/banned/nicknames
 func (srv *APIServer) ListBannedNicknamesHandler(w http.ResponseWriter, r *http.Request) {
 	if srv.redis != nil {
 		nicks, err := srv.redis.SMembers(r.Context(), "mobius:banned:nicknames").Result()
@@ -240,6 +259,9 @@ func (srv *APIServer) ListBannedNicknamesHandler(w http.ResponseWriter, r *http.
 	}
 }
 
+// ShutdownHandler gracefully shuts down the server with a custom message.
+// The message is sent to all connected clients before shutdown.
+// POST /api/v1/shutdown
 func (srv *APIServer) ShutdownHandler(w http.ResponseWriter, r *http.Request) {
 	msg, err := io.ReadAll(r.Body)
 	if err != nil || len(msg) == 0 {
@@ -252,6 +274,8 @@ func (srv *APIServer) ShutdownHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.WriteString(w, `{ "msg": "server shutting down" }`)
 }
 
+// ReloadHandler triggers a reload of the server configuration.
+// POST /api/v1/reload
 func (srv *APIServer) ReloadHandler(reloadFunc func()) func(w http.ResponseWriter, _ *http.Request) {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		reloadFunc()
@@ -260,6 +284,8 @@ func (srv *APIServer) ReloadHandler(reloadFunc func()) func(w http.ResponseWrite
 	}
 }
 
+// RenderStats returns current server statistics and metrics in JSON format.
+// GET /api/v1/stats
 func (srv *APIServer) RenderStats(w http.ResponseWriter, _ *http.Request) {
 	u, err := json.Marshal(srv.hlServer.CurrentStats())
 	if err != nil {
@@ -270,6 +296,8 @@ func (srv *APIServer) RenderStats(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write(u)
 }
 
+// Serve starts the API server on the specified port.
+// This is a blocking call that will run until the server is shut down.
 func (srv *APIServer) Serve(port string) {
 	err := http.ListenAndServe(port, srv.mux)
 	if err != nil {

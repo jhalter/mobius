@@ -170,62 +170,73 @@ Usage of mobius-hotline-server:
 
 To run as a systemd service, refer to this sample unit file: [mobius-hotline-server.service](https://github.com/jhalter/mobius/blob/master/cmd/mobius-hotline-server/mobius-hotline-server.service)
 
-## (Optional) HTTP API
+## HTTP API
 
-The Mobius server includes an optional HTTP API to perform out-of-band administrative functions.
+The Mobius server includes an optional HTTP API for server administration and user management.
 
-To enable it, include the `--api-addr` flag with a string defining the IP and port to listen on in the form of `<ip>:<port>`.
+### Configuration
 
-Example: `--api-addr=127.0.0.1:5503`
+To enable the API, use the `--api-addr` flag with an IP and port:
 
-⚠️ The API has no authentication, so binding it to localhost is a good idea!
-
-#### GET /api/v1/stats
-
-The stats endpoint returns server runtime statistics and counters.
-
-```
-❯ curl -s localhost:5503/api/v1/stats  | jq .
-{
-  "ConnectionCounter": 0,
-  "ConnectionPeak": 0,
-  "CurrentlyConnected": 0,
-  "DownloadCounter": 0,
-  "DownloadsInProgress": 0,
-  "Since": "2024-07-18T15:36:42.426156-07:00",
-  "UploadCounter": 0,
-  "UploadsInProgress": 0,
-  "WaitingDownloads": 0
-}
+```bash
+mobius-hotline-server --api-addr=127.0.0.1:5503
 ```
 
-#### GET /api/v1/reload
+### Authentication
 
-The reload endpoint reloads the following configuration files from disk:
+The API supports optional authentication via API key. Set the `--api-key` flag:
 
-* Agreement.txt
-* News.txt
-* Users/*.yaml
-* ThreadedNews.yaml
-* banner.jpg
-
-Example:
-
-```
-❯ curl -s localhost:5503/api/v1/reload | jq .
-{
-  "msg": "config reloaded"
-}
+```bash
+mobius-hotline-server --api-addr=127.0.0.1:5503 --api-key=your-secret-key
 ```
 
-#### POST /api/v1/shutdown
+Include the API key in the `X-API-Key` header:
 
-The shutdown endpoint accepts a shutdown message from POST payload, sends it to to all connected Hotline clients, then gracefully shuts down the server.
-
-Example:
-
+```bash
+curl -H "X-API-Key: your-secret-key" localhost:5503/api/v1/stats
 ```
-❯ curl -d 'Server rebooting' localhost:5503/api/v1/shutdown
 
-{ "msg": "server shutting down" }
+### API Documentation
+
+Complete API documentation is available in the [OpenAPI specification](api.yaml).
+
+### Endpoints
+
+#### User Management
+
+- `GET /api/v1/online` - List currently online users
+- `POST /api/v1/ban` - Ban a user by username, nickname, or IP
+- `POST /api/v1/unban` - Remove a ban
+- `GET /api/v1/banned/ips` - List banned IP addresses
+- `GET /api/v1/banned/usernames` - List banned usernames  
+- `GET /api/v1/banned/nicknames` - List banned nicknames
+
+#### Server Administration
+
+- `GET /api/v1/stats` - Get server statistics
+- `POST /api/v1/reload` - Reload configuration
+- `POST /api/v1/shutdown` - Shutdown server
+
+### Examples
+
+**Get online users:**
+```bash
+curl localhost:5503/api/v1/online
+```
+
+**Ban a user:**
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"username":"baduser"}' \
+  localhost:5503/api/v1/ban
+```
+
+**Get server stats:**
+```bash
+curl localhost:5503/api/v1/stats | jq .
+```
+
+**Shutdown server:**
+```bash
+curl -X POST -d 'Server maintenance' localhost:5503/api/v1/shutdown
 ```
