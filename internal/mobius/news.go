@@ -66,6 +66,7 @@ func (f *FlatNews) Write(p []byte) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	// Prepend the new post to the existing news posts.
 	f.data = slices.Concat(p, f.data)
 
 	tempFilePath := f.filePath + ".tmp"
@@ -79,10 +80,13 @@ func (f *FlatNews) Write(p []byte) (int, error) {
 		return 0, fmt.Errorf("rename temporary file to final file: %v", err)
 	}
 
-	return len(p), os.WriteFile(f.filePath, f.data, 0644)
+	return len(p), nil
 }
 
 func (f *FlatNews) Seek(offset int64, _ int) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	f.readOffset = int(offset)
 
 	return 0, nil
