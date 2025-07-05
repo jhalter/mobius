@@ -61,7 +61,9 @@ func (s *Stats) Decrement(key int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.stats[key]--
+	if s.stats[key] > 0 {
+		s.stats[key]--
+	}
 }
 
 func (s *Stats) Set(key, val int) {
