@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net"
 	"os"
 	"path"
 	"strings"
@@ -89,13 +90,6 @@ const (
 	ErrMsgCreateAlias = "Error creating alias"
 )
 
-// This function is used to extract the IP address from a given address string, exluding the port.
-func extractIP(addr string) string {
-	if idx := strings.LastIndex(addr, ":"); idx != -1 {
-		return addr[:idx]
-	}
-	return addr
-}
 
 // Converts bytes from Mac Roman encoding to UTF-8
 var txtDecoder = charmap.Macintosh.NewDecoder()
@@ -1048,7 +1042,7 @@ func HandleTranAgreed(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 
 	if cc.Server.Redis != nil {
 		login := cc.Account.Login
-		ip := extractIP(cc.RemoteAddr)
+		ip, _, _ := net.SplitHostPort(cc.RemoteAddr)
 		// Remove old entry (login::ip)
 		cc.Server.Redis.SRem(context.Background(), "mobius:online", login+"::"+ip)
 		// Add new entry with login, nickname, ip
@@ -1182,7 +1176,7 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 			))
 
 			banUntil := time.Now().Add(hotline.BanDuration)
-			ip := strings.Split(clientConn.RemoteAddr, ":")[0]
+			ip, _, _ := net.SplitHostPort(clientConn.RemoteAddr)
 
 			err := cc.Server.BanList.Add(ip, &banUntil)
 			if err != nil {
@@ -1200,7 +1194,7 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 				hotline.NewField(hotline.FieldChatOptions, []byte{0, 0}),
 			))
 
-			ip := strings.Split(clientConn.RemoteAddr, ":")[0]
+			ip, _, _ := net.SplitHostPort(clientConn.RemoteAddr)
 
 			err := cc.Server.BanList.Add(ip, nil)
 			if err != nil {
@@ -1790,7 +1784,7 @@ func HandleSetClientUserInfo(cc *hotline.ClientConn, t *hotline.Transaction) (re
 		cc.UserName = t.GetField(hotline.FieldUserName).Data
 		if cc.Server.Redis != nil {
 			login := cc.Account.Login
-			ip := extractIP(cc.RemoteAddr)
+			ip, _, _ := net.SplitHostPort(cc.RemoteAddr)
 			// Remove old entry (login:oldnickname:ip) and (login::ip)
 			cc.Server.Redis.SRem(context.Background(), "mobius:online", login+"::"+ip)
 			if oldNickname != "" {
