@@ -148,7 +148,7 @@ func TestCalcItemCount(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create temp dir: %v", err)
 			}
-			defer os.RemoveAll(tempDir)
+			defer func() { _ = os.RemoveAll(tempDir) }()
 
 			// Create the test directory structure
 			if err := createTestDirStructure(tempDir, tt.structure); err != nil {

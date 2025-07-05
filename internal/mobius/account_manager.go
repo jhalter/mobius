@@ -18,7 +18,7 @@ func loadFromYAMLFile(path string, data interface{}) error {
 	if err != nil {
 		return err
 	}
-	defer fh.Close()
+	defer func() { _ = fh.Close() }()
 
 	decoder := yaml.NewDecoder(fh)
 	return decoder.Decode(data)
@@ -90,7 +90,7 @@ func (am *YAMLAccountManager) Create(account hotline.Account) error {
 	if err != nil {
 		return fmt.Errorf("create account file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	b, err := yaml.Marshal(account)
 	if err != nil {

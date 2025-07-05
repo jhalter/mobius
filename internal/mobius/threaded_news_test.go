@@ -52,7 +52,7 @@ func TestLoadFromYAMLFile(t *testing.T) {
 			if tt.content != "" {
 				err := os.WriteFile(tt.fileName, []byte(tt.content), 0644)
 				assert.NoError(t, err)
-				defer os.Remove(tt.fileName) // Cleanup the file after the test
+				defer func() { _ = os.Remove(tt.fileName) }() // Cleanup the file after the test
 			}
 
 			var data TestData
@@ -161,7 +161,7 @@ func TestThreadedNewsYAML_CreateGrouping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tmpDir) // Clean up the temporary directory.
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Clean up the temporary directory.
 
 	// Path to the temporary ban file.
 	tmpFilePath := path.Join(tmpDir, "ThreadedNews.yaml")

@@ -166,7 +166,7 @@ func TestFindConfigPath(t *testing.T) {
 		tmpDir := t.TempDir()
 		originalDir, err := os.Getwd()
 		require.NoError(t, err)
-		defer os.Chdir(originalDir)
+		defer func() { _ = os.Chdir(originalDir) }()
 		
 		err = os.Chdir(tmpDir)
 		require.NoError(t, err)

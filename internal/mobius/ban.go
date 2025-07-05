@@ -43,7 +43,7 @@ func (bf *BanFile) Load() error {
 	if err != nil {
 		return fmt.Errorf("open file: %v", err)
 	}
-	defer fh.Close()
+	defer func() { _ = fh.Close() }()
 
 	err = yaml.NewDecoder(fh).Decode(&bf.banList)
 	if err != nil {

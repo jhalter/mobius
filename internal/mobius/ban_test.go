@@ -52,7 +52,7 @@ func TestAdd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tmpDir) // Clean up the temporary directory.
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Clean up the temporary directory.
 
 	// Path to the temporary ban file.
 	tmpFilePath := path.Join(tmpDir, "banfile.yaml")

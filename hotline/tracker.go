@@ -69,7 +69,7 @@ func register(dialer Dialer, tracker string, tr io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("failed to dial tracker: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if _, err := io.Copy(conn, tr); err != nil {
 		return fmt.Errorf("failed to write to connection: %w", err)

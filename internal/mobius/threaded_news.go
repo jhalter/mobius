@@ -218,7 +218,7 @@ func (n *ThreadedNewsYAML) Load() error {
 	if err != nil {
 		return err
 	}
-	defer fh.Close()
+	defer func() { _ = fh.Close() }()
 
 	n.ThreadedNews = hotline.ThreadedNews{}
 

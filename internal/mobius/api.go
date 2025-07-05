@@ -125,7 +125,7 @@ func (srv *APIServer) OnlineHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	json.NewEncoder(w).Encode(users)
+	_ = json.NewEncoder(w).Encode(users)
 }
 
 type BanRequest struct {
@@ -169,7 +169,7 @@ func (srv *APIServer) BanHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Write([]byte(`{"msg":"banned"}`))
+	_, _ = w.Write([]byte(`{"msg":"banned"}`))
 }
 
 func (srv *APIServer) UnbanHandler(w http.ResponseWriter, r *http.Request) {
@@ -198,7 +198,7 @@ func (srv *APIServer) UnbanHandler(w http.ResponseWriter, r *http.Request) {
 		// TODO: Fallback
 	}
 
-	w.Write([]byte(`{"msg":"unbanned"}`))
+	_, _ = w.Write([]byte(`{"msg":"unbanned"}`))
 }
 
 func (srv *APIServer) ListBannedIPsHandler(w http.ResponseWriter, r *http.Request) {
@@ -208,7 +208,7 @@ func (srv *APIServer) ListBannedIPsHandler(w http.ResponseWriter, r *http.Reques
 			http.Error(w, "failed to fetch banned IPs", http.StatusInternalServerError)
 			return
 		}
-		json.NewEncoder(w).Encode(ips)
+		_ = json.NewEncoder(w).Encode(ips)
 	} else {
 		// TODO: Fallback
 	}
@@ -221,7 +221,7 @@ func (srv *APIServer) ListBannedUsernamesHandler(w http.ResponseWriter, r *http.
 			http.Error(w, "failed to fetch banned usernames", http.StatusInternalServerError)
 			return
 		}
-		json.NewEncoder(w).Encode(users)
+		_ = json.NewEncoder(w).Encode(users)
 	} else {
 		// TODO: Fallback
 	}
@@ -234,7 +234,7 @@ func (srv *APIServer) ListBannedNicknamesHandler(w http.ResponseWriter, r *http.
 			http.Error(w, "failed to fetch banned nicknames", http.StatusInternalServerError)
 			return
 		}
-		json.NewEncoder(w).Encode(nicks)
+		_ = json.NewEncoder(w).Encode(nicks)
 	} else {
 		// TODO: Fallback
 	}

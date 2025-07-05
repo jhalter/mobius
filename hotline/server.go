@@ -235,7 +235,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 				})
 
 				s.Logger.Info("Connection established", "ip", ipAddr)
-				defer conn.Close()
+				defer func() { _ = conn.Close() }()
 
 				// Check if we have an existing rate limit for the IP and create one if we do not.
 				rl, ok := s.rateLimiters[ipAddr]
@@ -247,7 +247,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 				// Check if the rate limit is exceeded and close the connection if so.
 				if !rl.Allow() {
 					s.Logger.Info("Rate limit exceeded", "RemoteAddr", conn.RemoteAddr())
-					conn.Close()
+					_ = conn.Close()
 					return
 				}
 
