@@ -68,6 +68,9 @@ type Server struct {
 	MessageBoard io.ReadWriteSeeker
 
 	Redis *redis.Client
+
+	// TrackerRegistrar handles tracker registration (injectable for testing)
+	TrackerRegistrar TrackerRegistrar
 }
 
 type Option = func(s *Server)
@@ -98,19 +101,27 @@ func WithInterface(netInterface string) func(s *Server) {
 	}
 }
 
+// WithTrackerRegistrar optionally sets a custom tracker registrar (useful for testing).
+func WithTrackerRegistrar(registrar TrackerRegistrar) func(s *Server) {
+	return func(s *Server) {
+		s.TrackerRegistrar = registrar
+	}
+}
+
 type ServerConfig struct {
 }
 
 func NewServer(options ...Option) (*Server, error) {
 	server := Server{
-		handlers:        make(map[TranType]HandlerFunc),
-		outbox:          make(chan Transaction),
-		rateLimiters:    make(map[string]*rate.Limiter),
-		FS:              &OSFileStore{},
-		ChatMgr:         NewMemChatManager(),
-		ClientMgr:       NewMemClientMgr(),
-		FileTransferMgr: NewMemFileTransferMgr(),
-		Stats:           NewStats(),
+		handlers:         make(map[TranType]HandlerFunc),
+		outbox:           make(chan Transaction),
+		rateLimiters:     make(map[string]*rate.Limiter),
+		FS:               &OSFileStore{},
+		ChatMgr:          NewMemChatManager(),
+		ClientMgr:        NewMemClientMgr(),
+		FileTransferMgr:  NewMemFileTransferMgr(),
+		Stats:            NewStats(),
+		TrackerRegistrar: NewRealTrackerRegistrar(),
 	}
 
 	for _, opt := range options {
@@ -266,6 +277,61 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 // time in seconds between tracker re-registration
 const trackerUpdateFrequency = 300
 
+// TrackerRegistrar interface for tracker registration operations
+type TrackerRegistrar interface {
+	Register(tracker string, registration *TrackerRegistration) error
+}
+
+// RealTrackerRegistrar implements TrackerRegistrar using the real network operations
+type RealTrackerRegistrar struct {
+	dialer Dialer
+}
+
+func NewRealTrackerRegistrar() *RealTrackerRegistrar {
+	return &RealTrackerRegistrar{
+		dialer: &RealDialer{},
+	}
+}
+
+func (r *RealTrackerRegistrar) Register(tracker string, registration *TrackerRegistration) error {
+	return register(r.dialer, tracker, registration)
+}
+
+// parseTrackerPassword extracts the password from a tracker address in format "host:port:password"
+// Returns empty string if no password is present or if the format is invalid
+// For addresses with more than 3 parts (like passwords containing colons), everything after the second colon is treated as the password
+func parseTrackerPassword(trackerAddr string) string {
+	splitAddr := strings.Split(trackerAddr, ":")
+	if len(splitAddr) >= 3 {
+		// Join everything from the third part onwards (index 2+) to handle passwords with colons
+		return strings.Join(splitAddr[2:], ":")
+	}
+	return ""
+}
+
+// registerWithAllTrackers performs tracker registration for all configured trackers
+func (s *Server) registerWithAllTrackers() {
+	if !s.Config.EnableTrackerRegistration {
+		return
+	}
+
+	for _, t := range s.Config.Trackers {
+		tr := &TrackerRegistration{
+			UserCount:   len(s.ClientMgr.List()),
+			PassID:      s.TrackerPassID,
+			Name:        s.Config.Name,
+			Description: s.Config.Description,
+		}
+		binary.BigEndian.PutUint16(tr.Port[:], uint16(s.Port))
+
+		tr.Password = parseTrackerPassword(t)
+
+		if err := s.TrackerRegistrar.Register(t, tr); err != nil {
+			s.Logger.Error(fmt.Sprintf("Unable to register with tracker %v", t), "error", err)
+		}
+	}
+}
+
 // registerWithTrackers runs every trackerUpdateFrequency seconds to update the server's tracker entry on all configured
 // trackers.
 func (s *Server) registerWithTrackers(ctx context.Context) {
@@ -274,26 +340,7 @@ func (s *Server) registerWithTrackers(ctx context.Context) {
 	}
 
 	// Do the first registration immediately
-	if s.Config.EnableTrackerRegistration {
-		for _, t := range s.Config.Trackers {
-			tr := &TrackerRegistration{
-				UserCount:   len(s.ClientMgr.List()),
-				PassID:      s.TrackerPassID,
-				Name:        s.Config.Name,
-				Description: s.Config.Description,
-			}
-			binary.BigEndian.PutUint16(tr.Port[:], uint16(s.Port))
-
-			splitAddr := strings.Split(":", t)
-			if len(splitAddr) == 3 {
-				tr.Password = splitAddr[2]
-			}
-
-			if err := register(&RealDialer{}, t, tr); err != nil {
-				s.Logger.Error(fmt.Sprintf("Unable to register with tracker %v", t), "error", err)
-			}
-		}
-	}
+	s.registerWithAllTrackers()
 
 	ticker := time.NewTicker(trackerUpdateFrequency * time.Second)
 	defer ticker.Stop()
@@ -303,26 +350,7 @@ func (s *Server) registerWithTrackers(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if s.Config.EnableTrackerRegistration {
-				for _, t := range s.Config.Trackers {
-					tr := &TrackerRegistration{
-						UserCount:   len(s.ClientMgr.List()),
-						PassID:      s.TrackerPassID,
-						Name:        s.Config.Name,
-						Description: s.Config.Description,
-					}
-					binary.BigEndian.PutUint16(tr.Port[:], uint16(s.Port))
-
-					splitAddr := strings.Split(":", t)
-					if len(splitAddr) == 3 {
-						tr.Password = splitAddr[2]
-					}
-
-					if err := register(&RealDialer{}, t, tr); err != nil {
-						s.Logger.Error(fmt.Sprintf("Unable to register with tracker %v", t), "error", err)
-					}
-				}
-			}
+			s.registerWithAllTrackers()
 		}
 	}
 }
