@@ -47,7 +47,7 @@ func (newscat *NewsCategoryListData15) GetNewsArtListData() (NewsArtListData, er
 
 	for i, art := range newscat.Articles {
 		id := make([]byte, 4)
-		binary.BigEndian.PutUint32(id, i)
+		binary.BigEndian.PutUint32(id, i) // The article's map key in the Articles map is its ID.
 
 		newsArts = append(newsArts, NewsArtList{
 			ID:          [4]byte(id),
@@ -156,8 +156,8 @@ type NewsArtList struct {
 }
 
 var (
-	NewsFlavorLen = []byte{0x0a}
-	NewsFlavor    = []byte("text/plain")
+	NewsFlavor      = []byte("text/plain") // NewsFlavor is always "text/plain"
+	NewsFlavorCount = []byte{0, 1}         // NewsFlavorCount is always 1
 )
 
 func (nal *NewsArtList) Read(p []byte) (int, error) {
@@ -166,12 +166,12 @@ func (nal *NewsArtList) Read(p []byte) (int, error) {
 		nal.TimeStamp[:],
 		nal.ParentID[:],
 		nal.Flags[:],
-		[]byte{0, 1}, // Flavor Count TODO: make this not hardcoded
+		NewsFlavorCount,
 		[]byte{uint8(len(nal.Title))},
 		nal.Title,
 		[]byte{uint8(len(nal.Poster))},
 		nal.Poster,
-		NewsFlavorLen,
+		[]byte{uint8(len(NewsFlavor))},
 		NewsFlavor,
 		nal.ArticleSize[:],
 	)
@@ -183,7 +183,7 @@ func (nal *NewsArtList) Read(p []byte) (int, error) {
 	n := copy(p, out[nal.readOffset:])
 	nal.readOffset += n
 
-	return n, io.EOF
+	return n, nil
 }
 
 type NewsFlavorList struct {

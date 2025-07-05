@@ -229,3 +229,70 @@ func TestField_DecodeInt(t *testing.T) {
 		})
 	}
 }
+
+func TestField_DecodeNewsPath(t *testing.T) {
+	type fields struct {
+		Data []byte
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		want    []string
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name:    "empty field data",
+			fields:  fields{Data: []byte{}},
+			want:    []string{},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "single path",
+			fields: fields{Data: []byte{
+				0x00, 0x01, // path count = 1
+				0x00, 0x00, 0x05, // 2 bytes unused + 1 byte length (5)
+				0x48, 0x65, 0x6c, 0x6c, 0x6f, // "Hello"
+			}},
+			want:    []string{"Hello"},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "multiple paths",
+			fields: fields{Data: []byte{
+				0x00, 0x02, // path count = 2
+				0x00, 0x00, 0x05, // 2 bytes unused + 1 byte length (5)
+				0x48, 0x65, 0x6c, 0x6c, 0x6f, // "Hello"
+				0x00, 0x00, 0x05, // 2 bytes unused + 1 byte length (5)
+				0x57, 0x6f, 0x72, 0x6c, 0x64, // "World"
+			}},
+			want:    []string{"Hello", "World"},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "example from comments - nested categories",
+			fields: fields{Data: []byte{
+				0x00, 0x03, // path count = 3
+				0x00, 0x00, 0x10, // 2 bytes unused + 1 byte length (16)
+				0x54, 0x6f, 0x70, 0x20, 0x4c, 0x65, 0x76, 0x65, 0x6c, 0x20, 0x42, 0x75, 0x6e, 0x64, 0x6c, 0x65, // "Top Level Bundle"
+				0x00, 0x00, 0x13, // 2 bytes unused + 1 byte length (19)
+				0x53, 0x65, 0x63, 0x6f, 0x6e, 0x64, 0x20, 0x4c, 0x65, 0x76, 0x65, 0x6c, 0x20, 0x42, 0x75, 0x6e, 0x64, 0x6c, 0x65, // "Second Level Bundle"
+				0x00, 0x00, 0x0f, // 2 bytes unused + 1 byte length (15)
+				0x4e, 0x65, 0x73, 0x74, 0x65, 0x64, 0x20, 0x43, 0x61, 0x74, 0x65, 0x67, 0x6f, 0x72, 0x79, // "Nested Category"
+			}},
+			want:    []string{"Top Level Bundle", "Second Level Bundle", "Nested Category"},
+			wantErr: assert.NoError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &Field{
+				Data: tt.fields.Data,
+			}
+			got, err := f.DecodeNewsPath()
+			if !tt.wantErr(t, err, "DecodeNewsPath()") {
+				return
+			}
+			assert.Equalf(t, tt.want, got, "DecodeNewsPath()")
+		})
+	}
+}
