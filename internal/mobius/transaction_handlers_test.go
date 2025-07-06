@@ -2935,6 +2935,220 @@ func TestHandleSetClientUserInfo(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "when client has AccessAnyName and changes username",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessAnyName)
+							return bits
+						}(),
+					},
+					ID:       [2]byte{0, 1},
+					UserName: []byte("Guest"),
+					Flags:    [2]byte{0, 1},
+					Server: &hotline.Server{
+						ClientMgr: func() *hotline.MockClientMgr {
+							m := hotline.MockClientMgr{}
+							m.On("List").Return([]*hotline.ClientConn{
+								{
+									ID: [2]byte{0, 1},
+								},
+							})
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranSetClientUserInfo, [2]byte{},
+					hotline.NewField(hotline.FieldUserName, []byte("NewName")),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID: [2]byte{0, 1},
+					Type:     [2]byte{0x01, 0x2d},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldUserID, []byte{0, 1}),
+						hotline.NewField(hotline.FieldUserIconID, []byte{}),
+						hotline.NewField(hotline.FieldUserFlags, []byte{0, 1}),
+						hotline.NewField(hotline.FieldUserName, []byte("NewName"))},
+				},
+			},
+		},
+		{
+			name: "when client updates icon with 4-byte data",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							return bits
+						}(),
+					},
+					ID:       [2]byte{0, 1},
+					UserName: []byte("Guest"),
+					Flags:    [2]byte{0, 1},
+					Server: &hotline.Server{
+						ClientMgr: func() *hotline.MockClientMgr {
+							m := hotline.MockClientMgr{}
+							m.On("List").Return([]*hotline.ClientConn{
+								{
+									ID: [2]byte{0, 1},
+								},
+							})
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranSetClientUserInfo, [2]byte{},
+					hotline.NewField(hotline.FieldUserIconID, []byte{0, 1, 0, 5}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID: [2]byte{0, 1},
+					Type:     [2]byte{0x01, 0x2d},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldUserID, []byte{0, 1}),
+						hotline.NewField(hotline.FieldUserIconID, []byte{0, 5}),
+						hotline.NewField(hotline.FieldUserFlags, []byte{0, 1}),
+						hotline.NewField(hotline.FieldUserName, []byte("Guest"))},
+				},
+			},
+		},
+		{
+			name: "when client updates icon with 2-byte data",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							return bits
+						}(),
+					},
+					ID:       [2]byte{0, 1},
+					UserName: []byte("Guest"),
+					Flags:    [2]byte{0, 1},
+					Server: &hotline.Server{
+						ClientMgr: func() *hotline.MockClientMgr {
+							m := hotline.MockClientMgr{}
+							m.On("List").Return([]*hotline.ClientConn{
+								{
+									ID: [2]byte{0, 1},
+								},
+							})
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranSetClientUserInfo, [2]byte{},
+					hotline.NewField(hotline.FieldUserIconID, []byte{0, 3}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID: [2]byte{0, 1},
+					Type:     [2]byte{0x01, 0x2d},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldUserID, []byte{0, 1}),
+						hotline.NewField(hotline.FieldUserIconID, []byte{0, 3}),
+						hotline.NewField(hotline.FieldUserFlags, []byte{0, 1}),
+						hotline.NewField(hotline.FieldUserName, []byte("Guest"))},
+				},
+			},
+		},
+		{
+			name: "when client sets user options with auto-reply",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							return bits
+						}(),
+					},
+					ID:       [2]byte{0, 1},
+					UserName: []byte("Guest"),
+					Flags:    [2]byte{0, 1},
+					Version:  []byte{0x01, 0x03},
+					Server: &hotline.Server{
+						ClientMgr: func() *hotline.MockClientMgr {
+							m := hotline.MockClientMgr{}
+							m.On("List").Return([]*hotline.ClientConn{
+								{
+									ID: [2]byte{0, 1},
+								},
+							})
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranSetClientUserInfo, [2]byte{},
+					hotline.NewField(hotline.FieldOptions, []byte{0, 4}),
+					hotline.NewField(hotline.FieldAutomaticResponse, []byte("Away message")),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID: [2]byte{0, 1},
+					Type:     [2]byte{0x01, 0x2d},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldUserID, []byte{0, 1}),
+						hotline.NewField(hotline.FieldUserIconID, []byte{}),
+						hotline.NewField(hotline.FieldUserFlags, []byte{0, 1}),
+						hotline.NewField(hotline.FieldUserName, []byte("Guest"))},
+				},
+			},
+		},
+		{
+			name: "when client sets refuse private messages flag",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							return bits
+						}(),
+					},
+					ID:       [2]byte{0, 1},
+					UserName: []byte("Guest"),
+					Flags:    [2]byte{0, 1},
+					Version:  []byte{0x01, 0x03},
+					Server: &hotline.Server{
+						ClientMgr: func() *hotline.MockClientMgr {
+							m := hotline.MockClientMgr{}
+							m.On("List").Return([]*hotline.ClientConn{
+								{
+									ID: [2]byte{0, 1},
+								},
+							})
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranSetClientUserInfo, [2]byte{},
+					hotline.NewField(hotline.FieldOptions, []byte{0, 2}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID: [2]byte{0, 1},
+					Type:     [2]byte{0x01, 0x2d},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldUserID, []byte{0, 1}),
+						hotline.NewField(hotline.FieldUserIconID, []byte{}),
+						hotline.NewField(hotline.FieldUserFlags, []byte{0, 9}),
+						hotline.NewField(hotline.FieldUserName, []byte("Guest"))},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3865,6 +4079,485 @@ func TestHandleDownloadFolder(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			TranAssertEqual(t, tt.wantRes, HandleDownloadFolder(tt.args.cc, &tt.args.t))
+		})
+	}
+}
+
+func TestHandleJoinChat(t *testing.T) {
+	type args struct {
+		cc *hotline.ClientConn
+		t  hotline.Transaction
+	}
+	tests := []struct {
+		name string
+		args args
+		want []hotline.Transaction
+	}{
+		{
+			name: "joins private chat and notifies existing members",
+			args: args{
+				cc: &hotline.ClientConn{
+					UserName: []byte("NewUser"),
+					ID:       [2]byte{0, 3},
+					Icon:     []byte{0, 5},
+					Flags:    [2]byte{0, 1},
+					Account: &hotline.Account{
+						Access: hotline.AccessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
+					},
+					Server: &hotline.Server{
+						ChatMgr: func() *hotline.MockChatManager {
+							m := hotline.MockChatManager{}
+							// Mock existing members before join
+							m.On("Members", hotline.ChatID{0, 0, 0, 1}).Return([]*hotline.ClientConn{
+								{
+									UserName: []byte("User1"),
+									ID:       [2]byte{0, 1},
+									Icon:     []byte{0, 2},
+									Flags:    [2]byte{0, 0},
+								},
+								{
+									UserName: []byte("User2"),
+									ID:       [2]byte{0, 2},
+									Icon:     []byte{0, 3},
+									Flags:    [2]byte{0, 0},
+								},
+							})
+							// Mock join operation
+							m.On("Join", hotline.ChatID{0, 0, 0, 1}, mock.AnythingOfType("*hotline.ClientConn")).Return()
+							// Mock members after join (including new user)
+							m.On("Members", hotline.ChatID{0, 0, 0, 1}).Return([]*hotline.ClientConn{
+								{
+									UserName: []byte("User1"),
+									ID:       [2]byte{0, 1},
+									Icon:     []byte{0, 2},
+									Flags:    [2]byte{0, 0},
+								},
+								{
+									UserName: []byte("User2"),
+									ID:       [2]byte{0, 2},
+									Icon:     []byte{0, 3},
+									Flags:    [2]byte{0, 0},
+								},
+								{
+									UserName: []byte("NewUser"),
+									ID:       [2]byte{0, 3},
+									Icon:     []byte{0, 5},
+									Flags:    [2]byte{0, 1},
+								},
+							})
+							// Mock chat subject
+							m.On("GetSubject", hotline.ChatID{0, 0, 0, 1}).Return("Test Chat Room")
+							return &m
+						}(),
+					},
+				},
+				t: hotline.Transaction{
+					Type: [2]byte{0, 0x74}, // TranJoinChat
+					ID:   [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldChatID, []byte{0, 0, 0, 1}),
+					},
+				},
+			},
+			want: []hotline.Transaction{
+				// Notification to existing member 1
+				{
+					ClientID: [2]byte{0, 1},
+					Type:     [2]byte{0, 0x75}, // TranNotifyChatChangeUser
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldUserName, []byte("NewUser")),
+						hotline.NewField(hotline.FieldUserID, []byte{0, 3}),
+						hotline.NewField(hotline.FieldUserIconID, []byte{0, 5}),
+						hotline.NewField(hotline.FieldUserFlags, []byte{0, 1}),
+					},
+				},
+				// Notification to existing member 2
+				{
+					ClientID: [2]byte{0, 2},
+					Type:     [2]byte{0, 0x75}, // TranNotifyChatChangeUser
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldUserName, []byte("NewUser")),
+						hotline.NewField(hotline.FieldUserID, []byte{0, 3}),
+						hotline.NewField(hotline.FieldUserIconID, []byte{0, 5}),
+						hotline.NewField(hotline.FieldUserFlags, []byte{0, 1}),
+					},
+				},
+				// Reply to joining user
+				{
+					ClientID: [2]byte{0, 3},
+					IsReply:  0x01,
+					Type:     [2]byte{0, 0}, // Reply type is [0, 0]
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldChatSubject, []byte("Test Chat Room")),
+						// User1 info
+						hotline.NewField(hotline.FieldUsernameWithInfo, []byte{
+							0x00, 0x01, // User ID
+							0x00, 0x02, // Icon ID
+							0x00, 0x00, // Flags
+							0x00, 0x05, // Username length
+							0x55, 0x73, 0x65, 0x72, 0x31, // "User1"
+						}),
+						// User2 info
+						hotline.NewField(hotline.FieldUsernameWithInfo, []byte{
+							0x00, 0x02, // User ID
+							0x00, 0x03, // Icon ID
+							0x00, 0x00, // Flags
+							0x00, 0x05, // Username length
+							0x55, 0x73, 0x65, 0x72, 0x32, // "User2"
+						}),
+					},
+				},
+			},
+		},
+		{
+			name: "joins empty private chat",
+			args: args{
+				cc: &hotline.ClientConn{
+					UserName: []byte("OnlyUser"),
+					ID:       [2]byte{0, 1},
+					Icon:     []byte{0, 1},
+					Flags:    [2]byte{0, 0},
+					Account: &hotline.Account{
+						Access: hotline.AccessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
+					},
+					Server: &hotline.Server{
+						ChatMgr: func() *hotline.MockChatManager {
+							m := hotline.MockChatManager{}
+							// Mock empty chat before join
+							m.On("Members", hotline.ChatID{0, 0, 0, 2}).Return([]*hotline.ClientConn{})
+							// Mock join operation
+							m.On("Join", hotline.ChatID{0, 0, 0, 2}, mock.AnythingOfType("*hotline.ClientConn")).Return()
+							// Mock members after join
+							m.On("Members", hotline.ChatID{0, 0, 0, 2}).Return([]*hotline.ClientConn{
+								{
+									UserName: []byte("OnlyUser"),
+									ID:       [2]byte{0, 1},
+									Icon:     []byte{0, 1},
+									Flags:    [2]byte{0, 0},
+								},
+							})
+							// Mock chat subject
+							m.On("GetSubject", hotline.ChatID{0, 0, 0, 2}).Return("Empty Chat")
+							return &m
+						}(),
+					},
+				},
+				t: hotline.Transaction{
+					Type: [2]byte{0, 0x74}, // TranJoinChat
+					ID:   [4]byte{0, 0, 0, 2},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldChatID, []byte{0, 0, 0, 2}),
+					},
+				},
+			},
+			want: []hotline.Transaction{
+				// Only reply to joining user (no existing members to notify)
+				{
+					ClientID: [2]byte{0, 1},
+					IsReply:  0x01,
+					Type:     [2]byte{0, 0}, // Reply type is [0, 0]
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldChatSubject, []byte("Empty Chat")),
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := HandleJoinChat(tt.args.cc, &tt.args.t)
+			if !TranAssertEqual(t, tt.want, got) {
+				t.Errorf("HandleJoinChat() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHandleRejectChatInvite(t *testing.T) {
+	type args struct {
+		cc *hotline.ClientConn
+		t  hotline.Transaction
+	}
+	tests := []struct {
+		name string
+		args args
+		want []hotline.Transaction
+	}{
+		{
+			name: "rejects invite and notifies chat members",
+			args: args{
+				cc: &hotline.ClientConn{
+					UserName: []byte("RejectUser"),
+					ID:       [2]byte{0, 3},
+					Server: &hotline.Server{
+						ChatMgr: func() *hotline.MockChatManager {
+							m := hotline.MockChatManager{}
+							// Mock current members of the chat
+							m.On("Members", hotline.ChatID{0, 0, 0, 1}).Return([]*hotline.ClientConn{
+								{
+									UserName: []byte("Member1"),
+									ID:       [2]byte{0, 1},
+								},
+								{
+									UserName: []byte("Member2"),
+									ID:       [2]byte{0, 2},
+								},
+							})
+							return &m
+						}(),
+					},
+				},
+				t: hotline.Transaction{
+					Type: [2]byte{0, 0x72}, // TranRejectChatInvite
+					ID:   [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldChatID, []byte{0, 0, 0, 1}),
+					},
+				},
+			},
+			want: []hotline.Transaction{
+				// Notification to member 1
+				{
+					ClientID: [2]byte{0, 1},
+					Type:     [2]byte{0, 0x6A}, // TranChatMsg
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldData, []byte("RejectUser declined invitation to chat")),
+					},
+				},
+				// Notification to member 2
+				{
+					ClientID: [2]byte{0, 2},
+					Type:     [2]byte{0, 0x6A}, // TranChatMsg
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldData, []byte("RejectUser declined invitation to chat")),
+					},
+				},
+			},
+		},
+		{
+			name: "rejects invite to empty chat",
+			args: args{
+				cc: &hotline.ClientConn{
+					UserName: []byte("LoneRejecter"),
+					ID:       [2]byte{0, 1},
+					Server: &hotline.Server{
+						ChatMgr: func() *hotline.MockChatManager {
+							m := hotline.MockChatManager{}
+							// Mock empty chat (no members)
+							m.On("Members", hotline.ChatID{0, 0, 0, 2}).Return([]*hotline.ClientConn{})
+							return &m
+						}(),
+					},
+				},
+				t: hotline.Transaction{
+					Type: [2]byte{0, 0x72}, // TranRejectChatInvite
+					ID:   [4]byte{0, 0, 0, 2},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldChatID, []byte{0, 0, 0, 2}),
+					},
+				},
+			},
+			want: []hotline.Transaction{
+				// No notifications (no members to notify)
+			},
+		},
+		{
+			name: "rejects invite with single member",
+			args: args{
+				cc: &hotline.ClientConn{
+					UserName: []byte("Shy"),
+					ID:       [2]byte{0, 2},
+					Server: &hotline.Server{
+						ChatMgr: func() *hotline.MockChatManager {
+							m := hotline.MockChatManager{}
+							// Mock chat with single member
+							m.On("Members", hotline.ChatID{0, 0, 0, 3}).Return([]*hotline.ClientConn{
+								{
+									UserName: []byte("OnlyMember"),
+									ID:       [2]byte{0, 1},
+								},
+							})
+							return &m
+						}(),
+					},
+				},
+				t: hotline.Transaction{
+					Type: [2]byte{0, 0x72}, // TranRejectChatInvite
+					ID:   [4]byte{0, 0, 0, 3},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldChatID, []byte{0, 0, 0, 3}),
+					},
+				},
+			},
+			want: []hotline.Transaction{
+				// Notification to the single member
+				{
+					ClientID: [2]byte{0, 1},
+					Type:     [2]byte{0, 0x6A}, // TranChatMsg
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldData, []byte("Shy declined invitation to chat")),
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := HandleRejectChatInvite(tt.args.cc, &tt.args.t)
+			if !TranAssertEqual(t, tt.want, got) {
+				t.Errorf("HandleRejectChatInvite() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHandleInviteToChat(t *testing.T) {
+	type args struct {
+		cc *hotline.ClientConn
+		t  hotline.Transaction
+	}
+	tests := []struct {
+		name string
+		args args
+		want []hotline.Transaction
+	}{
+		{
+			name: "invites user to chat successfully",
+			args: args{
+				cc: &hotline.ClientConn{
+					UserName: []byte("Inviter"),
+					ID:       [2]byte{0, 1},
+					Icon:     []byte{0, 2},
+					Flags:    [2]byte{0, 3},
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							access := hotline.AccessBitmap{}
+							access.Set(hotline.AccessOpenChat)
+							return access
+						}(),
+					},
+				},
+				t: hotline.Transaction{
+					Type: [2]byte{0, 0x71}, // TranInviteToChat
+					ID:   [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldUserID, []byte{0, 5}),
+						hotline.NewField(hotline.FieldChatID, []byte{0, 0, 0, 10}),
+					},
+				},
+			},
+			want: []hotline.Transaction{
+				// Invite sent to target user
+				{
+					ClientID: [2]byte{0, 5},
+					Type:     [2]byte{0, 0x71}, // TranInviteToChat
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldUserName, []byte("Inviter")),
+						hotline.NewField(hotline.FieldUserID, []byte{0, 1}),
+					},
+				},
+				// Reply to inviting user
+				{
+					ClientID: [2]byte{0, 1},
+					IsReply:  0x01,
+					Type:     [2]byte{0, 0}, // Reply type is [0, 0]
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldUserName, []byte("Inviter")),
+						hotline.NewField(hotline.FieldUserID, []byte{0, 1}),
+						hotline.NewField(hotline.FieldUserIconID, []byte{0, 2}),
+						hotline.NewField(hotline.FieldUserFlags, []byte{0, 3}),
+					},
+				},
+			},
+		},
+		{
+			name: "returns error when user lacks permission",
+			args: args{
+				cc: &hotline.ClientConn{
+					UserName: []byte("NoPermUser"),
+					ID:       [2]byte{0, 2},
+					Account: &hotline.Account{
+						Access: hotline.AccessBitmap{}, // No permissions
+					},
+				},
+				t: hotline.Transaction{
+					Type: [2]byte{0, 0x71}, // TranInviteToChat
+					ID:   [4]byte{0, 0, 0, 2},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldUserID, []byte{0, 3}),
+						hotline.NewField(hotline.FieldChatID, []byte{0, 0, 0, 5}),
+					},
+				},
+			},
+			want: []hotline.Transaction{
+				// Error reply to requesting user
+				{
+					ClientID:  [2]byte{0, 2},
+					IsReply:   0x01,
+					Type:      [2]byte{0, 0}, // Reply type is [0, 0]
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte("You are not allowed to request private chat.")),
+					},
+				},
+			},
+		},
+		{
+			name: "invites to different chat room",
+			args: args{
+				cc: &hotline.ClientConn{
+					UserName: []byte("Host"),
+					ID:       [2]byte{0, 10},
+					Icon:     []byte{0, 15},
+					Flags:    [2]byte{0, 20},
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							access := hotline.AccessBitmap{}
+							access.Set(hotline.AccessOpenChat)
+							return access
+						}(),
+					},
+				},
+				t: hotline.Transaction{
+					Type: [2]byte{0, 0x71}, // TranInviteToChat
+					ID:   [4]byte{0, 0, 0, 3},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldUserID, []byte{0, 99}),
+						hotline.NewField(hotline.FieldChatID, []byte{0, 0, 0, 25}),
+					},
+				},
+			},
+			want: []hotline.Transaction{
+				// Invite sent to target user
+				{
+					ClientID: [2]byte{0, 99},
+					Type:     [2]byte{0, 0x71}, // TranInviteToChat
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldUserName, []byte("Host")),
+						hotline.NewField(hotline.FieldUserID, []byte{0, 10}),
+					},
+				},
+				// Reply to inviting user
+				{
+					ClientID: [2]byte{0, 10},
+					IsReply:  0x01,
+					Type:     [2]byte{0, 0}, // Reply type is [0, 0]
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldUserName, []byte("Host")),
+						hotline.NewField(hotline.FieldUserID, []byte{0, 10}),
+						hotline.NewField(hotline.FieldUserIconID, []byte{0, 15}),
+						hotline.NewField(hotline.FieldUserFlags, []byte{0, 20}),
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := HandleInviteToChat(tt.args.cc, &tt.args.t)
+			if !TranAssertEqual(t, tt.want, got) {
+				t.Errorf("HandleInviteToChat() got = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }
