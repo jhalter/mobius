@@ -85,7 +85,7 @@ func (f *fileWrapper) rsrcForkSize() (s [4]byte) {
 
 func (f *fileWrapper) rsrcForkHeader() FlatFileForkHeader {
 	return FlatFileForkHeader{
-		ForkType: [4]byte{0x4D, 0x41, 0x43, 0x52}, // "MACR"
+		ForkType: ForkTypeMACR,
 		DataSize: f.rsrcForkSize(),
 	}
 }

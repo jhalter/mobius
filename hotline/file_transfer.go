@@ -172,23 +172,6 @@ type folderUpload struct {
 	FileNamePath  []byte
 }
 
-//func (fu *folderUpload) Write(p []byte) (int, error) {
-//	if len(p) < 7 {
-//		return 0, errors.New("buflen too short")
-//	}
-//	copy(fu.DataSize[:], p[0:2])
-//	copy(fu.IsFolder[:], p[2:4])
-//	copy(fu.PathItemCount[:], p[4:6])
-//
-//	fu.FileNamePath = make([]byte, binary.BigEndian.Uint16(fu.DataSize[:])-4) // -4 to subtract the path separator bytes TODO: wat
-//	n, err := io.ReadFull(rwc, fu.FileNamePath)
-//	if err != nil {
-//		return 0, err
-//	}
-//
-//	return n + 6, nil
-//}
-
 // pathSegmentScanner implements bufio.SplitFunc for parsing path segments
 func pathSegmentScanner(data []byte, _ bool) (advance int, token []byte, err error) {
 	if len(data) < 3 {
@@ -269,12 +252,6 @@ func (fh *FileHeader) Read(p []byte) (int, error) {
 }
 
 func DownloadHandler(w io.Writer, fullPath string, fileTransfer *FileTransfer, fs FileStore, rLogger *slog.Logger, preserveForks bool) error {
-	//s.Stats.DownloadCounter += 1
-	//s.Stats.DownloadsInProgress += 1
-	//defer func() {
-	//	s.Stats.DownloadsInProgress -= 1
-	//}()
-
 	var dataOffset int64
 	if fileTransfer.FileResumeData != nil {
 		dataOffset = int64(binary.BigEndian.Uint32(fileTransfer.FileResumeData.ForkInfoList[0].DataSize[:]))
@@ -520,7 +497,6 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 			return fmt.Errorf("error opening file: %w", err)
 		}
 
-		// wr := bufio.NewWriterSize(rwc, 1460)
 		if _, err = io.Copy(rwc, io.TeeReader(file, fileTransfer.bytesSentCounter)); err != nil {
 			return fmt.Errorf("error sending file: %w", err)
 		}
@@ -576,7 +552,6 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 		//s.Stats.UploadCounter += 1
 
 		var fu folderUpload
-		// TODO: implement io.Writer on folderUpload and replace this
 		if _, err := io.ReadFull(rwc, fu.DataSize[:]); err != nil {
 			return err
 		}
@@ -586,7 +561,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 		if _, err := io.ReadFull(rwc, fu.PathItemCount[:]); err != nil {
 			return err
 		}
-		fu.FileNamePath = make([]byte, binary.BigEndian.Uint16(fu.DataSize[:])-4) // -4 to subtract the path separator bytes TODO: wat
+		fu.FileNamePath = make([]byte, binary.BigEndian.Uint16(fu.DataSize[:])-4) // -4 to subtract the length of the DataSize and IsFolder fields
 		if _, err := io.ReadFull(rwc, fu.FileNamePath); err != nil {
 			return err
 		}
