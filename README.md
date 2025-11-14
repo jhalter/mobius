@@ -32,7 +32,7 @@ See [Releases](https://github.com/jhalter/mobius/releases) page.
 
 To run a Hotline server with a default, sample configuration with ports forwarded from the host OS to the container:
 
-	docker run --rm -p 5500:5500 -p 5501:5501 ghcr.io/jhalter/mobius:latest
+	docker run --rm -p 5500:5500 -p 5501:5501 ghcr.io/jhalter/mobius-hotline-server:latest
 
 You can now connect to localhost:5500 with your favorite Hotline client and play around, but all changes will be lost on container restart.
 
