@@ -143,7 +143,7 @@ func Test_receiveFile(t *testing.T) {
 			wantErr: assert.NoError,
 		},
 		// {
-		// 	Name: "transfers fileWrapper when there is a resource fork",
+		// 	Name: "transfers File when there is a resource fork",
 		// 	args: args{
 		// 		conn: func() io.Reader {
 		// 			testFile := flattenedFileObject{

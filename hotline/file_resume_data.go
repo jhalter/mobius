@@ -24,7 +24,7 @@ func (ft ForkType) String() string {
 }
 
 type ForkInfoList struct {
-	Fork     ForkType // "DATA" or "MACR"
+	Fork     ForkType // "DATA", "INFO", or "MACR"
 	DataSize [4]byte  // offset from which to resume the transfer of data
 	RSVDA    [4]byte  // Present in the Hotline protocol docs, but unused.  Left here for documentation purposes.
 	RSVDB    [4]byte  // Present in the Hotline protocol docs, but unused.  Left here for documentation purposes.

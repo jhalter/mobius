@@ -17,8 +17,8 @@ const (
 	RsrcForkNameTemplate = ".rsrc_%s" // template string for resource fork filenames
 )
 
-// fileWrapper encapsulates the data, info, and resource forks of a Hotline file and provides methods to manage the files.
-type fileWrapper struct {
+// File encapsulates the data, info, and resource forks of a Hotline file and provides methods to manage the files.
+type File struct {
 	fs             FileStore
 	Name           string // Name of the file
 	path           string // path to file directory
@@ -30,10 +30,10 @@ type fileWrapper struct {
 	Ffo            *flattenedFileObject
 }
 
-func NewFileWrapper(fs FileStore, path string, dataOffset int64) (*fileWrapper, error) {
+func NewFileWrapper(fs FileStore, path string, dataOffset int64) (*File, error) {
 	dir := filepath.Dir(path)
 	fName := filepath.Base(path)
-	f := fileWrapper{
+	f := File{
 		fs:             fs,
 		Name:           fName,
 		path:           dir,
@@ -54,7 +54,7 @@ func NewFileWrapper(fs FileStore, path string, dataOffset int64) (*fileWrapper, 
 	return &f, nil
 }
 
-func (f *fileWrapper) TotalSize() []byte {
+func (f *File) TotalSize() []byte {
 	var s int64
 	size := make([]byte, 4)
 
@@ -73,7 +73,7 @@ func (f *fileWrapper) TotalSize() []byte {
 	return size
 }
 
-func (f *fileWrapper) rsrcForkSize() (s [4]byte) {
+func (f *File) rsrcForkSize() (s [4]byte) {
 	info, err := f.fs.Stat(f.rsrcPath)
 	if err != nil {
 		return s
@@ -83,26 +83,26 @@ func (f *fileWrapper) rsrcForkSize() (s [4]byte) {
 	return s
 }
 
-func (f *fileWrapper) rsrcForkHeader() FlatFileForkHeader {
+func (f *File) rsrcForkHeader() FlatFileForkHeader {
 	return FlatFileForkHeader{
 		ForkType: ForkTypeMACR,
 		DataSize: f.rsrcForkSize(),
 	}
 }
 
-func (f *fileWrapper) incompleteDataName() string {
+func (f *File) incompleteDataName() string {
 	return f.Name + IncompleteFileSuffix
 }
 
-func (f *fileWrapper) rsrcForkName() string {
+func (f *File) rsrcForkName() string {
 	return fmt.Sprintf(RsrcForkNameTemplate, f.Name)
 }
 
-func (f *fileWrapper) infoForkName() string {
+func (f *File) infoForkName() string {
 	return fmt.Sprintf(InfoForkNameTemplate, f.Name)
 }
 
-func (f *fileWrapper) rsrcForkWriter() (io.WriteCloser, error) {
+func (f *File) rsrcForkWriter() (io.WriteCloser, error) {
 	file, err := os.OpenFile(f.rsrcPath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, err
@@ -111,7 +111,7 @@ func (f *fileWrapper) rsrcForkWriter() (io.WriteCloser, error) {
 	return file, nil
 }
 
-func (f *fileWrapper) InfoForkWriter() (io.WriteCloser, error) {
+func (f *File) InfoForkWriter() (io.WriteCloser, error) {
 	file, err := os.OpenFile(f.infoPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return nil, err
@@ -120,7 +120,7 @@ func (f *fileWrapper) InfoForkWriter() (io.WriteCloser, error) {
 	return file, nil
 }
 
-func (f *fileWrapper) incFileWriter() (io.WriteCloser, error) {
+func (f *File) incFileWriter() (io.WriteCloser, error) {
 	file, err := os.OpenFile(f.incompletePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, err
@@ -129,15 +129,15 @@ func (f *fileWrapper) incFileWriter() (io.WriteCloser, error) {
 	return file, nil
 }
 
-func (f *fileWrapper) dataForkReader() (io.Reader, error) {
+func (f *File) dataForkReader() (io.Reader, error) {
 	return f.fs.Open(f.dataPath)
 }
 
-func (f *fileWrapper) rsrcForkFile() (*os.File, error) {
+func (f *File) rsrcForkFile() (*os.File, error) {
 	return f.fs.Open(f.rsrcPath)
 }
 
-func (f *fileWrapper) DataFile() (os.FileInfo, error) {
+func (f *File) DataFile() (os.FileInfo, error) {
 	if fi, err := f.fs.Stat(f.dataPath); err == nil {
 		return fi, nil
 	}
@@ -154,7 +154,7 @@ func (f *fileWrapper) DataFile() (os.FileInfo, error) {
 // * Resource fork starting with .rsrc_
 // * Info fork starting with .info
 // During Move of the meta files, os.ErrNotExist is ignored as these files may legitimately not exist.
-func (f *fileWrapper) Move(newPath string) error {
+func (f *File) Move(newPath string) error {
 	err := f.fs.Rename(f.dataPath, filepath.Join(newPath, f.Name))
 	if err != nil {
 		return err
@@ -179,7 +179,7 @@ func (f *fileWrapper) Move(newPath string) error {
 }
 
 // Delete a file and its associated metadata files if they exist
-func (f *fileWrapper) Delete() error {
+func (f *File) Delete() error {
 	err := f.fs.RemoveAll(f.dataPath)
 	if err != nil {
 		return err
@@ -203,7 +203,7 @@ func (f *fileWrapper) Delete() error {
 	return nil
 }
 
-func (f *fileWrapper) flattenedFileObject() (*flattenedFileObject, error) {
+func (f *File) flattenedFileObject() (*flattenedFileObject, error) {
 	dataSize := make([]byte, 4)
 	mTime := [8]byte{}
 
