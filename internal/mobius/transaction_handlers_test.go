@@ -2873,6 +2873,56 @@ func TestHandleTranAgreed(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "with gif banner",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessDisconUser)
+							bits.Set(hotline.AccessAnyName)
+							return bits
+						}()},
+					Icon:    []byte{0, 1},
+					Flags:   [2]byte{0, 1},
+					Version: []byte{0, 1},
+					ID:      [2]byte{0, 1},
+					Logger:  NewTestLogger(),
+					Server: &hotline.Server{
+						Config: hotline.Config{
+							BannerFile: "Banner.gif",
+						},
+						ClientMgr: func() *hotline.MockClientMgr {
+							m := hotline.MockClientMgr{}
+							m.On("List").Return([]*hotline.ClientConn{},
+							)
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranAgreed, [2]byte{},
+					hotline.NewField(hotline.FieldUserName, []byte("username")),
+					hotline.NewField(hotline.FieldUserIconID, []byte{0, 1}),
+					hotline.NewField(hotline.FieldOptions, []byte{0, 0}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID: [2]byte{0, 1},
+					Type:     [2]byte{0, 0x7a},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldBannerType, []byte("GIFf")),
+					},
+				},
+				{
+					ClientID: [2]byte{0, 1},
+					IsReply:  0x01,
+					Fields:   []hotline.Field{},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

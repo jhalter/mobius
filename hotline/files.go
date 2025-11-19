@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-func fileTypeFromFilename(filename string) fileType {
+func FileTypeFromFilename(filename string) fileType {
 	fileExt := strings.ToLower(filepath.Ext(filename))
 	ft, ok := fileTypes[fileExt]
 	if ok {
@@ -26,7 +26,7 @@ func fileTypeFromInfo(info fs.FileInfo) (ft fileType, err error) {
 		ft.CreatorCode = "n/a "
 		ft.TypeCode = "fldr"
 	} else {
-		ft = fileTypeFromFilename(info.Name())
+		ft = FileTypeFromFilename(info.Name())
 	}
 
 	return ft, nil
@@ -87,8 +87,8 @@ func GetFileNameList(path string, ignoreList []string) (fields []Field, err erro
 				copy(fnwi.Creator[:], fileCreator)
 			} else {
 				binary.BigEndian.PutUint32(fnwi.FileSize[:], uint32(rFile.Size()))
-				copy(fnwi.Type[:], fileTypeFromFilename(rFile.Name()).TypeCode)
-				copy(fnwi.Creator[:], fileTypeFromFilename(rFile.Name()).CreatorCode)
+				copy(fnwi.Type[:], FileTypeFromFilename(rFile.Name()).TypeCode)
+				copy(fnwi.Creator[:], FileTypeFromFilename(rFile.Name()).CreatorCode)
 			}
 		} else if file.IsDir() {
 			dir, err := os.ReadDir(filepath.Join(path, file.Name()))
