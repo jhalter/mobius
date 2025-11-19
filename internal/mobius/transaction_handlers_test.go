@@ -1917,11 +1917,11 @@ func TestHandleDownloadFile(t *testing.T) {
 								ForkCount: [2]byte{0, 2},
 								ForkInfoList: []hotline.ForkInfoList{
 									{
-										Fork:     [4]byte{0x44, 0x41, 0x54, 0x41}, // "DATA"
-										DataSize: [4]byte{0, 0, 0x01, 0x00},       // request offset 256
+										Fork:     hotline.ForkTypeDATA,
+										DataSize: [4]byte{0, 0, 0x01, 0x00}, // request offset 256
 									},
 									{
-										Fork:     [4]byte{0x4d, 0x41, 0x43, 0x52}, // "MACR"
+										Fork:     hotline.ForkTypeMACR,
 										DataSize: [4]byte{0, 0, 0, 0},
 									},
 								},

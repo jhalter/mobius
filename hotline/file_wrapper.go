@@ -227,7 +227,7 @@ func (f *fileWrapper) flattenedFileObject() (*flattenedFileObject, error) {
 	}
 
 	f.Ffo.FlatFileHeader = FlatFileHeader{
-		Format:    [4]byte{0x46, 0x49, 0x4c, 0x50}, // "FILP"
+		Format:    FormatFILP,
 		Version:   [2]byte{0, 1},
 		ForkCount: [2]byte{0, 2},
 	}
@@ -247,7 +247,7 @@ func (f *fileWrapper) flattenedFileObject() (*flattenedFileObject, error) {
 		}
 	} else {
 		f.Ffo.FlatFileInformationFork = FlatFileInformationFork{
-			Platform:         [4]byte{0x41, 0x4D, 0x41, 0x43}, // "AMAC" TODO: Remove hardcode to support "AWIN" Platform (maybe?)
+			Platform:         PlatformAMAC, // TODO: Remove hardcode to support "MWIN" Platform (maybe?)
 			TypeSignature:    [4]byte([]byte(ft.TypeCode)),
 			CreatorSignature: [4]byte([]byte(ft.CreatorCode)),
 			PlatformFlags:    [4]byte{0, 0, 1, 0}, // TODO: What is this?
@@ -263,12 +263,12 @@ func (f *fileWrapper) flattenedFileObject() (*flattenedFileObject, error) {
 	}
 
 	f.Ffo.FlatFileInformationForkHeader = FlatFileForkHeader{
-		ForkType: [4]byte{0x49, 0x4E, 0x46, 0x4F}, // "INFO"
+		ForkType: ForkTypeINFO,
 		DataSize: f.Ffo.FlatFileInformationFork.Size(),
 	}
 
 	f.Ffo.FlatFileDataForkHeader = FlatFileForkHeader{
-		ForkType: [4]byte{0x44, 0x41, 0x54, 0x41}, // "DATA"
+		ForkType: ForkTypeDATA,
 		DataSize: [4]byte{dataSize[0], dataSize[1], dataSize[2], dataSize[3]},
 	}
 	f.Ffo.FlatFileResForkHeader = f.rsrcForkHeader()

@@ -120,14 +120,14 @@ func Test_receiveFile(t *testing.T) {
 				conn: func() io.Reader {
 					testFile := flattenedFileObject{
 						FlatFileHeader: FlatFileHeader{
-							Format:    [4]byte{0x46, 0x49, 0x4c, 0x50}, // "FILP"
+							Format:    FormatFILP,
 							Version:   [2]byte{0, 1},
 							ForkCount: [2]byte{0, 2},
 						},
 						FlatFileInformationForkHeader: FlatFileForkHeader{},
 						FlatFileInformationFork:       NewFlatFileInformationFork("testfile.txt", [8]byte{}, "TEXT", "TEXT"),
 						FlatFileDataForkHeader: FlatFileForkHeader{
-							ForkType: [4]byte{0x4d, 0x41, 0x43, 0x52}, // DATA
+							ForkType: ForkTypeMACR,
 							DataSize: [4]byte{0x00, 0x00, 0x00, 0x03},
 						},
 					}

@@ -32,6 +32,7 @@ type ForkInfoList struct {
 
 var (
 	ForkTypeDATA = ForkType{0x44, 0x41, 0x54, 0x41} // DATA: Data fork
+	ForkTypeINFO = ForkType{0x49, 0x4E, 0x46, 0x4F} // INFO: Information fork
 	ForkTypeMACR = ForkType{0x4d, 0x41, 0x43, 0x52} // MACR: Mac resource fork
 )
 
@@ -45,7 +46,11 @@ func NewForkInfoList(b []byte) *ForkInfoList {
 }
 
 var (
+	FormatFILP = [4]byte{0x46, 0x49, 0x4c, 0x50} // Flattened file format: "FILP"
 	FormatRFLT = [4]byte{0x52, 0x46, 0x4C, 0x54} // File resume format: "RFLT" (?)
+
+	PlatformAMAC = [4]byte{0x41, 0x4D, 0x41, 0x43} // Mac platform: "AMAC"
+	PlatformMWIN = [4]byte{0x4D, 0x57, 0x49, 0x4E} // Windows platform: "MWIN"
 )
 
 func NewFileResumeData(list []ForkInfoList) *FileResumeData {

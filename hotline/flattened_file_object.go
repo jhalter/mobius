@@ -45,7 +45,7 @@ type FlatFileInformationFork struct {
 
 func NewFlatFileInformationFork(fileName string, modifyTime [8]byte, typeSignature string, creatorSignature string) FlatFileInformationFork {
 	return FlatFileInformationFork{
-		Platform:         [4]byte{0x41, 0x4D, 0x41, 0x43},   // "AMAC" TODO: Remove hardcode to support "AWIN" Platform (maybe?)
+		Platform:         PlatformAMAC,                       // TODO: Remove hardcode to support "MWIN" Platform (maybe?)
 		TypeSignature:    [4]byte([]byte(typeSignature)),    // TODO: Don't infer types from filename
 		CreatorSignature: [4]byte([]byte(creatorSignature)), // TODO: Don't infer types from filename
 		PlatformFlags:    [4]byte{0, 0, 1, 0},               // TODO: What is this?
@@ -128,7 +128,7 @@ func (ffif *FlatFileInformationFork) ReadNameSize() []byte {
 }
 
 type FlatFileForkHeader struct {
-	ForkType        [4]byte // Either INFO, DATA or MACR
+	ForkType        ForkType // Either INFO, DATA or MACR
 	CompressionType [4]byte
 	RSVD            [4]byte
 	DataSize        [4]byte
