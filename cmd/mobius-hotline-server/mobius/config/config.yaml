@@ -8,7 +8,7 @@ Description: A default configured Hotline server running Mobius
 #  * The banner must be under 256K (262,140 bytes specifically)
 #  * The standard size for a banner is 468 pixels wide and 60 pixels tall.
 #  * The banner must be saved in the same folder this file.
-#  * The banner must be a jpg
+#  * The banner must be a jpg or gif
 BannerFile: "banner.jpg"
 
 # Path to the Files directory, by default in a subdirectory of the config root named Files
