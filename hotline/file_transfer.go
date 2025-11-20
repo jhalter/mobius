@@ -257,7 +257,7 @@ func DownloadHandler(w io.Writer, fullPath string, fileTransfer *FileTransfer, f
 		dataOffset = int64(binary.BigEndian.Uint32(fileTransfer.FileResumeData.ForkInfoList[0].DataSize[:]))
 	}
 
-	fw, err := NewFileWrapper(fs, fullPath, 0)
+	hlFile, err := NewFile(fs, fullPath, 0)
 	if err != nil {
 		return fmt.Errorf("reading file header: %v", err)
 	}
@@ -267,12 +267,12 @@ func DownloadHandler(w io.Writer, fullPath string, fileTransfer *FileTransfer, f
 	// If file transfer options are included, that means this is a "quick preview" request.  In this case skip sending
 	// the flat file info and proceed directly to sending the file data.
 	if fileTransfer.Options == nil {
-		if _, err = io.Copy(w, fw.Ffo); err != nil {
+		if _, err = io.Copy(w, hlFile.Ffo); err != nil {
 			return fmt.Errorf("send flat file object: %v", err)
 		}
 	}
 
-	file, err := fw.dataForkReader()
+	file, err := hlFile.dataForkReader()
 	if err != nil {
 		return fmt.Errorf("open data fork reader: %v", err)
 	}
@@ -288,13 +288,13 @@ func DownloadHandler(w io.Writer, fullPath string, fileTransfer *FileTransfer, f
 
 	// If the client requested to resume transfer, do not send the resource fork header.
 	if fileTransfer.FileResumeData == nil {
-		err = binary.Write(w, binary.BigEndian, fw.rsrcForkHeader())
+		err = binary.Write(w, binary.BigEndian, hlFile.rsrcForkHeader())
 		if err != nil {
 			return fmt.Errorf("send resource fork header: %v", err)
 		}
 	}
 
-	rFile, _ := fw.rsrcForkFile()
+	rFile, _ := hlFile.rsrcForkFile()
 	//if err != nil {
 	//	// return fmt.Errorf("open resource fork file: %v", err)
 	//}
@@ -332,7 +332,7 @@ func UploadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfe
 		return fmt.Errorf("open temp file for uploade: %w", err)
 	}
 
-	f, err := NewFileWrapper(fileStore, fullPath, 0)
+	f, err := NewFile(fileStore, fullPath, 0)
 	if err != nil {
 		return err
 	}
@@ -424,7 +424,7 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 			return nil
 		}
 
-		hlFile, err := NewFileWrapper(fileStore, path, 0)
+		hlFile, err := NewFile(fileStore, path, 0)
 		if err != nil {
 			return err
 		}
@@ -645,7 +645,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 
 				filePath := path.Join(fullPath, fu.FormattedPath())
 
-				hlFile, err := NewFileWrapper(fileStore, filePath, 0)
+				hlFile, err := NewFile(fileStore, filePath, 0)
 				if err != nil {
 					return err
 				}

@@ -30,7 +30,7 @@ type File struct {
 	Ffo            *flattenedFileObject
 }
 
-func NewFileWrapper(fs FileStore, path string, dataOffset int64) (*File, error) {
+func NewFile(fs FileStore, path string, dataOffset int64) (*File, error) {
 	dir := filepath.Dir(path)
 	fName := filepath.Base(path)
 	f := File{
@@ -130,7 +130,11 @@ func (f *File) incFileWriter() (io.WriteCloser, error) {
 }
 
 func (f *File) dataForkReader() (io.Reader, error) {
-	return f.fs.Open(f.dataPath)
+	if _, err := f.fs.Stat(f.dataPath); err == nil {
+		return f.fs.Open(f.dataPath)
+	}
+
+	return f.fs.Open(f.incompletePath)
 }
 
 func (f *File) rsrcForkFile() (*os.File, error) {

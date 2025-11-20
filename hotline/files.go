@@ -112,9 +112,9 @@ func GetFileNameList(path string, ignoreList []string) (fields []Field, err erro
 				continue
 			}
 
-			hlFile, err := NewFileWrapper(&OSFileStore{}, path+"/"+file.Name(), 0)
+			hlFile, err := NewFile(&OSFileStore{}, path+"/"+file.Name(), 0)
 			if err != nil {
-				return nil, fmt.Errorf("NewFileWrapper: %w", err)
+				return nil, fmt.Errorf("NewFile: %w", err)
 			}
 
 			copy(fnwi.FileSize[:], hlFile.TotalSize())

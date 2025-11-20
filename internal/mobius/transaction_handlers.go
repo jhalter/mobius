@@ -86,10 +86,9 @@ const (
 
 	// General error messages
 	ErrMsgAccountNotFound = "Account not found."
-	ErrMsgUserNotFound = "User not found."
-	ErrMsgCreateAlias = "Error creating alias"
+	ErrMsgUserNotFound    = "User not found."
+	ErrMsgCreateAlias     = "Error creating alias"
 )
-
 
 // Converts bytes from Mac Roman encoding to UTF-8
 var txtDecoder = charmap.Macintosh.NewDecoder()
@@ -307,7 +306,7 @@ func HandleGetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		return res
 	}
 
-	fw, err := hotline.NewFileWrapper(cc.Server.FS, fullFilePath, 0)
+	fw, err := hotline.NewFile(cc.Server.FS, fullFilePath, 0)
 	if err != nil {
 		return res
 	}
@@ -361,7 +360,7 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		return res
 	}
 
-	hlFile, err := hotline.NewFileWrapper(cc.Server.FS, fullFilePath, 0)
+	hlFile, err := hotline.NewFile(cc.Server.FS, fullFilePath, 0)
 	if err != nil {
 		return res
 	}
@@ -449,7 +448,7 @@ func HandleDeleteFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 		return res
 	}
 
-	hlFile, err := hotline.NewFileWrapper(cc.Server.FS, fullFilePath, 0)
+	hlFile, err := hotline.NewFile(cc.Server.FS, fullFilePath, 0)
 	if err != nil {
 		return res
 	}
@@ -494,7 +493,7 @@ func HandleMoveFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 
 	cc.Logger.Info("Move file", "src", filePath+"/"+fileName, "dst", fileNewPath+"/"+fileName)
 
-	hlFile, err := hotline.NewFileWrapper(cc.Server.FS, filePath, 0)
+	hlFile, err := hotline.NewFile(cc.Server.FS, filePath, 0)
 	if err != nil {
 		return res
 	}
@@ -1553,7 +1552,7 @@ func HandleDownloadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 		return res
 	}
 
-	hlFile, err := hotline.NewFileWrapper(cc.Server.FS, fullFilePath, dataOffset)
+	hlFile, err := hotline.NewFile(cc.Server.FS, fullFilePath, dataOffset)
 	if err != nil {
 		return res
 	}
