@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"embed"
 	"flag"
 	"fmt"
@@ -44,6 +45,9 @@ func main() {
 	logLevel := flag.String("log-level", "info", "Log level")
 	logFile := flag.String("log-file", "", "Path to log file")
 	init := flag.Bool("init", false, "Populate the config dir with default configuration")
+	tlsCert := flag.String("tls-cert", "", "Path to TLS certificate file")
+	tlsKey := flag.String("tls-key", "", "Path to TLS key file")
+	tlsPort := flag.Int("tls-port", 5600, "Base TLS port. TLS file transfer port is base + 1.")
 
 	flag.Parse()
 
@@ -78,12 +82,27 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv, err := hotline.NewServer(
+	var tlsConfig *tls.Config
+	if *tlsCert != "" && *tlsKey != "" {
+		cert, err := tls.LoadX509KeyPair(*tlsCert, *tlsKey)
+		if err != nil {
+			slogger.Error("Error loading TLS certificate", "err", err)
+			os.Exit(1)
+		}
+		tlsConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
+	}
+
+	opts := []hotline.Option{
 		hotline.WithInterface(*netInterface),
 		hotline.WithLogger(slogger),
 		hotline.WithPort(*basePort),
 		hotline.WithConfig(*config),
-	)
+	}
+	if tlsConfig != nil {
+		opts = append(opts, hotline.WithTLS(tlsConfig, *tlsPort))
+	}
+
+	srv, err := hotline.NewServer(opts...)
 	if err != nil {
 		slogger.Error("Error starting server", "err", err)
 		os.Exit(1)
@@ -174,6 +193,9 @@ func main() {
 	}()
 
 	slogger.Info("Hotline server started", "version", version, "config", *configDir)
+	if tlsConfig != nil {
+		slogger.Info("TLS enabled", "port", *tlsPort, "fileTransferPort", *tlsPort+1)
+	}
 
 	// Assign functions to handle specific Hotline transaction types
 	mobius.RegisterHandlers(srv)

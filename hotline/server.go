@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -40,7 +41,8 @@ type Server struct {
 	NetInterface string
 	Port         int
 
-	rateLimiters map[string]*rate.Limiter
+	rateLimiters   map[string]*rate.Limiter
+	rateLimitersMu sync.Mutex
 
 	handlers map[TranType]HandlerFunc
 
@@ -71,6 +73,9 @@ type Server struct {
 
 	// TrackerRegistrar handles tracker registration (injectable for testing)
 	TrackerRegistrar TrackerRegistrar
+
+	TLSConfig *tls.Config
+	TLSPort   int
 }
 
 type Option = func(s *Server)
@@ -105,6 +110,14 @@ func WithInterface(netInterface string) func(s *Server) {
 func WithTrackerRegistrar(registrar TrackerRegistrar) func(s *Server) {
 	return func(s *Server) {
 		s.TrackerRegistrar = registrar
+	}
+}
+
+// WithTLS optionally enables TLS support on the specified port.
+func WithTLS(tlsConfig *tls.Config, port int) func(s *Server) {
+	return func(s *Server) {
+		s.TLSConfig = tlsConfig
+		s.TLSPort = port
 	}
 }
 
@@ -168,6 +181,28 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		log.Fatal(s.ServeFileTransfers(ctx, ln))
 	}()
 
+	if s.TLSConfig != nil {
+		wg.Add(1)
+		go func() {
+			ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", s.NetInterface, s.TLSPort))
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			log.Fatal(s.ServeWithTLS(ctx, ln))
+		}()
+
+		wg.Add(1)
+		go func() {
+			ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", s.NetInterface, s.TLSPort+1))
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			log.Fatal(s.ServeFileTransfersWithTLS(ctx, ln))
+		}()
+	}
+
 	wg.Wait()
 
 	return nil
@@ -193,6 +228,14 @@ func (s *Server) ServeFileTransfers(ctx context.Context, ln net.Listener) error 
 			}
 		}()
 	}
+}
+
+func (s *Server) ServeWithTLS(ctx context.Context, ln net.Listener) error {
+	return s.Serve(ctx, tls.NewListener(ln, s.TLSConfig))
+}
+
+func (s *Server) ServeFileTransfersWithTLS(ctx context.Context, ln net.Listener) error {
+	return s.ServeFileTransfers(ctx, tls.NewListener(ln, s.TLSConfig))
 }
 
 func (s *Server) sendTransaction(t Transaction) error {
@@ -249,11 +292,13 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 				defer func() { _ = conn.Close() }()
 
 				// Check if we have an existing rate limit for the IP and create one if we do not.
+				s.rateLimitersMu.Lock()
 				rl, ok := s.rateLimiters[ipAddr]
 				if !ok {
 					rl = rate.NewLimiter(perIPRateLimit, 1)
 					s.rateLimiters[ipAddr] = rl
 				}
+				s.rateLimitersMu.Unlock()
 
 				// Check if the rate limit is exceeded and close the connection if so.
 				if !rl.Allow() {
