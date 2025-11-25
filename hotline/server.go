@@ -368,6 +368,7 @@ func (s *Server) registerWithAllTrackers() {
 			Description: s.Config.Description,
 		}
 		binary.BigEndian.PutUint16(tr.Port[:], uint16(s.Port))
+		binary.BigEndian.PutUint16(tr.TLSPort[:], uint16(s.TLSPort))
 
 		tr.Password = parseTrackerPassword(t)
 

@@ -104,7 +104,7 @@ func TestGetListing(t *testing.T) {
 					192, 168, 1, 1, // IP address
 					0x1F, 0x90, // Port 8080
 					0x00, 0x10, // NumUsers 16
-					0x00, 0x00, // Unused
+					0x00, 0x00, // TLSPort
 					0x04,               // NameSize
 					'S', 'e', 'r', 'v', // Name
 					0x0B,                                                  // DescriptionSize
@@ -113,7 +113,7 @@ func TestGetListing(t *testing.T) {
 					10, 0, 0, 1, // IP address
 					0x1F, 0x91, // Port 8081
 					0x00, 0x05, // NumUsers 5
-					0x00, 0x00, // Unused
+					0x00, 0x00, // TLSPort
 					0x04,               // NameSize
 					'S', 'e', 'r', 'v', // Name
 					0x0B,                                                  // DescriptionSize
@@ -127,7 +127,7 @@ func TestGetListing(t *testing.T) {
 					IPAddr:          [4]byte{192, 168, 1, 1},
 					Port:            [2]byte{0x1F, 0x90},
 					NumUsers:        [2]byte{0x00, 0x10},
-					Unused:          [2]byte{0x00, 0x00},
+					TLSPort:         [2]byte{0x00, 0x00},
 					NameSize:        4,
 					Name:            []byte("Serv"),
 					DescriptionSize: 11,
@@ -137,7 +137,7 @@ func TestGetListing(t *testing.T) {
 					IPAddr:          [4]byte{10, 0, 0, 1},
 					Port:            [2]byte{0x1F, 0x91},
 					NumUsers:        [2]byte{0x00, 0x05},
-					Unused:          [2]byte{0x00, 0x00},
+					TLSPort:         [2]byte{0x00, 0x00},
 					NameSize:        4,
 					Name:            []byte("Serv"),
 					DescriptionSize: 11,
@@ -217,19 +217,19 @@ func TestGetListing(t *testing.T) {
 					192, 168, 1, 1, // IP address
 					0x1F, 0x90, // Port 8080
 					0x00, 0x0A, // NumUsers 10
-					0x00, 0x00, // Unused
-					0x07,                             // NameSize
+					0x00, 0x00, // TLSPort
+					0x07,                              // NameSize
 					'S', 'e', 'r', 'v', 'e', 'r', '1', // Name
-					0x0C,                                                      // DescriptionSize
+					0x0C,                                                       // DescriptionSize
 					'F', 'i', 'r', 's', 't', ' ', 'b', 'a', 't', 'c', 'h', '1', // Description
 					// ServerRecord 2
 					192, 168, 1, 2, // IP address
 					0x1F, 0x91, // Port 8081
 					0x00, 0x14, // NumUsers 20
-					0x00, 0x00, // Unused
-					0x07,                             // NameSize
+					0x00, 0x00, // TLSPort
+					0x07,                              // NameSize
 					'S', 'e', 'r', 'v', 'e', 'r', '2', // Name
-					0x0C,                                                      // DescriptionSize
+					0x0C,                                                       // DescriptionSize
 					'F', 'i', 'r', 's', 't', ' ', 'b', 'a', 't', 'c', 'h', '2', // Description
 					// Second ServerInfoHeader (next batch)
 					0x00, 0x01, // MsgType (1)
@@ -240,10 +240,10 @@ func TestGetListing(t *testing.T) {
 					192, 168, 1, 3, // IP address
 					0x1F, 0x92, // Port 8082
 					0x00, 0x1E, // NumUsers 30
-					0x00, 0x00, // Unused
-					0x07,                             // NameSize
+					0x00, 0x00, // TLSPort
+					0x07,                              // NameSize
 					'S', 'e', 'r', 'v', 'e', 'r', '3', // Name
-					0x0D,                                                           // DescriptionSize
+					0x0D,                                                            // DescriptionSize
 					'S', 'e', 'c', 'o', 'n', 'd', ' ', 'b', 'a', 't', 'c', 'h', '1', // Description
 				}),
 				writeBuffer: &bytes.Buffer{},
@@ -254,7 +254,7 @@ func TestGetListing(t *testing.T) {
 					IPAddr:          [4]byte{192, 168, 1, 1},
 					Port:            [2]byte{0x1F, 0x90},
 					NumUsers:        [2]byte{0x00, 0x0A},
-					Unused:          [2]byte{0x00, 0x00},
+					TLSPort:         [2]byte{0x00, 0x00},
 					NameSize:        7,
 					Name:            []byte("Server1"),
 					DescriptionSize: 12,
@@ -264,7 +264,7 @@ func TestGetListing(t *testing.T) {
 					IPAddr:          [4]byte{192, 168, 1, 2},
 					Port:            [2]byte{0x1F, 0x91},
 					NumUsers:        [2]byte{0x00, 0x14},
-					Unused:          [2]byte{0x00, 0x00},
+					TLSPort:         [2]byte{0x00, 0x00},
 					NameSize:        7,
 					Name:            []byte("Server2"),
 					DescriptionSize: 12,
@@ -274,7 +274,7 @@ func TestGetListing(t *testing.T) {
 					IPAddr:          [4]byte{192, 168, 1, 3},
 					Port:            [2]byte{0x1F, 0x92},
 					NumUsers:        [2]byte{0x00, 0x1E},
-					Unused:          [2]byte{0x00, 0x00},
+					TLSPort:         [2]byte{0x00, 0x00},
 					NameSize:        7,
 					Name:            []byte("Server3"),
 					DescriptionSize: 13,
@@ -298,20 +298,20 @@ func TestGetListing(t *testing.T) {
 					192, 168, 1, 1, // IP
 					0x15, 0x7c, // Port 5500
 					0x00, 0x01, // NumUsers 1
-					0x00, 0x00, // Unused
-					0x01,       // NameSize
-					'A',        // Name
-					0x01,       // DescriptionSize
-					'1',        // Description
+					0x00, 0x00, // TLSPort
+					0x01, // NameSize
+					'A',  // Name
+					0x01, // DescriptionSize
+					'1',  // Description
 					// ServerRecord 2
 					192, 168, 1, 2, // IP
 					0x15, 0x7c, // Port 5500
 					0x00, 0x02, // NumUsers 2
-					0x00, 0x00, // Unused
-					0x01,       // NameSize
-					'B',        // Name
-					0x01,       // DescriptionSize
-					'2',        // Description
+					0x00, 0x00, // TLSPort
+					0x01, // NameSize
+					'B',  // Name
+					0x01, // DescriptionSize
+					'2',  // Description
 					// Second ServerInfoHeader
 					0x00, 0x01, // MsgType (1)
 					0x00, 0x0A, // MsgDataSize
@@ -321,11 +321,11 @@ func TestGetListing(t *testing.T) {
 					192, 168, 1, 3, // IP
 					0x15, 0x7c, // Port 5500
 					0x00, 0x03, // NumUsers 3
-					0x00, 0x00, // Unused
-					0x01,       // NameSize
-					'C',        // Name
-					0x01,       // DescriptionSize
-					'3',        // Description
+					0x00, 0x00, // TLSPort
+					0x01, // NameSize
+					'C',  // Name
+					0x01, // DescriptionSize
+					'3',  // Description
 					// Third ServerInfoHeader
 					0x00, 0x01, // MsgType (1)
 					0x00, 0x0A, // MsgDataSize
@@ -335,11 +335,11 @@ func TestGetListing(t *testing.T) {
 					192, 168, 1, 4, // IP
 					0x15, 0x7c, // Port 5500
 					0x00, 0x04, // NumUsers 4
-					0x00, 0x00, // Unused
-					0x01,       // NameSize
-					'D',        // Name
-					0x01,       // DescriptionSize
-					'4',        // Description
+					0x00, 0x00, // TLSPort
+					0x01, // NameSize
+					'D',  // Name
+					0x01, // DescriptionSize
+					'4',  // Description
 				}),
 				writeBuffer: &bytes.Buffer{},
 			},
@@ -349,7 +349,7 @@ func TestGetListing(t *testing.T) {
 					IPAddr:          [4]byte{192, 168, 1, 1},
 					Port:            [2]byte{0x15, 0x7c},
 					NumUsers:        [2]byte{0x00, 0x01},
-					Unused:          [2]byte{0x00, 0x00},
+					TLSPort:         [2]byte{0x00, 0x00},
 					NameSize:        1,
 					Name:            []byte("A"),
 					DescriptionSize: 1,
@@ -359,7 +359,7 @@ func TestGetListing(t *testing.T) {
 					IPAddr:          [4]byte{192, 168, 1, 2},
 					Port:            [2]byte{0x15, 0x7c},
 					NumUsers:        [2]byte{0x00, 0x02},
-					Unused:          [2]byte{0x00, 0x00},
+					TLSPort:         [2]byte{0x00, 0x00},
 					NameSize:        1,
 					Name:            []byte("B"),
 					DescriptionSize: 1,
@@ -369,7 +369,7 @@ func TestGetListing(t *testing.T) {
 					IPAddr:          [4]byte{192, 168, 1, 3},
 					Port:            [2]byte{0x15, 0x7c},
 					NumUsers:        [2]byte{0x00, 0x03},
-					Unused:          [2]byte{0x00, 0x00},
+					TLSPort:         [2]byte{0x00, 0x00},
 					NameSize:        1,
 					Name:            []byte("C"),
 					DescriptionSize: 1,
@@ -379,7 +379,7 @@ func TestGetListing(t *testing.T) {
 					IPAddr:          [4]byte{192, 168, 1, 4},
 					Port:            [2]byte{0x15, 0x7c},
 					NumUsers:        [2]byte{0x00, 0x04},
-					Unused:          [2]byte{0x00, 0x00},
+					TLSPort:         [2]byte{0x00, 0x00},
 					NameSize:        1,
 					Name:            []byte("D"),
 					DescriptionSize: 1,
@@ -403,11 +403,11 @@ func TestGetListing(t *testing.T) {
 					192, 168, 1, 1, // IP
 					0x15, 0x7c, // Port 5500
 					0x00, 0x01, // NumUsers 1
-					0x00, 0x00, // Unused
-					0x01,       // NameSize
-					'A',        // Name
-					0x01,       // DescriptionSize
-					'1',        // Description
+					0x00, 0x00, // TLSPort
+					0x01, // NameSize
+					'A',  // Name
+					0x01, // DescriptionSize
+					'1',  // Description
 					// Incomplete second ServerInfoHeader
 					0x00, 0x01, // MsgType only
 				}),
