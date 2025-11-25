@@ -91,11 +91,22 @@ type TrackerHeader struct {
 	Version  [2]byte // Old protocol (1) or new (2)
 }
 
+// ServerInfoHeader represents a batch header in the tracker response.
+// The tracker protocol splits large server lists into batches, with each batch
+// preceded by its own ServerInfoHeader. The first header indicates the total
+// number of servers across all batches, and each header (including the first)
+// indicates how many servers are in the current batch.
+//
+// Example flow for 106 servers split into batches:
+//  1. First ServerInfoHeader: SrvCount=106, BatchSize=97
+//  2. Read 97 ServerRecords
+//  3. Second ServerInfoHeader: SrvCount=106, BatchSize=9
+//  4. Read 9 ServerRecords (total: 106)
 type ServerInfoHeader struct {
 	MsgType     [2]byte // Always has value of 1
 	MsgDataSize [2]byte // Remaining size of request
-	SrvCount    [2]byte // Number of servers in the server list
-	SrvCountDup [2]byte // Same as previous field ¯\_(ツ)_/¯
+	SrvCount    [2]byte // Total number of servers across all batches
+	BatchSize   [2]byte // Number of servers in the current batch
 }
 
 // ServerRecord is a tracker listing for a single server
@@ -128,79 +139,92 @@ func GetListing(conn io.ReadWriteCloser) ([]ServerRecord, error) {
 		return nil, err
 	}
 
+	// Use a buffered reader so we can read both headers and server records from the same buffer
+	reader := bufio.NewReader(conn)
+
 	var info ServerInfoHeader
-	if err := binary.Read(conn, binary.BigEndian, &info); err != nil {
+	if err := binary.Read(reader, binary.BigEndian, &info); err != nil {
 		return nil, err
 	}
 
 	totalSrv := int(binary.BigEndian.Uint16(info.SrvCount[:]))
+	batchSize := int(binary.BigEndian.Uint16(info.BatchSize[:]))
 
-	scanner := bufio.NewScanner(conn)
-	scanner.Split(serverScanner)
+	servers := make([]ServerRecord, 0, totalSrv)
+	serversInCurrentBatch := 0
 
-	var servers []ServerRecord
-	for {
-		scanner.Scan()
+	for len(servers) < totalSrv {
+		// Check if we've read all servers in the current batch
+		if serversInCurrentBatch == batchSize {
+			// Read the next ServerInfoHeader for the next batch from the buffered reader
+			if err := binary.Read(reader, binary.BigEndian, &info); err != nil {
+				return nil, fmt.Errorf("failed to read next ServerInfoHeader after %d servers: %w", len(servers), err)
+			}
 
-		// Make a new []byte slice and copy the scanner bytes to it.  This is critical as the
-		// scanner re-uses the buffer for subsequent scans.
-		buf := make([]byte, len(scanner.Bytes()))
-		copy(buf, scanner.Bytes())
+			batchSize = int(binary.BigEndian.Uint16(info.BatchSize[:]))
+			serversInCurrentBatch = 0
+		}
 
-		var srv ServerRecord
-		_, err = srv.Write(buf)
+		// Read a server record using our helper function
+		srv, err := readServerRecord(reader)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to read server record %d: %w", len(servers)+1, err)
 		}
 
 		servers = append(servers, srv)
-		if len(servers) == totalSrv {
-			break
-		}
+		serversInCurrentBatch++
 	}
 
 	return servers, nil
 }
 
-// serverScanner implements bufio.SplitFunc for parsing the tracker list into ServerRecords tokens
-// Example payload:
-// 00000000  18 05 30 63 15 7c 00 02  00 00 10 54 68 65 20 4d  |..0c.|.....The M|
-// 00000010  6f 62 69 75 73 20 53 74  72 69 70 40 48 6f 6d 65  |obius Strip@Home|
-// 00000020  20 6f 66 20 74 68 65 20  4d 6f 62 69 75 73 20 48  | of the Mobius H|
-// 00000030  6f 74 6c 69 6e 65 20 73  65 72 76 65 72 20 61 6e  |otline server an|
-// 00000040  64 20 63 6c 69 65 6e 74  20 7c 20 54 52 54 50 48  |d client | TRTPH|
-// 00000050  4f 54 4c 2e 63 6f 6d 3a  35 35 30 30 2d 4f 3a b2  |OTL.com:5500-O:.|
-// 00000060  15 7c 00 00 00 00 08 53  65 6e 65 63 74 75 73 20  |.|.....Senectus |
-func serverScanner(data []byte, _ bool) (advance int, token []byte, err error) {
-	// The name length field is the 11th byte of the server record.  If we don't have that many bytes,
-	// return nil token so the Scanner reads more data and continues scanning.
-	if len(data) < 10 {
-		return 0, nil, nil
+// readServerRecord reads a single ServerRecord from the reader
+func readServerRecord(reader *bufio.Reader) (ServerRecord, error) {
+	var srv ServerRecord
+
+	// Read fixed header: IP (4) + Port (2) + NumUsers (2) + Unused (2) = 10 bytes
+	header := make([]byte, 10)
+	if _, err := io.ReadFull(reader, header); err != nil {
+		return srv, fmt.Errorf("failed to read server header: %w", err)
 	}
 
-	// A server entry has two variable length fields: the name and description.
-	// To get the token length, we first need the name length from the 10th byte
-	nameLen := int(data[10])
+	copy(srv.IPAddr[:], header[0:4])
+	copy(srv.Port[:], header[4:6])
+	copy(srv.NumUsers[:], header[6:8])
+	copy(srv.Unused[:], header[8:10])
 
-	// The description length field is at the 12th + nameLen byte of the server record.
-	// If we don't have that many bytes, return nil token so the Scanner reads more data and continues scanning.
-	if len(data) < 11+nameLen {
-		return 0, nil, nil
+	// Read name size
+	nameSizeByte, err := reader.ReadByte()
+	if err != nil {
+		return srv, fmt.Errorf("failed to read name size: %w", err)
+	}
+	srv.NameSize = nameSizeByte
+
+	// Read name
+	srv.Name = make([]byte, srv.NameSize)
+	if _, err := io.ReadFull(reader, srv.Name); err != nil {
+		return srv, fmt.Errorf("failed to read name: %w", err)
 	}
 
-	// Next we need the description length from the 11+nameLen byte:
-	descLen := int(data[11+nameLen])
+	// Read description size
+	descSizeByte, err := reader.ReadByte()
+	if err != nil {
+		return srv, fmt.Errorf("failed to read description size: %w", err)
+	}
+	srv.DescriptionSize = descSizeByte
 
-	if len(data) < 12+nameLen+descLen {
-		return 0, nil, nil
+	// Read description
+	srv.Description = make([]byte, srv.DescriptionSize)
+	if _, err := io.ReadFull(reader, srv.Description); err != nil {
+		return srv, fmt.Errorf("failed to read description: %w", err)
 	}
 
-	return 12 + nameLen + descLen, data[0 : 12+nameLen+descLen], nil
+	return srv, nil
 }
 
 // Write implements io.Writer for ServerRecord
 func (s *ServerRecord) Write(b []byte) (n int, err error) {
-	if len(b) < 13 {
+	if len(b) < 12 {
 		return 0, errors.New("too few bytes")
 	}
 	copy(s.IPAddr[:], b[0:4])

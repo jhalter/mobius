@@ -2,11 +2,11 @@ package hotline
 
 import (
 	"bytes"
-	"fmt"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"io"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTrackerRegistration_Payload(t *testing.T) {
@@ -62,138 +62,6 @@ func TestTrackerRegistration_Payload(t *testing.T) {
 	}
 }
 
-func Test_serverScanner(t *testing.T) {
-	type args struct {
-		data  []byte
-		atEOF bool
-	}
-	tests := []struct {
-		name        string
-		args        args
-		wantAdvance int
-		wantToken   []byte
-		wantErr     assert.ErrorAssertionFunc
-	}{
-		{
-			name: "when a full server entry is provided",
-			args: args{
-				data: []byte{
-					0x18, 0x05, 0x30, 0x63, // IP Addr
-					0x15, 0x7c, // Port
-					0x00, 0x02, // UserCount
-					0x00, 0x00, // ??
-					0x03,             // Name Len
-					0x54, 0x68, 0x65, // Name
-					0x03,             // Desc Len
-					0x54, 0x54, 0x54, // Description
-				},
-				atEOF: false,
-			},
-			wantAdvance: 18,
-			wantToken: []byte{
-				0x18, 0x05, 0x30, 0x63, // IP Addr
-				0x15, 0x7c, // Port
-				0x00, 0x02, // UserCount
-				0x00, 0x00, // ??
-				0x03,             // Name Len
-				0x54, 0x68, 0x65, // Name
-				0x03,             // Desc Len
-				0x54, 0x54, 0x54, // Description
-			},
-			wantErr: assert.NoError,
-		},
-		{
-			name: "when extra bytes are provided",
-			args: args{
-				data: []byte{
-					0x18, 0x05, 0x30, 0x63, // IP Addr
-					0x15, 0x7c, // Port
-					0x00, 0x02, // UserCount
-					0x00, 0x00, // ??
-					0x03,             // Name Len
-					0x54, 0x68, 0x65, // Name
-					0x03,             // Desc Len
-					0x54, 0x54, 0x54, // Description
-					0x54, 0x54, 0x54, 0x54, 0x54, 0x54, 0x54, 0x54, 0x54,
-				},
-				atEOF: false,
-			},
-			wantAdvance: 18,
-			wantToken: []byte{
-				0x18, 0x05, 0x30, 0x63, // IP Addr
-				0x15, 0x7c, // Port
-				0x00, 0x02, // UserCount
-				0x00, 0x00, // ??
-				0x03,             // Name Len
-				0x54, 0x68, 0x65, // Name
-				0x03,             // Desc Len
-				0x54, 0x54, 0x54, // Description
-			},
-			wantErr: assert.NoError,
-		},
-		{
-			name: "when insufficient bytes are provided",
-			args: args{
-				data: []byte{
-					0, 0,
-				},
-				atEOF: false,
-			},
-			wantAdvance: 0,
-			wantToken:   []byte(nil),
-			wantErr:     assert.NoError,
-		},
-		{
-			name: "when nameLen exceeds provided data",
-			args: args{
-				data: []byte{
-					0x18, 0x05, 0x30, 0x63, // IP Addr
-					0x15, 0x7c, // Port
-					0x00, 0x02, // UserCount
-					0x00, 0x00, // ??
-					0xff,             // Name Len
-					0x54, 0x68, 0x65, // Name
-					0x03,             // Desc Len
-					0x54, 0x54, 0x54, // Description
-				},
-				atEOF: false,
-			},
-			wantAdvance: 0,
-			wantToken:   []byte(nil),
-			wantErr:     assert.NoError,
-		},
-		{
-			name: "when description len exceeds provided data",
-			args: args{
-				data: []byte{
-					0x18, 0x05, 0x30, 0x63, // IP Addr
-					0x15, 0x7c, // Port
-					0x00, 0x02, // UserCount
-					0x00, 0x00, // ??
-					0x03,             // Name Len
-					0x54, 0x68, 0x65, // Name
-					0xff,             // Desc Len
-					0x54, 0x54, 0x54, // Description
-				},
-				atEOF: false,
-			},
-			wantAdvance: 0,
-			wantToken:   []byte(nil),
-			wantErr:     assert.NoError,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotAdvance, gotToken, err := serverScanner(tt.args.data, tt.args.atEOF)
-			if !tt.wantErr(t, err, fmt.Sprintf("serverScanner(%v, %v)", tt.args.data, tt.args.atEOF)) {
-				return
-			}
-			assert.Equalf(t, tt.wantAdvance, gotAdvance, "serverScanner(%v, %v)", tt.args.data, tt.args.atEOF)
-			assert.Equalf(t, tt.wantToken, gotToken, "serverScanner(%v, %v)", tt.args.data, tt.args.atEOF)
-		})
-	}
-}
-
 type mockConn struct {
 	readBuffer  *bytes.Buffer
 	writeBuffer *bytes.Buffer
@@ -231,7 +99,7 @@ func TestGetListing(t *testing.T) {
 					0x00, 0x01, // MsgType (1)
 					0x00, 0x14, // MsgDataSize (20)
 					0x00, 0x02, // SrvCount (2)
-					0x00, 0x02, // SrvCountDup (2)
+					0x00, 0x02, // BatchSize (2)
 					// ServerRecord 1
 					192, 168, 1, 1, // IP address
 					0x1F, 0x90, // Port 8080
@@ -324,7 +192,7 @@ func TestGetListing(t *testing.T) {
 					0x00, 0x01, // MsgType (1)
 					0x00, 0x14, // MsgDataSize (20)
 					0x00, 0x01, // SrvCount (1)
-					0x00, 0x01, // SrvCountDup (1)
+					0x00, 0x01, // BatchSize (1)
 					// incomplete ServerRecord to cause scanner error
 					192, 168, 1, 1,
 				}),
@@ -332,6 +200,239 @@ func TestGetListing(t *testing.T) {
 			},
 			wantErr:    true,
 			wantResult: nil,
+		},
+		{
+			name: "Multiple batches with ServerInfoHeaders",
+			mockConn: &mockConn{
+				readBuffer: bytes.NewBuffer([]byte{
+					// TrackerHeader
+					0x48, 0x54, 0x52, 0x4B, // Protocol "HTRK"
+					0x00, 0x01, // Version 1
+					// First ServerInfoHeader
+					0x00, 0x01, // MsgType (1)
+					0x00, 0x14, // MsgDataSize (20)
+					0x00, 0x03, // SrvCount (3 total)
+					0x00, 0x02, // BatchSize (2 in first batch)
+					// ServerRecord 1
+					192, 168, 1, 1, // IP address
+					0x1F, 0x90, // Port 8080
+					0x00, 0x0A, // NumUsers 10
+					0x00, 0x00, // Unused
+					0x07,                             // NameSize
+					'S', 'e', 'r', 'v', 'e', 'r', '1', // Name
+					0x0C,                                                      // DescriptionSize
+					'F', 'i', 'r', 's', 't', ' ', 'b', 'a', 't', 'c', 'h', '1', // Description
+					// ServerRecord 2
+					192, 168, 1, 2, // IP address
+					0x1F, 0x91, // Port 8081
+					0x00, 0x14, // NumUsers 20
+					0x00, 0x00, // Unused
+					0x07,                             // NameSize
+					'S', 'e', 'r', 'v', 'e', 'r', '2', // Name
+					0x0C,                                                      // DescriptionSize
+					'F', 'i', 'r', 's', 't', ' ', 'b', 'a', 't', 'c', 'h', '2', // Description
+					// Second ServerInfoHeader (next batch)
+					0x00, 0x01, // MsgType (1)
+					0x00, 0x0A, // MsgDataSize (10)
+					0x00, 0x03, // SrvCount (3 total - same)
+					0x00, 0x01, // BatchSize (1 in second batch)
+					// ServerRecord 3
+					192, 168, 1, 3, // IP address
+					0x1F, 0x92, // Port 8082
+					0x00, 0x1E, // NumUsers 30
+					0x00, 0x00, // Unused
+					0x07,                             // NameSize
+					'S', 'e', 'r', 'v', 'e', 'r', '3', // Name
+					0x0D,                                                           // DescriptionSize
+					'S', 'e', 'c', 'o', 'n', 'd', ' ', 'b', 'a', 't', 'c', 'h', '1', // Description
+				}),
+				writeBuffer: &bytes.Buffer{},
+			},
+			wantErr: false,
+			wantResult: []ServerRecord{
+				{
+					IPAddr:          [4]byte{192, 168, 1, 1},
+					Port:            [2]byte{0x1F, 0x90},
+					NumUsers:        [2]byte{0x00, 0x0A},
+					Unused:          [2]byte{0x00, 0x00},
+					NameSize:        7,
+					Name:            []byte("Server1"),
+					DescriptionSize: 12,
+					Description:     []byte("First batch1"),
+				},
+				{
+					IPAddr:          [4]byte{192, 168, 1, 2},
+					Port:            [2]byte{0x1F, 0x91},
+					NumUsers:        [2]byte{0x00, 0x14},
+					Unused:          [2]byte{0x00, 0x00},
+					NameSize:        7,
+					Name:            []byte("Server2"),
+					DescriptionSize: 12,
+					Description:     []byte("First batch2"),
+				},
+				{
+					IPAddr:          [4]byte{192, 168, 1, 3},
+					Port:            [2]byte{0x1F, 0x92},
+					NumUsers:        [2]byte{0x00, 0x1E},
+					Unused:          [2]byte{0x00, 0x00},
+					NameSize:        7,
+					Name:            []byte("Server3"),
+					DescriptionSize: 13,
+					Description:     []byte("Second batch1"),
+				},
+			},
+		},
+		{
+			name: "Three batches",
+			mockConn: &mockConn{
+				readBuffer: bytes.NewBuffer([]byte{
+					// TrackerHeader
+					0x48, 0x54, 0x52, 0x4B, // Protocol "HTRK"
+					0x00, 0x01, // Version 1
+					// First ServerInfoHeader
+					0x00, 0x01, // MsgType (1)
+					0x00, 0x0A, // MsgDataSize
+					0x00, 0x04, // SrvCount (4 total)
+					0x00, 0x02, // BatchSize (2 in first batch)
+					// ServerRecord 1
+					192, 168, 1, 1, // IP
+					0x15, 0x7c, // Port 5500
+					0x00, 0x01, // NumUsers 1
+					0x00, 0x00, // Unused
+					0x01,       // NameSize
+					'A',        // Name
+					0x01,       // DescriptionSize
+					'1',        // Description
+					// ServerRecord 2
+					192, 168, 1, 2, // IP
+					0x15, 0x7c, // Port 5500
+					0x00, 0x02, // NumUsers 2
+					0x00, 0x00, // Unused
+					0x01,       // NameSize
+					'B',        // Name
+					0x01,       // DescriptionSize
+					'2',        // Description
+					// Second ServerInfoHeader
+					0x00, 0x01, // MsgType (1)
+					0x00, 0x0A, // MsgDataSize
+					0x00, 0x04, // SrvCount (4 total)
+					0x00, 0x01, // BatchSize (1 in second batch)
+					// ServerRecord 3
+					192, 168, 1, 3, // IP
+					0x15, 0x7c, // Port 5500
+					0x00, 0x03, // NumUsers 3
+					0x00, 0x00, // Unused
+					0x01,       // NameSize
+					'C',        // Name
+					0x01,       // DescriptionSize
+					'3',        // Description
+					// Third ServerInfoHeader
+					0x00, 0x01, // MsgType (1)
+					0x00, 0x0A, // MsgDataSize
+					0x00, 0x04, // SrvCount (4 total)
+					0x00, 0x01, // BatchSize (1 in third batch)
+					// ServerRecord 4
+					192, 168, 1, 4, // IP
+					0x15, 0x7c, // Port 5500
+					0x00, 0x04, // NumUsers 4
+					0x00, 0x00, // Unused
+					0x01,       // NameSize
+					'D',        // Name
+					0x01,       // DescriptionSize
+					'4',        // Description
+				}),
+				writeBuffer: &bytes.Buffer{},
+			},
+			wantErr: false,
+			wantResult: []ServerRecord{
+				{
+					IPAddr:          [4]byte{192, 168, 1, 1},
+					Port:            [2]byte{0x15, 0x7c},
+					NumUsers:        [2]byte{0x00, 0x01},
+					Unused:          [2]byte{0x00, 0x00},
+					NameSize:        1,
+					Name:            []byte("A"),
+					DescriptionSize: 1,
+					Description:     []byte("1"),
+				},
+				{
+					IPAddr:          [4]byte{192, 168, 1, 2},
+					Port:            [2]byte{0x15, 0x7c},
+					NumUsers:        [2]byte{0x00, 0x02},
+					Unused:          [2]byte{0x00, 0x00},
+					NameSize:        1,
+					Name:            []byte("B"),
+					DescriptionSize: 1,
+					Description:     []byte("2"),
+				},
+				{
+					IPAddr:          [4]byte{192, 168, 1, 3},
+					Port:            [2]byte{0x15, 0x7c},
+					NumUsers:        [2]byte{0x00, 0x03},
+					Unused:          [2]byte{0x00, 0x00},
+					NameSize:        1,
+					Name:            []byte("C"),
+					DescriptionSize: 1,
+					Description:     []byte("3"),
+				},
+				{
+					IPAddr:          [4]byte{192, 168, 1, 4},
+					Port:            [2]byte{0x15, 0x7c},
+					NumUsers:        [2]byte{0x00, 0x04},
+					Unused:          [2]byte{0x00, 0x00},
+					NameSize:        1,
+					Name:            []byte("D"),
+					DescriptionSize: 1,
+					Description:     []byte("4"),
+				},
+			},
+		},
+		{
+			name: "Error reading second ServerInfoHeader",
+			mockConn: &mockConn{
+				readBuffer: bytes.NewBuffer([]byte{
+					// TrackerHeader
+					0x48, 0x54, 0x52, 0x4B, // Protocol "HTRK"
+					0x00, 0x01, // Version 1
+					// First ServerInfoHeader
+					0x00, 0x01, // MsgType (1)
+					0x00, 0x0A, // MsgDataSize
+					0x00, 0x02, // SrvCount (2 total)
+					0x00, 0x01, // BatchSize (1 in first batch)
+					// ServerRecord 1
+					192, 168, 1, 1, // IP
+					0x15, 0x7c, // Port 5500
+					0x00, 0x01, // NumUsers 1
+					0x00, 0x00, // Unused
+					0x01,       // NameSize
+					'A',        // Name
+					0x01,       // DescriptionSize
+					'1',        // Description
+					// Incomplete second ServerInfoHeader
+					0x00, 0x01, // MsgType only
+				}),
+				writeBuffer: &bytes.Buffer{},
+			},
+			wantErr:    true,
+			wantResult: nil,
+		},
+		{
+			name: "Empty server list",
+			mockConn: &mockConn{
+				readBuffer: bytes.NewBuffer([]byte{
+					// TrackerHeader
+					0x48, 0x54, 0x52, 0x4B, // Protocol "HTRK"
+					0x00, 0x01, // Version 1
+					// ServerInfoHeader with 0 servers
+					0x00, 0x01, // MsgType (1)
+					0x00, 0x00, // MsgDataSize (0)
+					0x00, 0x00, // SrvCount (0)
+					0x00, 0x00, // BatchSize (0)
+				}),
+				writeBuffer: &bytes.Buffer{},
+			},
+			wantErr:    false,
+			wantResult: []ServerRecord{},
 		},
 	}
 
