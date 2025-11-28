@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/jhalter/mobius/hotline"
 	"golang.org/x/text/encoding/charmap"
 )
@@ -1322,6 +1323,8 @@ func HandleGetNewsArtNameList(cc *hotline.ClientConn, t *hotline.Transaction) (r
 	if err != nil {
 		return res
 	}
+
+	spew.Dump(nald)
 
 	return append(res, cc.NewReply(t, hotline.NewField(hotline.FieldNewsArtListData, b)))
 }

@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"time"
 )
@@ -27,7 +26,7 @@ func (cp *ClientPrefs) IconBytes() []byte {
 
 type Client struct {
 	Connection  net.Conn
-	Logger      *slog.Logger
+	Logger      Logger
 	Pref        *ClientPrefs
 	Handlers    map[[2]byte]ClientHandler
 	activeTasks map[[4]byte]*Transaction
@@ -40,7 +39,7 @@ func (c *Client) HandleFunc(tranType [2]byte, handler ClientHandler) {
 	c.Handlers[tranType] = handler
 }
 
-func NewClient(username string, logger *slog.Logger) *Client {
+func NewClient(username string, logger Logger) *Client {
 	c := &Client{
 		Logger:      logger,
 		activeTasks: make(map[[4]byte]*Transaction),
@@ -143,7 +142,7 @@ func (c *Client) Handshake() error {
 }
 
 func (c *Client) Send(t Transaction) error {
-	requestNum := binary.BigEndian.Uint16(t.Type[:])
+	//requestNum := binary.BigEndian.Uint16(t.Type[:])
 
 	// if transaction is NOT reply, add it to the list to transactions we're expecting a response for
 	if t.IsReply == 0 {
@@ -155,11 +154,8 @@ func (c *Client) Send(t Transaction) error {
 		return fmt.Errorf("error sending transaction: %w", err)
 	}
 
-	c.Logger.Debug("Sent Transaction",
-		"IsReply", t.IsReply,
-		"type", requestNum,
-		"sentBytes", n,
-	)
+	c.Logger.Info(tranTypeNames[t.Type], "IsReply", t.IsReply, "type", t.Type[:], "sentBytes", n)
+
 	return nil
 }
 
@@ -171,11 +167,8 @@ func (c *Client) HandleTransaction(ctx context.Context, t *Transaction) error {
 	}
 
 	if handler, ok := c.Handlers[t.Type]; ok {
-		c.Logger.Debug(
-			"Received transaction",
-			"IsReply", t.IsReply,
-			"type", t.Type[:],
-		)
+		c.Logger.Info(tranTypeNames[t.Type], "IsReply", t.IsReply, "type", t.Type[:])
+
 		outT, err := handler(ctx, c, t)
 		if err != nil {
 			c.Logger.Error("error handling transaction", "err", err)

@@ -3,9 +3,10 @@ package hotline
 import (
 	"cmp"
 	"encoding/binary"
-	"github.com/stretchr/testify/mock"
 	"io"
 	"slices"
+
+	"github.com/stretchr/testify/mock"
 )
 
 var (
@@ -38,7 +39,9 @@ type NewsCategoryListData15 struct {
 	AddSN    [4]byte                           `yaml:"-"` // What does this do?  Undocumented and seeming unused.
 	DeleteSN [4]byte                           `yaml:"-"` // What does this do?  Undocumented and seeming unused.
 
-	readOffset int // Internal offset to track read progress
+	readOffset  int    // Internal offset to track read progress
+	writeOffset int    // Internal offset to track write progress
+	writeBuf    []byte // Buffer for accumulating partial writes
 }
 
 func (newscat *NewsCategoryListData15) GetNewsArtListData() (NewsArtListData, error) {
@@ -110,7 +113,9 @@ type NewsArtListData struct {
 	NewsArtList []byte  // List of articles			Optional (if article count > 0)
 	Count       int
 
-	readOffset int // Internal offset to track read progress
+	readOffset  int    // Internal offset to track read progress
+	writeOffset int    // Internal offset to track write progress
+	writeBuf    []byte // Buffer for accumulating partial writes
 }
 
 func (nald *NewsArtListData) Read(p []byte) (int, error) {
@@ -134,6 +139,82 @@ func (nald *NewsArtListData) Read(p []byte) (int, error) {
 	nald.readOffset += n
 
 	return n, nil
+}
+
+func (nald *NewsArtListData) Write(p []byte) (int, error) {
+	// Accumulate incoming bytes into the write buffer
+	nald.writeBuf = append(nald.writeBuf, p...)
+	bytesConsumed := len(p)
+
+	// If we've already parsed the header (writeOffset > 0), just accumulate article list data
+	if nald.writeOffset > 0 {
+		// Append new data to existing NewsArtList
+		nald.NewsArtList = append(nald.NewsArtList, p...)
+		return bytesConsumed, nil
+	}
+
+	// Minimum size: ID(4) + Count(4) + NameLen(1) + DescLen(1) = 10 bytes
+	if len(nald.writeBuf) < 10 {
+		return bytesConsumed, nil // Need more data
+	}
+
+	offset := 0
+
+	// Read ID (4 bytes)
+	copy(nald.ID[:], nald.writeBuf[offset:offset+4])
+	offset += 4
+
+	// Read Count (4 bytes)
+	nald.Count = int(binary.BigEndian.Uint32(nald.writeBuf[offset : offset+4]))
+	offset += 4
+
+	// Read Name length (1 byte)
+	nameLen := int(nald.writeBuf[offset])
+	offset += 1
+
+	// Check if we have enough data for Name
+	if len(nald.writeBuf) < offset+nameLen {
+		return bytesConsumed, nil // Need more data
+	}
+
+	// Read Name (nameLen bytes)
+	nald.Name = make([]byte, nameLen)
+	copy(nald.Name, nald.writeBuf[offset:offset+nameLen])
+	offset += nameLen
+
+	// Check if we have Description length byte
+	if len(nald.writeBuf) < offset+1 {
+		return bytesConsumed, nil // Need more data
+	}
+
+	// Read Description length (1 byte)
+	descLen := int(nald.writeBuf[offset])
+	offset += 1
+
+	// Check if we have enough data for Description
+	if len(nald.writeBuf) < offset+descLen {
+		return bytesConsumed, nil // Need more data
+	}
+
+	// Read Description (descLen bytes)
+	nald.Description = make([]byte, descLen)
+	copy(nald.Description, nald.writeBuf[offset:offset+descLen])
+	offset += descLen
+
+	// Read remaining bytes as NewsArtList
+	if len(nald.writeBuf) > offset {
+		nald.NewsArtList = make([]byte, len(nald.writeBuf)-offset)
+		copy(nald.NewsArtList, nald.writeBuf[offset:])
+	} else {
+		nald.NewsArtList = []byte{}
+	}
+
+	// Mark that we've successfully parsed the header
+	nald.writeOffset = offset
+	// Clear the buffer as we've successfully parsed all data
+	nald.writeBuf = nil
+
+	return bytesConsumed, nil
 }
 
 // NewsArtList is a summarized version of a NewArtData record for display in list view
@@ -221,6 +302,72 @@ func (newscat *NewsCategoryListData15) Read(p []byte) (int, error) {
 	newscat.readOffset = n
 
 	return n, nil
+}
+
+func (newscat *NewsCategoryListData15) Write(p []byte) (int, error) {
+	// Accumulate incoming bytes into the write buffer
+	newscat.writeBuf = append(newscat.writeBuf, p...)
+	bytesConsumed := len(p)
+
+	// Minimum size: Type(2) + Count(2) + NameLen(1) = 5 bytes
+	if len(newscat.writeBuf) < 5 {
+		return bytesConsumed, nil // Need more data
+	}
+
+	offset := 0
+
+	// Read Type (2 bytes)
+	copy(newscat.Type[:], newscat.writeBuf[offset:offset+2])
+	offset += 2
+
+	// Read count (2 bytes) - stored but not directly used as it's derived from maps
+	_ = binary.BigEndian.Uint16(newscat.writeBuf[offset : offset+2])
+	offset += 2
+
+	// If Type is NewsCategory, read GUID, AddSN, DeleteSN
+	if newscat.Type == NewsCategory {
+		// Need additional 24 bytes: GUID(16) + AddSN(4) + DeleteSN(4)
+		if len(newscat.writeBuf) < offset+24 {
+			return bytesConsumed, nil // Need more data
+		}
+
+		copy(newscat.GUID[:], newscat.writeBuf[offset:offset+16])
+		offset += 16
+
+		copy(newscat.AddSN[:], newscat.writeBuf[offset:offset+4])
+		offset += 4
+
+		copy(newscat.DeleteSN[:], newscat.writeBuf[offset:offset+4])
+		offset += 4
+	}
+
+	// Read name length (1 byte)
+	if len(newscat.writeBuf) < offset+1 {
+		return bytesConsumed, nil // Need more data
+	}
+	nameLen := int(newscat.writeBuf[offset])
+	offset += 1
+
+	// Read name (nameLen bytes)
+	if len(newscat.writeBuf) < offset+nameLen {
+		return bytesConsumed, nil // Need more data
+	}
+	newscat.Name = string(newscat.writeBuf[offset : offset+nameLen])
+	offset += nameLen
+
+	// Initialize maps if needed
+	if newscat.Articles == nil {
+		newscat.Articles = make(map[uint32]*NewsArtData)
+	}
+	if newscat.SubCats == nil {
+		newscat.SubCats = make(map[string]NewsCategoryListData15)
+	}
+
+	// Clear the buffer as we've successfully parsed all expected data
+	newscat.writeBuf = newscat.writeBuf[offset:]
+	newscat.writeOffset = offset
+
+	return bytesConsumed, nil
 }
 
 func (newscat *NewsCategoryListData15) nameLen() []byte {

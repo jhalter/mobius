@@ -97,6 +97,7 @@ var tranTypeNames = map[TranType]string{
 	TranUserAccess:         "User access",
 	TranNotifyDeleteUser:   "User left",
 	TranAgreed:             "Accept agreement",
+	TranLogin:              "Log In",
 	TranChatSend:           "Send chat",
 	TranDelNewsArt:         "Delete news article",
 	TranDelNewsItem:        "Delete news item",
