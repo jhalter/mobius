@@ -5,13 +5,14 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"log/slog"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type mockReadWriter struct {
@@ -400,20 +401,20 @@ func TestServer_registerWithTrackers(t *testing.T) {
 
 func TestServer_registerWithTrackers_ContextCancellation(t *testing.T) {
 	tests := []struct {
-		name           string
-		cancelAfter    time.Duration
-		expectedCalls  int // Number of expected registration calls before cancellation
-		trackerCount   int
+		name          string
+		cancelAfter   time.Duration
+		expectedCalls int // Number of expected registration calls before cancellation
+		trackerCount  int
 	}{
 		{
-			name:         "immediate cancellation",
-			cancelAfter:  10 * time.Millisecond,
+			name:          "immediate cancellation",
+			cancelAfter:   10 * time.Millisecond,
 			expectedCalls: 2, // Should complete immediate registration
 			trackerCount:  2,
 		},
 		{
-			name:         "cancellation after first ticker",
-			cancelAfter:  100 * time.Millisecond,
+			name:          "cancellation after first ticker",
+			cancelAfter:   100 * time.Millisecond,
 			expectedCalls: 2, // Should only do immediate registration within 100ms
 			trackerCount:  2,
 		},
@@ -470,10 +471,10 @@ func TestServer_registerWithTrackers_ContextCancellation(t *testing.T) {
 
 func TestServer_registerWithTrackers_PeriodicRegistration(t *testing.T) {
 	t.Skip("Skipping timing-sensitive test - would take 5+ minutes to run reliably")
-	
+
 	// This test would verify that periodic re-registration happens every trackerUpdateFrequency seconds
 	// but it's impractical to run in normal test suites due to the 300-second interval
-	
+
 	mockRegistrar := &MockTrackerRegistrar{}
 	config := Config{
 		EnableTrackerRegistration: true,

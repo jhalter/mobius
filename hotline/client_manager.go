@@ -3,10 +3,11 @@ package hotline
 import (
 	"cmp"
 	"encoding/binary"
-	"github.com/stretchr/testify/mock"
 	"slices"
 	"sync"
 	"sync/atomic"
+
+	"github.com/stretchr/testify/mock"
 )
 
 type ClientID [2]byte

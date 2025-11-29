@@ -4,12 +4,13 @@ import (
 	"cmp"
 	"encoding/binary"
 	"fmt"
-	"github.com/jhalter/mobius/hotline"
-	"gopkg.in/yaml.v3"
 	"os"
 	"slices"
 	"sort"
 	"sync"
+
+	"github.com/jhalter/mobius/hotline"
+	"gopkg.in/yaml.v3"
 )
 
 type ThreadedNewsYAML struct {

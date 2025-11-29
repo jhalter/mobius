@@ -1,9 +1,10 @@
 package hotline
 
 import (
-	"github.com/stretchr/testify/assert"
 	"io"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewsCategoryListData15_MarshalBinary(t *testing.T) {
@@ -289,8 +290,8 @@ func TestNewsArtListData_Write(t *testing.T) {
 				0x00, 0x00, 0x00, 0x05, // Count: 5
 				0x04,                   // Name length: 4
 				0x74, 0x65, 0x73, 0x74, // Name: "test"
-				0x04,                         // Description length: 4
-				0x64, 0x65, 0x73, 0x63,       // Description: "desc"
+				0x04,                   // Description length: 4
+				0x64, 0x65, 0x73, 0x63, // Description: "desc"
 			},
 			wantID:      [4]byte{0x00, 0x01, 0x02, 0x03},
 			wantCount:   5,
@@ -307,9 +308,9 @@ func TestNewsArtListData_Write(t *testing.T) {
 				0x00, 0x00, 0x00, 0x01, // Count: 1
 				0x04,                   // Name length: 4
 				0x74, 0x65, 0x73, 0x74, // Name: "test"
-				0x04,                         // Description length: 4
-				0x64, 0x65, 0x73, 0x63,       // Description: "desc"
-				0xAA, 0xBB, 0xCC,             // NewsArtList data
+				0x04,                   // Description length: 4
+				0x64, 0x65, 0x73, 0x63, // Description: "desc"
+				0xAA, 0xBB, 0xCC, // NewsArtList data
 			},
 			wantID:      [4]byte{0x00, 0x01, 0x02, 0x03},
 			wantCount:   1,
@@ -340,9 +341,9 @@ func TestNewsArtListData_Write(t *testing.T) {
 			input: []byte{
 				0x00, 0x00, 0x00, 0x00, // ID
 				0x00, 0x00, 0x00, 0x0A, // Count: 10
-				0x0A, // Name length: 10
+				0x0A,                                                       // Name length: 10
 				0x4C, 0x6F, 0x6E, 0x67, 0x65, 0x72, 0x4E, 0x61, 0x6D, 0x65, // Name: "LongerName"
-				0x0B, // Description length: 11
+				0x0B,                                                             // Description length: 11
 				0x44, 0x65, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x69, 0x6F, 0x6E, // Description: "Description"
 			},
 			wantID:      [4]byte{0x00, 0x00, 0x00, 0x00},
@@ -405,8 +406,8 @@ func TestNewsArtListData_Write_PartialData(t *testing.T) {
 		{
 			name: "split across ID boundary",
 			chunks: [][]byte{
-				{0x00, 0x01},       // First 2 bytes of ID
-				{0x02, 0x03},       // Last 2 bytes of ID
+				{0x00, 0x01},             // First 2 bytes of ID
+				{0x02, 0x03},             // Last 2 bytes of ID
 				{0x00, 0x00, 0x00, 0x02}, // Count: 2
 				{0x03},                   // Name length: 3
 				{0x66, 0x6f, 0x6f},       // Name: "foo"
@@ -425,10 +426,10 @@ func TestNewsArtListData_Write_PartialData(t *testing.T) {
 			chunks: [][]byte{
 				{0x00, 0x00, 0x00, 0x00}, // ID
 				{0x00, 0x00, 0x00, 0x01}, // Count: 1
-				{0x05},       // Name length: 5
-				{0x68, 0x65}, // "he"
-				{0x6c, 0x6c, 0x6f}, // "llo"
-				{0x00}, // Description length: 0
+				{0x05},                   // Name length: 5
+				{0x68, 0x65},             // "he"
+				{0x6c, 0x6c, 0x6f},       // "llo"
+				{0x00},                   // Description length: 0
 			},
 			wantID:      [4]byte{0x00, 0x00, 0x00, 0x00},
 			wantCount:   1,
@@ -442,10 +443,10 @@ func TestNewsArtListData_Write_PartialData(t *testing.T) {
 			chunks: [][]byte{
 				{0xAA, 0xBB, 0xCC, 0xDD}, // ID
 				{0x00, 0x00, 0x00, 0x05}, // Count: 5
-				{0x01, 0x41}, // Name length: 1, Name: "A"
-				{0x01, 0x42}, // Description length: 1, Description: "B"
-				{0x11, 0x22}, // Article list part 1
-				{0x33, 0x44, 0x55}, // Article list part 2
+				{0x01, 0x41},             // Name length: 1, Name: "A"
+				{0x01, 0x42},             // Description length: 1, Description: "B"
+				{0x11, 0x22},             // Article list part 1
+				{0x33, 0x44, 0x55},       // Article list part 2
 			},
 			wantID:      [4]byte{0xAA, 0xBB, 0xCC, 0xDD},
 			wantCount:   5,
@@ -459,7 +460,7 @@ func TestNewsArtListData_Write_PartialData(t *testing.T) {
 			chunks: [][]byte{
 				{0x01}, {0x02}, {0x03}, {0x04}, // ID
 				{0x00}, {0x00}, {0x00}, {0x00}, // Count: 0
-				{0x02},       // Name length: 2
+				{0x02},         // Name length: 2
 				{0x41}, {0x42}, // Name: "AB"
 				{0x00}, // Description length: 0
 			},
@@ -684,8 +685,8 @@ func TestNewsCategoryListData15_Write(t *testing.T) {
 			input: []byte{
 				0x00, 0x02, // Type: Bundle
 				0x00, 0x01, // Count: 1
-				0x03,                   // Name length: 3
-				0x66, 0x6f, 0x6f,       // Name: "foo"
+				0x03,             // Name length: 3
+				0x66, 0x6f, 0x6f, // Name: "foo"
 			},
 			wantType: [2]byte{0x00, 0x02},
 			wantName: "foo",
@@ -727,7 +728,7 @@ func TestNewsCategoryListData15_Write(t *testing.T) {
 			input: []byte{
 				0x00, 0x02, // Type: Bundle
 				0x00, 0x05, // Count: 5
-				0x0a, // Name length: 10
+				0x0a,                                                       // Name length: 10
 				0x4c, 0x6f, 0x6e, 0x67, 0x65, 0x72, 0x4e, 0x61, 0x6d, 0x65, // Name: "LongerName"
 			},
 			wantType: [2]byte{0x00, 0x02},
@@ -758,9 +759,9 @@ func TestNewsCategoryListData15_Write(t *testing.T) {
 
 func TestNewsCategoryListData15_WriteRead_RoundTrip(t *testing.T) {
 	tests := []struct {
-		name     string
-		newscat  NewsCategoryListData15
-		wantErr  bool
+		name    string
+		newscat NewsCategoryListData15
+		wantErr bool
 	}{
 		{
 			name: "bundle round trip",
@@ -844,11 +845,11 @@ func TestNewsCategoryListData15_Write_PartialData(t *testing.T) {
 		{
 			name: "split across type boundary",
 			chunks: [][]byte{
-				{0x00},                         // First byte of type
-				{0x02},                         // Second byte of type
-				{0x00, 0x01},                   // Count
-				{0x03},                         // Name length
-				{0x66, 0x6f, 0x6f},             // Name: "foo"
+				{0x00},             // First byte of type
+				{0x02},             // Second byte of type
+				{0x00, 0x01},       // Count
+				{0x03},             // Name length
+				{0x66, 0x6f, 0x6f}, // Name: "foo"
 			},
 			wantType:   [2]byte{0x00, 0x02},
 			wantName:   "foo",

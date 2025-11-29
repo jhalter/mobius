@@ -4,11 +4,12 @@ import (
 	"cmp"
 	"encoding/binary"
 	"fmt"
-	"golang.org/x/crypto/bcrypt"
 	"io"
 	"log/slog"
 	"strings"
 	"sync"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 var clientConnSortFunc = func(a, b *ClientConn) int {

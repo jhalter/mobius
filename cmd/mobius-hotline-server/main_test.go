@@ -22,7 +22,7 @@ func TestCopyDir(t *testing.T) {
 	expectedFiles := []string{
 		"config.yaml",
 		"Agreement.txt",
-		"MessageBoard.txt", 
+		"MessageBoard.txt",
 		"ThreadedNews.yaml",
 		"Users/admin.yaml",
 		"Users/guest.yaml",
@@ -32,7 +32,7 @@ func TestCopyDir(t *testing.T) {
 	for _, expectedFile := range expectedFiles {
 		fullPath := path.Join(dstDir, expectedFile)
 		assert.FileExists(t, fullPath, "Expected file %s to exist", expectedFile)
-		
+
 		// Verify file is not empty
 		info, err := os.Stat(fullPath)
 		require.NoError(t, err)
@@ -55,7 +55,7 @@ func TestCopyDir(t *testing.T) {
 
 func TestCopyDirNonexistentSource(t *testing.T) {
 	dstDir := t.TempDir()
-	
+
 	err := copyDir("nonexistent/directory", dstDir)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to read source directory")
@@ -71,7 +71,7 @@ func TestCopyDirRecursive(t *testing.T) {
 	// Verify nested structure is copied correctly
 	nestedPath := path.Join(dstDir, "Users", "admin.yaml")
 	assert.FileExists(t, nestedPath)
-	
+
 	// Verify nested Files directory
 	filesDir := path.Join(dstDir, "Files")
 	info, err := os.Stat(filesDir)
@@ -89,7 +89,7 @@ func TestCopyFile(t *testing.T) {
 
 	// Verify file was copied correctly
 	assert.FileExists(t, dstFile)
-	
+
 	// Verify file is not empty
 	info, err := os.Stat(dstFile)
 	require.NoError(t, err)
@@ -121,7 +121,7 @@ func TestCopyDirPermissions(t *testing.T) {
 	info, err := os.Stat(path.Join(dstDir, "Users"))
 	require.NoError(t, err)
 	assert.True(t, info.IsDir())
-	
+
 	// Check that directory has reasonable permissions (at least readable/executable)
 	mode := info.Mode()
 	assert.True(t, mode&0400 != 0, "Directory should be readable")
@@ -132,10 +132,10 @@ func TestFindConfigPath(t *testing.T) {
 	// Test function behavior by checking it returns one of the expected paths or fallback
 	t.Run("returns valid path", func(t *testing.T) {
 		result := findConfigPath()
-		
+
 		// Should return either one of the search paths that exists, or "config" fallback
 		validPaths := append([]string{"config"}, mobius.ConfigSearchOrder...)
-		
+
 		found := false
 		for _, validPath := range validPaths {
 			if result == validPath {
@@ -143,16 +143,16 @@ func TestFindConfigPath(t *testing.T) {
 				break
 			}
 		}
-		
+
 		assert.True(t, found, "findConfigPath should return one of the valid paths or fallback, got: %s", result)
 	})
-	
-	// Test directory vs file validation  
+
+	// Test directory vs file validation
 	t.Run("validates directory vs file", func(t *testing.T) {
 		// This test verifies the function logic but can't control system directories
 		// The function correctly validates that only directories are returned
 		result := findConfigPath()
-		
+
 		// Verify result is an actual directory if it exists
 		if result != "config" {
 			info, err := os.Stat(result)
@@ -160,21 +160,21 @@ func TestFindConfigPath(t *testing.T) {
 			assert.True(t, info.IsDir(), "Returned path should be a directory")
 		}
 	})
-	
+
 	// Test with existing directory
 	t.Run("finds existing directory", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		originalDir, err := os.Getwd()
 		require.NoError(t, err)
 		defer func() { _ = os.Chdir(originalDir) }()
-		
+
 		err = os.Chdir(tmpDir)
 		require.NoError(t, err)
-		
+
 		// Create a config directory
 		err = os.Mkdir("config", 0755)
 		require.NoError(t, err)
-		
+
 		result := findConfigPath()
 		assert.Equal(t, "config", result)
 	})

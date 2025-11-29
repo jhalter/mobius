@@ -4,11 +4,12 @@ import (
 	"cmp"
 	"encoding/binary"
 	"encoding/hex"
-	"github.com/stretchr/testify/assert"
 	"log/slog"
 	"os"
 	"slices"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func NewTestLogger() *slog.Logger {

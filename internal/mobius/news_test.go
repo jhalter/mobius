@@ -12,11 +12,11 @@ import (
 
 func TestNewFlatNews(t *testing.T) {
 	tests := []struct {
-		name        string
-		setupFile   func(string) error
-		filePath    string
-		wantErr     bool
-		wantErrMsg  string
+		name       string
+		setupFile  func(string) error
+		filePath   string
+		wantErr    bool
+		wantErrMsg string
 	}{
 		{
 			name: "valid file with content",
@@ -35,11 +35,11 @@ func TestNewFlatNews(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name:        "nonexistent file",
-			setupFile:   func(path string) error { return nil },
-			filePath:    "nonexistent.txt",
-			wantErr:     true,
-			wantErrMsg:  "reload:",
+			name:       "nonexistent file",
+			setupFile:  func(path string) error { return nil },
+			filePath:   "nonexistent.txt",
+			wantErr:    true,
+			wantErrMsg: "reload:",
 		},
 		{
 			name: "file with mixed line endings",
@@ -55,13 +55,13 @@ func TestNewFlatNews(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := t.TempDir()
 			fullPath := filepath.Join(tempDir, tt.filePath)
-			
+
 			if err := tt.setupFile(fullPath); err != nil {
 				t.Fatalf("Failed to setup test file: %v", err)
 			}
 
 			flatNews, err := NewFlatNews(fullPath)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("Expected error but got none")
@@ -70,17 +70,17 @@ func TestNewFlatNews(t *testing.T) {
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
 			}
-			
+
 			if flatNews == nil {
 				t.Error("Expected FlatNews instance but got nil")
 				return
 			}
-			
+
 			if flatNews.filePath != fullPath {
 				t.Errorf("Expected filePath %q, got %q", fullPath, flatNews.filePath)
 			}
@@ -90,12 +90,12 @@ func TestNewFlatNews(t *testing.T) {
 
 func TestFlatNews_Reload(t *testing.T) {
 	tests := []struct {
-		name         string
-		initialData  string
-		newData      string
-		expectData   string
-		wantErr      bool
-		deleteFile   bool
+		name        string
+		initialData string
+		newData     string
+		expectData  string
+		wantErr     bool
+		deleteFile  bool
 	}{
 		{
 			name:        "reload with new content",
@@ -132,16 +132,16 @@ func TestFlatNews_Reload(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := t.TempDir()
 			filePath := filepath.Join(tempDir, "test.txt")
-			
+
 			if err := os.WriteFile(filePath, []byte(tt.initialData), 0644); err != nil {
 				t.Fatalf("Failed to create initial file: %v", err)
 			}
-			
+
 			flatNews, err := NewFlatNews(filePath)
 			if err != nil {
 				t.Fatalf("Failed to create FlatNews: %v", err)
 			}
-			
+
 			if tt.deleteFile {
 				if err := os.Remove(filePath); err != nil {
 					t.Fatalf("Failed to delete file: %v", err)
@@ -151,21 +151,21 @@ func TestFlatNews_Reload(t *testing.T) {
 					t.Fatalf("Failed to write new data: %v", err)
 				}
 			}
-			
+
 			err = flatNews.Reload()
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("Expected error but got none")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
 			}
-			
+
 			if string(flatNews.data) != tt.expectData {
 				t.Errorf("Expected data %q, got %q", tt.expectData, string(flatNews.data))
 			}
@@ -175,9 +175,9 @@ func TestFlatNews_Reload(t *testing.T) {
 
 func TestFlatNews_Read(t *testing.T) {
 	tests := []struct {
-		name         string
-		fileContent  string
-		bufferSize   int
+		name          string
+		fileContent   string
+		bufferSize    int
 		expectedReads []readResult
 	}{
 		{
@@ -226,28 +226,28 @@ func TestFlatNews_Read(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := t.TempDir()
 			filePath := filepath.Join(tempDir, "test.txt")
-			
+
 			if err := os.WriteFile(filePath, []byte(tt.fileContent), 0644); err != nil {
 				t.Fatalf("Failed to create test file: %v", err)
 			}
-			
+
 			flatNews, err := NewFlatNews(filePath)
 			if err != nil {
 				t.Fatalf("Failed to create FlatNews: %v", err)
 			}
-			
+
 			for i, expected := range tt.expectedReads {
 				buf := make([]byte, tt.bufferSize)
 				n, err := flatNews.Read(buf)
-				
+
 				if err != expected.err {
 					t.Errorf("Read %d: expected error %v, got %v", i, expected.err, err)
 				}
-				
+
 				if n != expected.n {
 					t.Errorf("Read %d: expected n %d, got %d", i, expected.n, n)
 				}
-				
+
 				actualData := string(buf[:n])
 				if actualData != expected.data {
 					t.Errorf("Read %d: expected data %q, got %q", i, expected.data, actualData)
@@ -299,44 +299,44 @@ func TestFlatNews_Write(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := t.TempDir()
 			filePath := filepath.Join(tempDir, "test.txt")
-			
+
 			if err := os.WriteFile(filePath, []byte(tt.initialData), 0644); err != nil {
 				t.Fatalf("Failed to create initial file: %v", err)
 			}
-			
+
 			flatNews, err := NewFlatNews(filePath)
 			if err != nil {
 				t.Fatalf("Failed to create FlatNews: %v", err)
 			}
-			
+
 			n, err := flatNews.Write([]byte(tt.writeData))
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("Expected error but got none")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
 			}
-			
+
 			if n != len(tt.writeData) {
 				t.Errorf("Expected n %d, got %d", len(tt.writeData), n)
 			}
-			
+
 			if string(flatNews.data) != tt.expectedData {
 				t.Errorf("Expected data %q, got %q", tt.expectedData, string(flatNews.data))
 			}
-			
+
 			fileData, err := os.ReadFile(filePath)
 			if err != nil {
 				t.Errorf("Failed to read file: %v", err)
 				return
 			}
-			
+
 			if string(fileData) != tt.expectedData {
 				t.Errorf("Expected file data %q, got %q", tt.expectedData, string(fileData))
 			}
@@ -391,34 +391,34 @@ func TestFlatNews_Seek(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := t.TempDir()
 			filePath := filepath.Join(tempDir, "test.txt")
-			
+
 			if err := os.WriteFile(filePath, []byte(tt.fileContent), 0644); err != nil {
 				t.Fatalf("Failed to create test file: %v", err)
 			}
-			
+
 			flatNews, err := NewFlatNews(filePath)
 			if err != nil {
 				t.Fatalf("Failed to create FlatNews: %v", err)
 			}
-			
+
 			offset, err := flatNews.Seek(tt.offset, tt.whence)
-			
+
 			if tt.expectErr {
 				if err == nil {
 					t.Error("Expected error but got none")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
 			}
-			
+
 			if offset != tt.expectOffset {
 				t.Errorf("Expected offset %d, got %d", tt.expectOffset, offset)
 			}
-			
+
 			expectedReadOffset := int(tt.offset)
 			if flatNews.readOffset != expectedReadOffset {
 				t.Errorf("Expected readOffset %d, got %d", expectedReadOffset, flatNews.readOffset)
@@ -430,24 +430,24 @@ func TestFlatNews_Seek(t *testing.T) {
 func TestFlatNews_ConcurrentOperations(t *testing.T) {
 	tempDir := t.TempDir()
 	filePath := filepath.Join(tempDir, "concurrent_test.txt")
-	
+
 	if err := os.WriteFile(filePath, []byte("initial content"), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	
+
 	flatNews, err := NewFlatNews(filePath)
 	if err != nil {
 		t.Fatalf("Failed to create FlatNews: %v", err)
 	}
-	
+
 	var wg sync.WaitGroup
 	errors := make(chan error, 10)
-	
+
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			
+
 			buf := make([]byte, 10)
 			_, err := flatNews.Read(buf)
 			if err != nil && err != io.EOF {
@@ -455,33 +455,33 @@ func TestFlatNews_ConcurrentOperations(t *testing.T) {
 			}
 		}(i)
 	}
-	
+
 	for i := 0; i < 3; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			
+
 			if err := flatNews.Reload(); err != nil {
 				errors <- fmt.Errorf("reload goroutine %d: %w", id, err)
 			}
 		}(i)
 	}
-	
+
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			
+
 			data := fmt.Sprintf("data%d", id)
 			if _, err := flatNews.Write([]byte(data)); err != nil {
 				errors <- fmt.Errorf("write goroutine %d: %w", id, err)
 			}
 		}(i)
 	}
-	
+
 	wg.Wait()
 	close(errors)
-	
+
 	for err := range errors {
 		t.Errorf("Concurrent operation error: %v", err)
 	}
@@ -494,7 +494,7 @@ type readResult struct {
 }
 
 func containsSubstring(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		   (len(substr) == 0 || 
-		    strings.Contains(s, substr))
+	return len(s) >= len(substr) &&
+		(len(substr) == 0 ||
+			strings.Contains(s, substr))
 }

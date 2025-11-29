@@ -1,11 +1,12 @@
 package mobius
 
 import (
-	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"log/slog"
 	"os"
 	"time"
+
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 const (

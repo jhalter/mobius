@@ -1,10 +1,11 @@
 package hotline
 
 import (
-	"github.com/stretchr/testify/mock"
 	"io/fs"
 	"os"
 	"time"
+
+	"github.com/stretchr/testify/mock"
 )
 
 type FileStore interface {

@@ -4,9 +4,6 @@ import (
 	"cmp"
 	"encoding/binary"
 	"errors"
-	"github.com/jhalter/mobius/hotline"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -16,6 +13,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jhalter/mobius/hotline"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 type mockReadWriteSeeker struct {
@@ -2895,8 +2896,7 @@ func TestHandleTranAgreed(t *testing.T) {
 						},
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
-							m.On("List").Return([]*hotline.ClientConn{},
-							)
+							m.On("List").Return([]*hotline.ClientConn{})
 							return &m
 						}(),
 					},

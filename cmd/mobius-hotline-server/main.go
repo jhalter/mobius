@@ -246,7 +246,7 @@ func copyDirRecursive(src, dst string) error {
 			if err := os.MkdirAll(dstPath, 0755); err != nil {
 				return fmt.Errorf("failed to create directory %s: %w", dstPath, err)
 			}
-			
+
 			// Recursively copy subdirectory
 			if err := copyDirRecursive(srcPath, dstPath); err != nil {
 				return fmt.Errorf("failed to copy subdirectory %s: %w", srcPath, err)

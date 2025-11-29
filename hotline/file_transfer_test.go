@@ -2,9 +2,10 @@ package hotline
 
 import (
 	"encoding/binary"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFileTransfer_String(t *testing.T) {
@@ -178,10 +179,10 @@ func TestFileHeader_Payload(t *testing.T) {
 
 func Test_folderUpload_FormattedPath(t *testing.T) {
 	tests := []struct {
-		name           string
-		pathItemCount  [2]byte
-		fileNamePath   []byte
-		want           string
+		name          string
+		pathItemCount [2]byte
+		fileNamePath  []byte
+		want          string
 	}{
 		{
 			name:          "empty path",
@@ -210,7 +211,7 @@ func Test_folderUpload_FormattedPath(t *testing.T) {
 				0x04,                   // segment length
 				0x75, 0x73, 0x65, 0x72, // "user"
 				0x00, 0x00, // path separator
-				0x09,                                           // segment length
+				0x09,                                                 // segment length
 				0x64, 0x6f, 0x63, 0x75, 0x6d, 0x65, 0x6e, 0x74, 0x73, // "documents"
 			},
 			want: "home/user/documents",
@@ -220,10 +221,10 @@ func Test_folderUpload_FormattedPath(t *testing.T) {
 			pathItemCount: [2]byte{0x00, 0x02},
 			fileNamePath: []byte{
 				0x00, 0x00, // path separator
-				0x07,                               // segment length
+				0x07,                                     // segment length
 				0x4d, 0x79, 0x20, 0x46, 0x69, 0x6c, 0x65, // "My File"
 				0x00, 0x00, // path separator
-				0x0d,                                                             // segment length (13 bytes)
+				0x0d,                                                                         // segment length (13 bytes)
 				0x49, 0x6d, 0x70, 0x6f, 0x72, 0x74, 0x61, 0x6e, 0x74, 0x2e, 0x74, 0x78, 0x74, // "Important.txt"
 			},
 			want: "My File/Important.txt",
@@ -239,8 +240,8 @@ func Test_folderUpload_FormattedPath(t *testing.T) {
 				0x01,       // segment length
 				0x62,       // "b"
 				0x00, 0x00, // path separator
-				0x01,       // segment length
-				0x63,       // "c"
+				0x01, // segment length
+				0x63, // "c"
 			},
 			want: "a/b/c",
 		},
@@ -249,7 +250,7 @@ func Test_folderUpload_FormattedPath(t *testing.T) {
 			pathItemCount: [2]byte{0x00, 0x01},
 			fileNamePath: []byte{
 				0x00, 0x00, // path separator
-				0x08,                                     // segment length
+				0x08,                                           // segment length
 				0x74, 0x65, 0x73, 0x74, 0x40, 0x24, 0x25, 0x26, // "test@$%&"
 			},
 			want: "test@$%&",

@@ -1,9 +1,10 @@
 package hotline
 
 import (
-	"github.com/stretchr/testify/assert"
 	"io"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFileNameWithInfo_MarshalBinary(t *testing.T) {

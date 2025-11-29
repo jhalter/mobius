@@ -1,11 +1,12 @@
 package hotline
 
 import (
+	"strings"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
-	"strings"
-	"testing"
 )
 
 func Test_accessBitmap_IsSet(t *testing.T) {

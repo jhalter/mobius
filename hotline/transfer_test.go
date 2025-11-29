@@ -3,9 +3,10 @@ package hotline
 import (
 	"bytes"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTransfer_Write(t *testing.T) {

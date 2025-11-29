@@ -2,11 +2,12 @@ package mobius
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"os"
 	"path"
 	"sync"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 type BanFile struct {

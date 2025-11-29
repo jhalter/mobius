@@ -2,14 +2,15 @@ package mobius
 
 import (
 	"fmt"
-	"github.com/jhalter/mobius/hotline"
-	"github.com/stretchr/testify/mock"
-	"gopkg.in/yaml.v3"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/jhalter/mobius/hotline"
+	"github.com/stretchr/testify/mock"
+	"gopkg.in/yaml.v3"
 )
 
 // loadFromYAMLFile loads data from a YAML file into the provided data structure.

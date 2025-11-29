@@ -2,12 +2,13 @@ package mobius
 
 import (
 	"fmt"
-	"github.com/jhalter/mobius/hotline"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"path"
 	"sync"
 	"testing"
+
+	"github.com/jhalter/mobius/hotline"
+	"github.com/stretchr/testify/assert"
 )
 
 type TestData struct {

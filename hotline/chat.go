@@ -2,9 +2,10 @@ package hotline
 
 import (
 	"crypto/rand"
-	"github.com/stretchr/testify/mock"
 	"slices"
 	"sync"
+
+	"github.com/stretchr/testify/mock"
 )
 
 type PrivateChat struct {

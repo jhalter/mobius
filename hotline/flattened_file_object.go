@@ -45,7 +45,7 @@ type FlatFileInformationFork struct {
 
 func NewFlatFileInformationFork(fileName string, modifyTime [8]byte, typeSignature string, creatorSignature string) FlatFileInformationFork {
 	return FlatFileInformationFork{
-		Platform:         PlatformAMAC,                       // TODO: Remove hardcode to support "MWIN" Platform (maybe?)
+		Platform:         PlatformAMAC,                      // TODO: Remove hardcode to support "MWIN" Platform (maybe?)
 		TypeSignature:    [4]byte([]byte(typeSignature)),    // TODO: Don't infer types from filename
 		CreatorSignature: [4]byte([]byte(creatorSignature)), // TODO: Don't infer types from filename
 		PlatformFlags:    [4]byte{0, 0, 1, 0},               // TODO: What is this?

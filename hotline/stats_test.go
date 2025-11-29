@@ -1,9 +1,10 @@
 package hotline
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestStats_Increment(t *testing.T) {
@@ -51,13 +52,13 @@ func TestStats_Increment(t *testing.T) {
 
 func TestStats_Increment_Multiple_Calls(t *testing.T) {
 	stats := NewStats()
-	
+
 	stats.Increment(StatCurrentlyConnected)
 	assert.Equal(t, 1, stats.Get(StatCurrentlyConnected))
-	
+
 	stats.Increment(StatCurrentlyConnected)
 	assert.Equal(t, 2, stats.Get(StatCurrentlyConnected))
-	
+
 	stats.Increment(StatCurrentlyConnected, StatDownloadCounter)
 	assert.Equal(t, 3, stats.Get(StatCurrentlyConnected))
 	assert.Equal(t, 1, stats.Get(StatDownloadCounter))
@@ -65,28 +66,28 @@ func TestStats_Increment_Multiple_Calls(t *testing.T) {
 
 func TestStats_Decrement(t *testing.T) {
 	tests := []struct {
-		name        string
-		setupValue  int
-		key         int
-		expected    int
+		name       string
+		setupValue int
+		key        int
+		expected   int
 	}{
 		{
-			name:        "decrement from positive value",
-			setupValue:  5,
-			key:         StatCurrentlyConnected,
-			expected:    4,
+			name:       "decrement from positive value",
+			setupValue: 5,
+			key:        StatCurrentlyConnected,
+			expected:   4,
 		},
 		{
-			name:        "decrement from zero stays zero",
-			setupValue:  0,
-			key:         StatCurrentlyConnected,
-			expected:    0,
+			name:       "decrement from zero stays zero",
+			setupValue: 0,
+			key:        StatCurrentlyConnected,
+			expected:   0,
 		},
 		{
-			name:        "decrement from one",
-			setupValue:  1,
-			key:         StatCurrentlyConnected,
-			expected:    0,
+			name:       "decrement from one",
+			setupValue: 1,
+			key:        StatCurrentlyConnected,
+			expected:   0,
 		},
 	}
 
@@ -94,9 +95,9 @@ func TestStats_Decrement(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stats := NewStats()
 			stats.Set(tt.key, tt.setupValue)
-			
+
 			stats.Decrement(tt.key)
-			
+
 			assert.Equal(t, tt.expected, stats.Get(tt.key))
 		})
 	}
@@ -104,13 +105,13 @@ func TestStats_Decrement(t *testing.T) {
 
 func TestStats_Decrement_Multiple_Calls(t *testing.T) {
 	stats := NewStats()
-	
+
 	stats.Set(StatCurrentlyConnected, 10)
 	assert.Equal(t, 10, stats.Get(StatCurrentlyConnected))
-	
+
 	stats.Decrement(StatCurrentlyConnected)
 	assert.Equal(t, 9, stats.Get(StatCurrentlyConnected))
-	
+
 	stats.Decrement(StatCurrentlyConnected)
 	assert.Equal(t, 8, stats.Get(StatCurrentlyConnected))
 }
@@ -151,13 +152,13 @@ func TestStats_Set(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			stats := NewStats()
-			
+
 			if tt.name == "overwrite existing value" {
 				stats.Set(tt.key, 50)
 			}
-			
+
 			stats.Set(tt.key, tt.value)
-			
+
 			assert.Equal(t, tt.expected, stats.Get(tt.key))
 		})
 	}
@@ -193,13 +194,13 @@ func TestStats_Get(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			stats := NewStats()
-			
+
 			if tt.name == "get after increment" {
 				stats.Increment(tt.key)
 			} else {
 				stats.Set(tt.key, tt.setValue)
 			}
-			
+
 			result := stats.Get(tt.key)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -208,7 +209,7 @@ func TestStats_Get(t *testing.T) {
 
 func TestStats_Get_Default_Values(t *testing.T) {
 	stats := NewStats()
-	
+
 	expectedDefaults := map[int]int{
 		StatCurrentlyConnected:  0,
 		StatDownloadsInProgress: 0,
@@ -219,7 +220,7 @@ func TestStats_Get_Default_Values(t *testing.T) {
 		StatUploadCounter:       0,
 		StatConnectionCounter:   0,
 	}
-	
+
 	for key, expected := range expectedDefaults {
 		assert.Equal(t, expected, stats.Get(key))
 	}
@@ -227,10 +228,10 @@ func TestStats_Get_Default_Values(t *testing.T) {
 
 func TestStats_Values(t *testing.T) {
 	stats := NewStats()
-	
+
 	// Test default values
 	values := stats.Values()
-	
+
 	assert.Equal(t, 0, values["CurrentlyConnected"])
 	assert.Equal(t, 0, values["DownloadsInProgress"])
 	assert.Equal(t, 0, values["UploadsInProgress"])
@@ -240,7 +241,7 @@ func TestStats_Values(t *testing.T) {
 	assert.Equal(t, 0, values["DownloadCounter"])
 	assert.Equal(t, 0, values["UploadCounter"])
 	assert.NotNil(t, values["Since"])
-	
+
 	// Verify Since is a time.Time
 	_, ok := values["Since"].(time.Time)
 	assert.True(t, ok, "Since should be a time.Time")
@@ -248,15 +249,15 @@ func TestStats_Values(t *testing.T) {
 
 func TestStats_Values_WithModifiedStats(t *testing.T) {
 	stats := NewStats()
-	
+
 	// Modify some stats
 	stats.Set(StatCurrentlyConnected, 10)
 	stats.Set(StatDownloadsInProgress, 5)
 	stats.Increment(StatConnectionCounter)
 	stats.Increment(StatDownloadCounter, StatUploadCounter)
-	
+
 	values := stats.Values()
-	
+
 	assert.Equal(t, 10, values["CurrentlyConnected"])
 	assert.Equal(t, 5, values["DownloadsInProgress"])
 	assert.Equal(t, 0, values["UploadsInProgress"])
@@ -270,7 +271,7 @@ func TestStats_Values_WithModifiedStats(t *testing.T) {
 func TestStats_Values_ContainsAllKeys(t *testing.T) {
 	stats := NewStats()
 	values := stats.Values()
-	
+
 	expectedKeys := []string{
 		"CurrentlyConnected",
 		"DownloadsInProgress",
@@ -282,12 +283,12 @@ func TestStats_Values_ContainsAllKeys(t *testing.T) {
 		"UploadCounter",
 		"Since",
 	}
-	
+
 	for _, key := range expectedKeys {
 		_, exists := values[key]
 		assert.True(t, exists, "Key %s should exist in Values() output", key)
 	}
-	
+
 	// Should have exactly 9 keys
 	assert.Equal(t, 9, len(values))
 }

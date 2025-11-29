@@ -1,12 +1,13 @@
 package mobius
 
 import (
-	"github.com/jhalter/mobius/hotline"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path"
 	"testing"
+
+	"github.com/jhalter/mobius/hotline"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // copyTestFiles copies test config files to a temporary directory

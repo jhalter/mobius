@@ -2,12 +2,13 @@ package mobius
 
 import (
 	"fmt"
-	"github.com/go-playground/validator/v10"
-	"github.com/jhalter/mobius/hotline"
-	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/go-playground/validator/v10"
+	"github.com/jhalter/mobius/hotline"
+	"gopkg.in/yaml.v3"
 )
 
 var ConfigSearchOrder = []string{

@@ -2,8 +2,9 @@ package hotline
 
 import (
 	"bytes"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestReadUser(t *testing.T) {

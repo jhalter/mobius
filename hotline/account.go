@@ -3,9 +3,10 @@ package hotline
 import (
 	"encoding/binary"
 	"fmt"
-	"golang.org/x/crypto/bcrypt"
 	"io"
 	"slices"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 const GuestAccount = "guest" // default account used when no login is provided for a connection
