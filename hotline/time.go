@@ -26,3 +26,20 @@ func NewTime(t time.Time) (b Time) {
 		secondBytes,
 	))
 }
+
+// Time converts the Hotline Time format to a Go time.Time.
+// The Hotline format stores: Year (2 bytes) + milliseconds (2 bytes, unused) + seconds since Jan 1 (4 bytes)
+func (t Time) Time() time.Time {
+	year := binary.BigEndian.Uint16(t[0:2])
+	seconds := binary.BigEndian.Uint32(t[4:8])
+
+	// Create start of year, then add seconds
+	startOfYear := time.Date(int(year), time.January, 1, 0, 0, 0, 0, time.Local)
+	return startOfYear.Add(time.Duration(seconds) * time.Second)
+}
+
+// Format returns the time formatted according to the layout string.
+// This is a convenience wrapper around Time().Format().
+func (t Time) Format(layout string) string {
+	return t.Time().Format(layout)
+}
