@@ -135,9 +135,17 @@ func (n *ThreadedNewsYAML) PostArticle(newsPath []string, parentArticleID uint32
 	}
 
 	cats := n.getCatByPath(newsPath[:len(newsPath)-1])
+	if cats == nil {
+		return fmt.Errorf("parent category path does not exist")
+	}
 
 	catName := newsPath[len(newsPath)-1]
 	cat := cats[catName]
+
+	// Initialize Articles map if nil (e.g., from old YAML files)
+	if cat.Articles == nil {
+		cat.Articles = make(map[uint32]*hotline.NewsArtData)
+	}
 
 	var keys []int
 	for k := range cat.Articles {
