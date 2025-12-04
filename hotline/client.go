@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -31,6 +32,9 @@ type Client struct {
 	Handlers    map[[2]byte]ClientHandler
 	activeTasks map[[4]byte]*Transaction
 	UserList    []User
+
+	mu   sync.Mutex
+	done chan struct{}
 }
 
 type ClientHandler func(context.Context, *Client, *Transaction) ([]Transaction, error)
@@ -50,21 +54,10 @@ func NewClient(username string, logger Logger) *Client {
 	return c
 }
 
-type ClientTransaction struct {
-	Name    string
-	Handler func(*Client, *Transaction) ([]Transaction, error)
-}
-
-func (ch ClientTransaction) Handle(cc *Client, t *Transaction) ([]Transaction, error) {
-	return ch.Handler(cc, t)
-}
-
-type ClientTHandler interface {
-	Handle(*Client, *Transaction) ([]Transaction, error)
-}
-
-// JoinServer connects to a Hotline server and completes the login flow
+// Connect connects to a Hotline server and completes the login flow.
 func (c *Client) Connect(address, login, passwd string) (err error) {
+	c.done = make(chan struct{})
+
 	// Establish TCP connection to server
 	c.Connection, err = net.DialTimeout("tcp", address, 5*time.Second)
 	if err != nil {
@@ -100,9 +93,16 @@ func (c *Client) Connect(address, login, passwd string) (err error) {
 const keepaliveInterval = 300 * time.Second
 
 func (c *Client) keepalive() error {
+	ticker := time.NewTicker(keepaliveInterval)
+	defer ticker.Stop()
+
 	for {
-		time.Sleep(keepaliveInterval)
-		_ = c.Send(NewTransaction(TranKeepAlive, [2]byte{}))
+		select {
+		case <-ticker.C:
+			_ = c.Send(NewTransaction(TranKeepAlive, [2]byte{}))
+		case <-c.done:
+			return nil
+		}
 	}
 }
 
@@ -119,18 +119,17 @@ var ServerHandshake = []byte{
 }
 
 func (c *Client) Handshake() error {
-	// Protocol Type	4	‘TRTP’	0x54 52 54 50
+	// Protocol Type	4	'TRTP'	0x54 52 54 50
 	// Sub-protocol Type	4		User defined
 	// Version	2	1	Currently 1
 	// Sub-version	2		User defined
 	if _, err := c.Connection.Write(ClientHandshake); err != nil {
-		return fmt.Errorf("handshake write err: %s", err)
+		return fmt.Errorf("handshake write err: %w", err)
 	}
 
 	replyBuf := make([]byte, 8)
-	_, err := c.Connection.Read(replyBuf)
-	if err != nil {
-		return err
+	if _, err := io.ReadFull(c.Connection, replyBuf); err != nil {
+		return fmt.Errorf("handshake read err: %w", err)
 	}
 
 	if bytes.Equal(replyBuf, ServerHandshake) {
@@ -138,11 +137,12 @@ func (c *Client) Handshake() error {
 	}
 
 	// In the case of an error, client and server close the connection.
-	return fmt.Errorf("handshake response err: %s", err)
+	return fmt.Errorf("unexpected handshake response: %x", replyBuf)
 }
 
 func (c *Client) Send(t Transaction) error {
-	//requestNum := binary.BigEndian.Uint16(t.Type[:])
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	// if transaction is NOT reply, add it to the list to transactions we're expecting a response for
 	if t.IsReply == 0 {
@@ -160,9 +160,17 @@ func (c *Client) Send(t Transaction) error {
 }
 
 func (c *Client) HandleTransaction(ctx context.Context, t *Transaction) error {
-	var origT Transaction
 	if t.IsReply == 1 {
-		origT = *c.activeTasks[t.ID]
+		c.mu.Lock()
+		origT, ok := c.activeTasks[t.ID]
+		if ok {
+			delete(c.activeTasks, t.ID)
+		}
+		c.mu.Unlock()
+
+		if !ok {
+			return fmt.Errorf("no matching request for reply ID %v", t.ID)
+		}
 		t.Type = origT.Type
 	}
 
@@ -184,6 +192,9 @@ func (c *Client) HandleTransaction(ctx context.Context, t *Transaction) error {
 }
 
 func (c *Client) Disconnect() error {
+	if c.done != nil {
+		close(c.done)
+	}
 	return c.Connection.Close()
 }
 
@@ -210,8 +221,9 @@ func (c *Client) HandleTransactions(ctx context.Context) error {
 		}
 	}
 
-	if scanner.Err() == nil {
+	if scanner.Err() != nil {
 		return scanner.Err()
 	}
-	return nil
+
+	return fmt.Errorf("connection terminated")
 }
