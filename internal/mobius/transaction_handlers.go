@@ -324,7 +324,7 @@ func HandleGetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		hotline.NewField(hotline.FieldFileCreateDate, fw.Ffo.FlatFileInformationFork.CreateDate[:]),
 		hotline.NewField(hotline.FieldFileModifyDate, fw.Ffo.FlatFileInformationFork.ModifyDate[:]),
 	}
-
+ 
 	// Include the optional FileComment field if there is a comment.
 	if len(fw.Ffo.FlatFileInformationFork.Comment) != 0 {
 		fields = append(fields, hotline.NewField(hotline.FieldFileComment, fw.Ffo.FlatFileInformationFork.Comment))
@@ -335,8 +335,7 @@ func HandleGetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		fields = append(fields, hotline.NewField(hotline.FieldFileSize, fw.TotalSize()))
 	}
 
-	res = append(res, cc.NewReply(t, fields...))
-	return res
+	return append(res, cc.NewReply(t, fields...))
 }
 
 // HandleSetFileInfo updates a file or folder Name and/or comment from the Get Info window

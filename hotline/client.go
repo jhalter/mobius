@@ -186,15 +186,20 @@ func (c *Client) HandleTransaction(ctx context.Context, t *Transaction) error {
 				return err
 			}
 		}
+	} else {
+		c.Logger.Info("Unhandled transaction", "type", tranTypeNames[t.Type], "id", int(binary.BigEndian.Uint16(t.Type[:])))
 	}
 
 	return nil
 }
 
 func (c *Client) Disconnect() error {
+	c.mu.Lock()
 	if c.done != nil {
 		close(c.done)
+		c.done = nil
 	}
+	c.mu.Unlock()
 	return c.Connection.Close()
 }
 

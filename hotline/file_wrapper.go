@@ -209,7 +209,7 @@ func (f *File) Delete() error {
 
 func (f *File) flattenedFileObject() (*flattenedFileObject, error) {
 	dataSize := make([]byte, 4)
-	mTime := [8]byte{}
+	var mTime Time
 
 	ft := defaultFileType
 

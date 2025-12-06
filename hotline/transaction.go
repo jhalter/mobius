@@ -90,6 +90,7 @@ type Transaction struct {
 }
 
 var tranTypeNames = map[TranType]string{
+	TranServerMsg:          "Server Message",
 	TranChatMsg:            "Receive chat",
 	TranNotifyChangeUser:   "User change",
 	TranError:              "Error",

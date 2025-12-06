@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -677,7 +676,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 
 	fileTransfer := s.FileTransferMgr.Get(t.ReferenceNumber)
 	if fileTransfer == nil {
-		return errors.New("invalid transaction ID")
+		return fmt.Errorf("invalid transaction ID: %v", t.ReferenceNumber)
 	}
 
 	defer func() {
