@@ -41,7 +41,12 @@ func (n *ThreadedNewsYAML) CreateGrouping(newsPath []string, name string, t [2]b
 		SubCats:  make(map[string]hotline.NewsCategoryListData15),
 	}
 
-	return n.writeFile()
+	if err := n.writeFile(); err != nil {
+		delete(cats, name)
+		return err
+	}
+
+	return nil
 }
 
 func (n *ThreadedNewsYAML) NewsItem(newsPath []string) hotline.NewsCategoryListData15 {
@@ -71,9 +76,15 @@ func (n *ThreadedNewsYAML) DeleteNewsItem(newsPath []string) error {
 		}
 	}
 
+	oldVal := cats[delName]
 	delete(cats, delName)
 
-	return n.writeFile()
+	if err := n.writeFile(); err != nil {
+		cats[delName] = oldVal
+		return err
+	}
+
+	return nil
 }
 
 func (n *ThreadedNewsYAML) GetArticle(newsPath []string, articleID uint32) *hotline.NewsArtData {
@@ -153,12 +164,21 @@ func (n *ThreadedNewsYAML) PostArticle(newsPath []string, parentArticleID uint32
 	}
 
 	nextID := uint32(1)
+	var prevID uint32
+	var oldNextArt [4]byte
+	hasPrev := false
+	setFirstChild := false
+
 	if len(keys) > 0 {
 		sort.Ints(keys)
-		prevID := uint32(keys[len(keys)-1])
+		prevID = uint32(keys[len(keys)-1])
 		nextID = prevID + 1
+		hasPrev = true
 
 		binary.BigEndian.PutUint32(article.PrevArt[:], prevID)
+
+		// Save old value for rollback
+		oldNextArt = cat.Articles[prevID].NextArt
 
 		// Set next article Type
 		binary.BigEndian.PutUint32(cat.Articles[prevID].NextArt[:], nextID)
@@ -170,6 +190,7 @@ func (n *ThreadedNewsYAML) PostArticle(newsPath []string, parentArticleID uint32
 		parentArt := cat.Articles[parentID]
 
 		if parentArt.FirstChildArt == [4]byte{0, 0, 0, 0} {
+			setFirstChild = true
 			binary.BigEndian.PutUint32(parentArt.FirstChildArt[:], nextID)
 		}
 	}
@@ -178,7 +199,19 @@ func (n *ThreadedNewsYAML) PostArticle(newsPath []string, parentArticleID uint32
 
 	cats[catName] = cat
 
-	return n.writeFile()
+	if err := n.writeFile(); err != nil {
+		delete(cat.Articles, nextID)
+		if hasPrev {
+			cat.Articles[prevID].NextArt = oldNextArt
+		}
+		if setFirstChild {
+			cat.Articles[parentID].FirstChildArt = [4]byte{}
+		}
+		cats[catName] = cat
+		return err
+	}
+
+	return nil
 }
 
 func (n *ThreadedNewsYAML) DeleteArticle(newsPath []string, articleID uint32, _ bool) error {
@@ -198,10 +231,17 @@ func (n *ThreadedNewsYAML) DeleteArticle(newsPath []string, articleID uint32, _ 
 	catName := newsPath[len(newsPath)-1]
 
 	cat := cats[catName]
+	oldArticle := cat.Articles[articleID]
 	delete(cat.Articles, articleID)
 	cats[catName] = cat
 
-	return n.writeFile()
+	if err := n.writeFile(); err != nil {
+		cat.Articles[articleID] = oldArticle
+		cats[catName] = cat
+		return err
+	}
+
+	return nil
 }
 
 func (n *ThreadedNewsYAML) ListArticles(newsPath []string) (hotline.NewsArtListData, error) {

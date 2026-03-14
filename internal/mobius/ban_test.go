@@ -273,6 +273,50 @@ func TestBanFile_PermanentBanViaAdd(t *testing.T) {
 	assert.Nil(t, until)
 }
 
+func TestBanFile_Add_rollback(t *testing.T) {
+	bf := &BanFile{
+		filePath:    "/nonexistent/dir/banfile.yaml",
+		banList:     make(map[string]*time.Time),
+		bannedUsers: make(map[string]bool),
+		bannedNicks: make(map[string]bool),
+	}
+
+	err := bf.Add("1.2.3.4", nil)
+	assert.Error(t, err)
+
+	_, exists := bf.banList["1.2.3.4"]
+	assert.False(t, exists, "IP should not be in banList after save failure")
+}
+
+func TestBanFile_UnbanIP_rollback(t *testing.T) {
+	bf := &BanFile{
+		filePath:    "/nonexistent/dir/banfile.yaml",
+		banList:     map[string]*time.Time{"10.0.0.1": nil},
+		bannedUsers: make(map[string]bool),
+		bannedNicks: make(map[string]bool),
+	}
+
+	err := bf.UnbanIP("10.0.0.1")
+	assert.Error(t, err)
+
+	_, exists := bf.banList["10.0.0.1"]
+	assert.True(t, exists, "IP should still be in banList after save failure")
+}
+
+func TestBanFile_BanNickname_rollback(t *testing.T) {
+	bf := &BanFile{
+		filePath:    "/nonexistent/dir/banfile.yaml",
+		banList:     make(map[string]*time.Time),
+		bannedUsers: make(map[string]bool),
+		bannedNicks: make(map[string]bool),
+	}
+
+	err := bf.BanNickname("troll")
+	assert.Error(t, err)
+
+	assert.False(t, bf.bannedNicks["troll"], "nickname should not be in bannedNicks after save failure")
+}
+
 func TestBanFile_NewFormatPersistence(t *testing.T) {
 	bf := newTempBanFile(t)
 

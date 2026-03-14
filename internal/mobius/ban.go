@@ -97,8 +97,19 @@ func (bf *BanFile) Load() error {
 
 // add is the internal implementation that assumes the caller holds the lock.
 func (bf *BanFile) add(ip string, until *time.Time) error {
+	old, existed := bf.banList[ip]
 	bf.banList[ip] = until
-	return bf.save()
+
+	if err := bf.save(); err != nil {
+		if existed {
+			bf.banList[ip] = old
+		} else {
+			delete(bf.banList, ip)
+		}
+		return err
+	}
+
+	return nil
 }
 
 func (bf *BanFile) Add(ip string, until *time.Time) error {
@@ -146,8 +157,17 @@ func (bf *BanFile) UnbanIP(ip string) error {
 	bf.Lock()
 	defer bf.Unlock()
 
+	old, existed := bf.banList[ip]
 	delete(bf.banList, ip)
-	return bf.save()
+
+	if err := bf.save(); err != nil {
+		if existed {
+			bf.banList[ip] = old
+		}
+		return err
+	}
+
+	return nil
 }
 
 // BanUsername adds a username to the banned users set
@@ -155,8 +175,19 @@ func (bf *BanFile) BanUsername(username string) error {
 	bf.Lock()
 	defer bf.Unlock()
 
+	old, existed := bf.bannedUsers[username]
 	bf.bannedUsers[username] = true
-	return bf.save()
+
+	if err := bf.save(); err != nil {
+		if existed {
+			bf.bannedUsers[username] = old
+		} else {
+			delete(bf.bannedUsers, username)
+		}
+		return err
+	}
+
+	return nil
 }
 
 // UnbanUsername removes a username from the banned users set
@@ -164,8 +195,17 @@ func (bf *BanFile) UnbanUsername(username string) error {
 	bf.Lock()
 	defer bf.Unlock()
 
+	old, existed := bf.bannedUsers[username]
 	delete(bf.bannedUsers, username)
-	return bf.save()
+
+	if err := bf.save(); err != nil {
+		if existed {
+			bf.bannedUsers[username] = old
+		}
+		return err
+	}
+
+	return nil
 }
 
 // IsUsernameBanned checks if a username is banned
@@ -181,8 +221,19 @@ func (bf *BanFile) BanNickname(nickname string) error {
 	bf.Lock()
 	defer bf.Unlock()
 
+	old, existed := bf.bannedNicks[nickname]
 	bf.bannedNicks[nickname] = true
-	return bf.save()
+
+	if err := bf.save(); err != nil {
+		if existed {
+			bf.bannedNicks[nickname] = old
+		} else {
+			delete(bf.bannedNicks, nickname)
+		}
+		return err
+	}
+
+	return nil
 }
 
 // UnbanNickname removes a nickname from the banned nicknames set
@@ -190,8 +241,17 @@ func (bf *BanFile) UnbanNickname(nickname string) error {
 	bf.Lock()
 	defer bf.Unlock()
 
+	old, existed := bf.bannedNicks[nickname]
 	delete(bf.bannedNicks, nickname)
-	return bf.save()
+
+	if err := bf.save(); err != nil {
+		if existed {
+			bf.bannedNicks[nickname] = old
+		}
+		return err
+	}
+
+	return nil
 }
 
 // IsNicknameBanned checks if a nickname is banned

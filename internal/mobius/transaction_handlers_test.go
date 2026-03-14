@@ -1580,6 +1580,41 @@ func TestHandleGetMsgs(t *testing.T) {
 			},
 		},
 		{
+			name: "when ReadAll returns an error",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessNewsReadArt)
+							return bits
+						}(),
+					},
+					Logger: NewTestLogger(),
+					Server: &hotline.Server{
+						MessageBoard: func() *mockReadWriteSeeker {
+							m := mockReadWriteSeeker{}
+							m.On("Seek", int64(0), 0).Return(int64(0), nil)
+							m.On("Read", mock.AnythingOfType("[]uint8")).Return(0, errors.New("read error"))
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranGetMsgs, [2]byte{0, 1},
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte("Error reading message board.")),
+					},
+				},
+			},
+		},
+		{
 			name: "when user does not have required permission",
 			args: args{
 				cc: &hotline.ClientConn{
@@ -2141,6 +2176,51 @@ func TestHandleDelNewsArt(t *testing.T) {
 					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []hotline.Field{
 						hotline.NewField(hotline.FieldError, []byte("You are not allowed to delete news articles.")),
+					},
+				},
+			},
+		},
+		{
+			name: "when DeleteArticle returns an error",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessNewsDeleteArt)
+							return bits
+						}(),
+					},
+					Logger: NewTestLogger(),
+					ID:     [2]byte{0, 1},
+					Server: &hotline.Server{
+						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
+							m := hotline.MockThreadNewsMgr{}
+							m.On("DeleteArticle", []string{"test"}, uint32(1), false).Return(errors.New("write error"))
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranDelNewsArt, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldNewsPath,
+						[]byte{
+							0, 1,
+							0, 0,
+							4,
+							0x74, 0x65, 0x73, 0x74,
+						},
+					),
+					hotline.NewField(hotline.FieldNewsArtID, []byte{0, 0, 0, 1}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID:  [2]byte{0, 1},
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte("Error deleting news article.")),
 					},
 				},
 			},
@@ -3874,62 +3954,51 @@ func TestHandleNewNewsFldr(t *testing.T) {
 				},
 			},
 		},
-		//{
-		//	Name: "when there is an error writing the threaded news file",
-		//	args: args{
-		//		cc: &hotline.ClientConn{
-		//			Account: &hotline.Account{
-		//				Access: func() hotline.AccessBitmap {
-		//					var bits hotline.AccessBitmap
-		//					bits.Set(hotline.AccessNewsCreateFldr)
-		//					return bits
-		//				}(),
-		//			},
-		//			logger: NewTestLogger(),
-		//			Type:     [2]byte{0, 1},
-		//			Server: &hotline.Server{
-		//				ConfigDir: "/fakeConfigRoot",
-		//				FS: func() *hotline.MockFileStore {
-		//					mfs := &MockFileStore{}
-		//					mfs.On("WriteFile", "/fakeConfigRoot/ThreadedNews.yaml", mock.Anything, mock.Anything).Return(os.ErrNotExist)
-		//					return mfs
-		//				}(),
-		//				ThreadedNews: &ThreadedNews{Categories: map[string]NewsCategoryListData15{
-		//					"test": {
-		//						Type:     []byte{0, 2},
-		//						Count:    nil,
-		//						NameSize: 0,
-		//						Name:     "test",
-		//						SubCats:  make(map[string]NewsCategoryListData15),
-		//					},
-		//				}},
-		//			},
-		//		},
-		//		t: NewTransaction(
-		//			TranGetNewsArtNameList, [2]byte{0, 1},
-		//			NewField(hotline.FieldFileName, []byte("testFolder")),
-		//			NewField(hotline.FieldNewsPath,
-		//				[]byte{
-		//					0, 1,
-		//					0, 0,
-		//					4,
-		//					0x74, 0x65, 0x73, 0x74,
-		//				},
-		//			),
-		//		),
-		//	},
-		//	wantRes: []hotline.Transaction{
-		//		{
-		//			ClientID:  [2]byte{0, 1},
-		//			Flags:     0x00,
-		//			IsReply:   0x01,
-		//			Type:      [2]byte{0, 0},
-		//			ErrorCode: [4]byte{0, 0, 0, 1},
-		//			Fields: []hotline.Field{
-		//				NewField(hotline.FieldError, []byte("Error creating news folder.")),
-		//			},
-		//		},
-		//	},
+		{
+			name: "when CreateGrouping returns an error",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessNewsCreateFldr)
+							return bits
+						}(),
+					},
+					Logger: NewTestLogger(),
+					ID:     [2]byte{0, 1},
+					Server: &hotline.Server{
+						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
+							m := hotline.MockThreadNewsMgr{}
+							m.On("CreateGrouping", []string{"test"}, "testFolder", hotline.NewsBundle).Return(errors.New("write error"))
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranGetNewsArtNameList, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldFileName, []byte("testFolder")),
+					hotline.NewField(hotline.FieldNewsPath,
+						[]byte{
+							0, 1,
+							0, 0,
+							4,
+							0x74, 0x65, 0x73, 0x74,
+						},
+					),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID:  [2]byte{0, 1},
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte("Error creating news folder.")),
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -4028,6 +4097,43 @@ func TestHandlePostNewsArt(t *testing.T) {
 					IsReply:   0x01,
 					ErrorCode: [4]byte{0, 0, 0, 0},
 					Fields:    []hotline.Field{},
+				},
+			},
+		},
+		{
+			name: "when PostArticle returns an error",
+			args: args{
+				cc: &hotline.ClientConn{
+					Server: &hotline.Server{
+						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
+							m := hotline.MockThreadNewsMgr{}
+							m.On("PostArticle", []string{"www"}, uint32(0), mock.AnythingOfType("hotline.NewsArtData")).Return(errors.New("write error"))
+							return &m
+						}(),
+					},
+					Logger: NewTestLogger(),
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessNewsPostArt)
+							return bits
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranPostNewsArt,
+					[2]byte{0, 0},
+					hotline.NewField(hotline.FieldNewsPath, []byte{0x00, 0x01, 0x00, 0x00, 0x03, 0x77, 0x77, 0x77}),
+					hotline.NewField(hotline.FieldNewsArtID, []byte{0x00, 0x00, 0x00, 0x00}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte("Error posting news article.")),
+					},
 				},
 			},
 		},
@@ -4608,6 +4714,271 @@ func TestHandleInviteToChat(t *testing.T) {
 			if !TranAssertEqual(t, tt.want, got) {
 				t.Errorf("HandleInviteToChat() got = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestHandleSetUser(t *testing.T) {
+	type args struct {
+		cc *hotline.ClientConn
+		t  hotline.Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []hotline.Transaction
+	}{
+		{
+			name: "when user does not have required permission",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							return bits
+						}(),
+					},
+					Server: &hotline.Server{},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranSetUser, [2]byte{0, 1},
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      [2]byte{0, 0},
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte(ErrMsgNotAllowedModifyAccounts)),
+					},
+				},
+			},
+		},
+		{
+			name: "when account is not found",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessModifyUser)
+							return bits
+						}(),
+					},
+					Logger: NewTestLogger(),
+					ID:     [2]byte{0, 1},
+					Server: &hotline.Server{
+						AccountManager: func() *MockAccountManager {
+							m := MockAccountManager{}
+							m.On("Get", "testuser").Return((*hotline.Account)(nil))
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranSetUser, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldUserLogin, hotline.EncodeString([]byte("testuser"))),
+					hotline.NewField(hotline.FieldUserName, []byte("Test User")),
+					hotline.NewField(hotline.FieldUserAccess, make([]byte, 8)),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID:  [2]byte{0, 1},
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte(ErrMsgAccountNotFound)),
+					},
+				},
+			},
+		},
+		{
+			name: "when Update returns an error",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessModifyUser)
+							return bits
+						}(),
+					},
+					Logger: NewTestLogger(),
+					ID:     [2]byte{0, 1},
+					Server: &hotline.Server{
+						AccountManager: func() *MockAccountManager {
+							m := MockAccountManager{}
+							m.On("Get", "testuser").Return(&hotline.Account{
+								Login: "testuser",
+								Name:  "Old Name",
+							})
+							m.On("Update", mock.Anything, "testuser").Return(errors.New("disk full"))
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranSetUser, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldUserLogin, hotline.EncodeString([]byte("testuser"))),
+					hotline.NewField(hotline.FieldUserName, []byte("New Name")),
+					hotline.NewField(hotline.FieldUserAccess, make([]byte, 8)),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID:  [2]byte{0, 1},
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte(ErrMsgUpdateAccount)),
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes := HandleSetUser(tt.args.cc, &tt.args.t)
+
+			TranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}
+
+func TestHandleNewNewsCat(t *testing.T) {
+	type args struct {
+		cc *hotline.ClientConn
+		t  hotline.Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []hotline.Transaction
+	}{
+		{
+			name: "when user does not have required permission",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							return bits
+						}(),
+					},
+					Server: &hotline.Server{},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranNewNewsCat, [2]byte{0, 1},
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					Flags:     0x00,
+					IsReply:   0x01,
+					Type:      [2]byte{0, 0},
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte(ErrMsgNotAllowedCreateNewsCategories)),
+					},
+				},
+			},
+		},
+		{
+			name: "when CreateGrouping returns an error",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessNewsCreateCat)
+							return bits
+						}(),
+					},
+					Logger: NewTestLogger(),
+					ID:     [2]byte{0, 1},
+					Server: &hotline.Server{
+						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
+							m := hotline.MockThreadNewsMgr{}
+							m.On("CreateGrouping", []string{"test"}, "TestCat", hotline.NewsCategory).Return(errors.New("write error"))
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranNewNewsCat, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldNewsCatName, []byte("TestCat")),
+					hotline.NewField(hotline.FieldNewsPath,
+						[]byte{
+							0, 1,
+							0, 0,
+							4,
+							0x74, 0x65, 0x73, 0x74,
+						},
+					),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID:  [2]byte{0, 1},
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte(ErrMsgCreateNewsCategory)),
+					},
+				},
+			},
+		},
+		{
+			name: "with a valid request",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessNewsCreateCat)
+							return bits
+						}(),
+					},
+					Logger: NewTestLogger(),
+					ID:     [2]byte{0, 1},
+					Server: &hotline.Server{
+						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
+							m := hotline.MockThreadNewsMgr{}
+							m.On("CreateGrouping", []string{"test"}, "TestCat", hotline.NewsCategory).Return(nil)
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranNewNewsCat, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldNewsCatName, []byte("TestCat")),
+					hotline.NewField(hotline.FieldNewsPath,
+						[]byte{
+							0, 1,
+							0, 0,
+							4,
+							0x74, 0x65, 0x73, 0x74,
+						},
+					),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID: [2]byte{0, 1},
+					IsReply:  0x01,
+					Fields:   []hotline.Field{},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes := HandleNewNewsCat(tt.args.cc, &tt.args.t)
+
+			TranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
 }

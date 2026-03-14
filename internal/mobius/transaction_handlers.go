@@ -84,9 +84,16 @@ const (
 	ErrMsgPermanentBan = "You are permanently banned on this server"
 
 	// General error messages
-	ErrMsgAccountNotFound = "Account not found."
-	ErrMsgUserNotFound    = "User not found."
-	ErrMsgCreateAlias     = "Error creating alias"
+	ErrMsgAccountNotFound      = "Account not found."
+	ErrMsgUserNotFound         = "User not found."
+	ErrMsgCreateAlias          = "Error creating alias"
+	ErrMsgUpdateAccount        = "Error updating account."
+	ErrMsgReadNewsCategories   = "Error reading news categories."
+	ErrMsgCreateNewsCategory   = "Error creating news category."
+	ErrMsgCreateNewsFolder     = "Error creating news folder."
+	ErrMsgDeleteNewsArticle    = "Error deleting news article."
+	ErrMsgPostNewsArticle      = "Error posting news article."
+	ErrMsgReadMessageBoard     = "Error reading message board."
 )
 
 // Converts bytes from Mac Roman encoding to UTF-8
@@ -621,6 +628,7 @@ func HandleSetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 	err := cc.Server.AccountManager.Update(*account, account.Login)
 	if err != nil {
 		cc.Logger.Error("Error updating account", "Err", err)
+		return cc.NewErrReply(t, ErrMsgUpdateAccount)
 	}
 
 	// Notify connected clients logged in as the user of the new access level
@@ -1251,6 +1259,7 @@ func HandleGetNewsCatNameList(cc *hotline.ClientConn, t *hotline.Transaction) (r
 		b, err := io.ReadAll(&cat)
 		if err != nil {
 			cc.Logger.Error("get news categories", "err", err)
+			return cc.NewErrReply(t, ErrMsgReadNewsCategories)
 		}
 
 		fields = append(fields, hotline.NewField(hotline.FieldNewsCatListData15, b))
@@ -1282,6 +1291,7 @@ func HandleNewNewsCat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	err = cc.Server.ThreadedNewsMgr.CreateGrouping(pathStrs, name, hotline.NewsCategory)
 	if err != nil {
 		cc.Logger.Error("error creating news category", "err", err)
+		return cc.NewErrReply(t, ErrMsgCreateNewsCategory)
 	}
 
 	return []hotline.Transaction{cc.NewReply(t)}
@@ -1310,6 +1320,7 @@ func HandleNewNewsFldr(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 	err = cc.Server.ThreadedNewsMgr.CreateGrouping(pathStrs, name, hotline.NewsBundle)
 	if err != nil {
 		cc.Logger.Error("error creating news bundle", "err", err)
+		return cc.NewErrReply(t, ErrMsgCreateNewsFolder)
 	}
 
 	return append(res, cc.NewReply(t))
@@ -1465,6 +1476,7 @@ func HandleDelNewsArt(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	err = cc.Server.ThreadedNewsMgr.DeleteArticle(pathStrs, uint32(articleID), deleteRecursive)
 	if err != nil {
 		cc.Logger.Error("error deleting news article", "err", err)
+		return cc.NewErrReply(t, ErrMsgDeleteNewsArticle)
 	}
 
 	return []hotline.Transaction{cc.NewReply(t)}
@@ -1512,6 +1524,7 @@ func HandlePostNewsArt(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 	)
 	if err != nil {
 		cc.Logger.Error("error posting news article", "err", err)
+		return cc.NewErrReply(t, ErrMsgPostNewsArticle)
 	}
 
 	return append(res, cc.NewReply(t))
@@ -1533,6 +1546,7 @@ func HandleGetMsgs(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 	newsData, err := io.ReadAll(cc.Server.MessageBoard)
 	if err != nil {
 		cc.Logger.Error("Error reading messageboard", "err", err)
+		return cc.NewErrReply(t, ErrMsgReadMessageBoard)
 	}
 
 	return append(res, cc.NewReply(t, hotline.NewField(hotline.FieldData, newsData)))
