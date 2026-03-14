@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"strings"
 	"sync"
 
@@ -48,6 +49,12 @@ func (cc *ClientConn) FileRoot() string {
 		return cc.Account.FileRoot
 	}
 	return cc.Server.Config.FileRoot
+}
+
+// IP returns the IP address portion of the client's remote address.
+func (cc *ClientConn) IP() string {
+	ip, _, _ := net.SplitHostPort(cc.RemoteAddr)
+	return ip
 }
 
 type ClientFileTransferMgr struct {

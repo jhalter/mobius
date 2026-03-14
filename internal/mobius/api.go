@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/jhalter/mobius/hotline"
-	"github.com/redis/go-redis/v9"
 )
 
 type logResponseWriter struct {
@@ -41,7 +40,6 @@ type APIServer struct {
 	logger   *slog.Logger
 	mux      *http.ServeMux
 	apiKey   string
-	redis    *redis.Client
 }
 
 func (srv *APIServer) authMiddleware(next http.Handler) http.Handler {
@@ -64,21 +62,13 @@ func (srv *APIServer) logMiddleware(next http.Handler) http.Handler {
 }
 
 // NewAPIServer creates a new APIServer instance with the specified configuration.
-// It sets up all API routes and middleware, and optionally connects to Redis for persistent storage.
-func NewAPIServer(hlServer *hotline.Server, reloadFunc func(), logger *slog.Logger, apiKey string, redisAddr string, redisPassword string, redisDB int) *APIServer {
+// It sets up all API routes and middleware.
+func NewAPIServer(hlServer *hotline.Server, reloadFunc func(), logger *slog.Logger, apiKey string) *APIServer {
 	srv := APIServer{
 		hlServer: hlServer,
 		logger:   logger,
 		mux:      http.NewServeMux(),
 		apiKey:   apiKey,
-	}
-	if redisAddr != "" {
-		srv.redis = redis.NewClient(&redis.Options{
-			Addr:     redisAddr,
-			Password: redisPassword,
-			DB:       redisDB,
-		})
-		hlServer.Redis = srv.redis
 	}
 
 	srv.mux.Handle("/api/v1/online", srv.logMiddleware(srv.authMiddleware(http.HandlerFunc(srv.OnlineHandler))))
@@ -91,11 +81,11 @@ func NewAPIServer(hlServer *hotline.Server, reloadFunc func(), logger *slog.Logg
 	srv.mux.Handle("/api/v1/shutdown", srv.logMiddleware(srv.authMiddleware(http.HandlerFunc(srv.ShutdownHandler))))
 	srv.mux.Handle("/api/v1/stats", srv.logMiddleware(srv.authMiddleware(http.HandlerFunc(srv.RenderStats))))
 
-	if srv.redis != nil {
-		if err := srv.redis.Del(context.Background(), "mobius:online").Err(); err != nil {
-			srv.logger.Warn("Failed to clear mobius:online in Redis", "err", err)
+	if hlServer.Redis != nil {
+		if err := hlServer.Redis.Del(context.Background(), hotline.RedisKeyOnline).Err(); err != nil {
+			srv.logger.Warn("Failed to clear online users in Redis", "err", err)
 		} else {
-			srv.logger.Info("Cleared mobius:online in Redis on startup")
+			srv.logger.Info("Cleared online users in Redis on startup")
 		}
 	}
 
@@ -107,8 +97,8 @@ func NewAPIServer(hlServer *hotline.Server, reloadFunc func(), logger *slog.Logg
 func (srv *APIServer) OnlineHandler(w http.ResponseWriter, r *http.Request) {
 	var users []map[string]string
 
-	if srv.redis != nil {
-		members, err := srv.redis.SMembers(r.Context(), "mobius:online").Result()
+	if srv.hlServer.Redis != nil {
+		members, err := srv.hlServer.Redis.SMembers(r.Context(), hotline.RedisKeyOnline).Result()
 		if err == nil {
 			for _, m := range members {
 				parts := strings.SplitN(m, ":", 3)
@@ -157,25 +147,30 @@ func (srv *APIServer) BanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if srv.redis != nil {
-		if req.Username != "" {
-			srv.redis.SAdd(r.Context(), "mobius:banned:users", req.Username)
+	if req.Username != "" {
+		if err := srv.hlServer.BanList.BanUsername(req.Username); err != nil {
+			http.Error(w, "failed to ban username", http.StatusInternalServerError)
+			return
 		}
-		if req.Nickname != "" {
-			srv.redis.SAdd(r.Context(), "mobius:banned:nicknames", req.Nickname)
+	}
+	if req.Nickname != "" {
+		if err := srv.hlServer.BanList.BanNickname(req.Nickname); err != nil {
+			http.Error(w, "failed to ban nickname", http.StatusInternalServerError)
+			return
 		}
-		if req.IP != "" {
-			srv.redis.SAdd(r.Context(), "mobius:banned:ips", req.IP)
+	}
+	if req.IP != "" {
+		if err := srv.hlServer.BanList.Add(req.IP, nil); err != nil {
+			http.Error(w, "failed to ban IP", http.StatusInternalServerError)
+			return
 		}
-	} else {
-		// TODO: Fallback
 	}
 
 	// Disconnect user if online
 	for _, c := range srv.hlServer.ClientMgr.List() {
-		if (req.Username != "" && string(c.Account.Login) == req.Username) ||
+		if (req.Username != "" && c.Account.Login == req.Username) ||
 			(req.Nickname != "" && string(c.UserName) == req.Nickname) ||
-			(req.IP != "" && c.RemoteAddr == req.IP) {
+			(req.IP != "" && c.IP() == req.IP) {
 			c.Disconnect()
 		}
 	}
@@ -197,18 +192,23 @@ func (srv *APIServer) UnbanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if srv.redis != nil {
-		if req.Username != "" {
-			srv.redis.SRem(r.Context(), "mobius:banned:users", req.Username)
+	if req.Username != "" {
+		if err := srv.hlServer.BanList.UnbanUsername(req.Username); err != nil {
+			http.Error(w, "failed to unban username", http.StatusInternalServerError)
+			return
 		}
-		if req.Nickname != "" {
-			srv.redis.SRem(r.Context(), "mobius:banned:nicknames", req.Nickname)
+	}
+	if req.Nickname != "" {
+		if err := srv.hlServer.BanList.UnbanNickname(req.Nickname); err != nil {
+			http.Error(w, "failed to unban nickname", http.StatusInternalServerError)
+			return
 		}
-		if req.IP != "" {
-			srv.redis.SRem(r.Context(), "mobius:banned:ips", req.IP)
+	}
+	if req.IP != "" {
+		if err := srv.hlServer.BanList.UnbanIP(req.IP); err != nil {
+			http.Error(w, "failed to unban IP", http.StatusInternalServerError)
+			return
 		}
-	} else {
-		// TODO: Fallback
 	}
 
 	_, _ = w.Write([]byte(`{"msg":"unbanned"}`))
@@ -217,46 +217,34 @@ func (srv *APIServer) UnbanHandler(w http.ResponseWriter, r *http.Request) {
 // ListBannedIPsHandler returns a list of all banned IP addresses.
 // GET /api/v1/banned/ips
 func (srv *APIServer) ListBannedIPsHandler(w http.ResponseWriter, r *http.Request) {
-	if srv.redis != nil {
-		ips, err := srv.redis.SMembers(r.Context(), "mobius:banned:ips").Result()
-		if err != nil {
-			http.Error(w, "failed to fetch banned IPs", http.StatusInternalServerError)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(ips)
-	} else {
-		// TODO: Fallback
+	ips, err := srv.hlServer.BanList.ListBannedIPs()
+	if err != nil {
+		http.Error(w, "failed to fetch banned IPs", http.StatusInternalServerError)
+		return
 	}
+	_ = json.NewEncoder(w).Encode(ips)
 }
 
 // ListBannedUsernamesHandler returns a list of all banned usernames.
 // GET /api/v1/banned/usernames
 func (srv *APIServer) ListBannedUsernamesHandler(w http.ResponseWriter, r *http.Request) {
-	if srv.redis != nil {
-		users, err := srv.redis.SMembers(r.Context(), "mobius:banned:users").Result()
-		if err != nil {
-			http.Error(w, "failed to fetch banned usernames", http.StatusInternalServerError)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(users)
-	} else {
-		// TODO: Fallback
+	users, err := srv.hlServer.BanList.ListBannedUsernames()
+	if err != nil {
+		http.Error(w, "failed to fetch banned usernames", http.StatusInternalServerError)
+		return
 	}
+	_ = json.NewEncoder(w).Encode(users)
 }
 
 // ListBannedNicknamesHandler returns a list of all banned nicknames.
 // GET /api/v1/banned/nicknames
 func (srv *APIServer) ListBannedNicknamesHandler(w http.ResponseWriter, r *http.Request) {
-	if srv.redis != nil {
-		nicks, err := srv.redis.SMembers(r.Context(), "mobius:banned:nicknames").Result()
-		if err != nil {
-			http.Error(w, "failed to fetch banned nicknames", http.StatusInternalServerError)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(nicks)
-	} else {
-		// TODO: Fallback
+	nicks, err := srv.hlServer.BanList.ListBannedNicknames()
+	if err != nil {
+		http.Error(w, "failed to fetch banned nicknames", http.StatusInternalServerError)
+		return
 	}
+	_ = json.NewEncoder(w).Encode(nicks)
 }
 
 // ShutdownHandler gracefully shuts down the server with a custom message.

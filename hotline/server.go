@@ -496,23 +496,17 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 
 	// Check if remoteAddr is present in the ban list, we do this after we have the login name
 	ipAddr, _, _ := net.SplitHostPort(remoteAddr)
-	if s.Redis != nil {
-		// Redis-based ban check
-		bannedUser, _ := s.Redis.SIsMember(ctx, "mobius:banned:users", login).Result()
-		bannedIP, _ := s.Redis.SIsMember(ctx, "mobius:banned:ips", ipAddr).Result()
-		if bannedUser {
-			s.Redis.SAdd(ctx, "mobius:banned:ips", ipAddr)
-			sendBanMessage(rwc, "You are banned on this server")
-			s.Logger.Debug("Disconnecting banned user", "login", login, "ip", ipAddr)
-			return nil
-		}
-		if bannedIP {
-			sendBanMessage(rwc, "You are banned on this server")
-			s.Logger.Debug("Disconnecting banned IP", "ip", ipAddr)
-			return nil
-		}
-	} else {
-		// Fallback to in-memory ban list
+
+	// Check if user is banned
+	if s.BanList != nil && s.BanList.IsUsernameBanned(login) {
+		_ = s.BanList.Add(ipAddr, nil)
+		sendBanMessage(rwc, "You are banned on this server")
+		s.Logger.Debug("Disconnecting banned user", "login", login, "ip", ipAddr)
+		return nil
+	}
+
+	// Check if IP is banned
+	if s.BanList != nil {
 		if isBanned, banUntil := s.BanList.IsBanned(ipAddr); isBanned {
 			// permaban
 			if banUntil == nil {
@@ -531,16 +525,18 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 
 	c := s.NewClientConn(rwc, remoteAddr)
 	// Add the client to the list of connected clients
+
+	// TODO: refactor this into a connection manager interface, maybe?
 	if s.Redis != nil {
-		s.Redis.SAdd(context.Background(), "mobius:online", login+"::"+ipAddr)
+		s.Redis.SAdd(context.Background(), RedisKeyOnline, login+"::"+ipAddr)
 	}
 
 	// Remove the client from the list of connected clients when they disconnect
 	defer func() {
 		if s.Redis != nil {
-			s.Redis.SRem(context.Background(), "mobius:online", login+"::"+ipAddr)
+			s.Redis.SRem(context.Background(), RedisKeyOnline, login+"::"+ipAddr)
 			if len(c.UserName) != 0 {
-				s.Redis.SRem(context.Background(), "mobius:online", login+":"+string(c.UserName)+":"+ipAddr)
+				s.Redis.SRem(context.Background(), RedisKeyOnline, login+":"+string(c.UserName)+":"+ipAddr)
 			}
 		}
 		c.Disconnect()
@@ -621,9 +617,9 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		// Update the Redis set with the new information
 		if s.Redis != nil && len(c.UserName) != 0 {
 			// Remove old entry (login::ip)
-			s.Redis.SRem(context.Background(), "mobius:online", login+"::"+ipAddr)
+			s.Redis.SRem(context.Background(), RedisKeyOnline, login+"::"+ipAddr)
 			// Add new entry with login, nickname, ip
-			s.Redis.SAdd(context.Background(), "mobius:online", login+":"+string(c.UserName)+":"+ipAddr)
+			s.Redis.SAdd(context.Background(), RedisKeyOnline, login+":"+string(c.UserName)+":"+ipAddr)
 		}
 
 		// Notify other clients on the server that the new user has logged in.  For 1.5+ clients we don't have this

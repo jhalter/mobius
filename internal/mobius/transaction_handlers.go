@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"net"
 	"os"
 	"path"
 	"strings"
@@ -1047,25 +1046,28 @@ func HandleTranAgreed(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 		}
 	}
 
+	login := cc.Account.Login
+	ip := cc.IP()
+
 	if cc.Server.Redis != nil {
-		login := cc.Account.Login
-		ip, _, _ := net.SplitHostPort(cc.RemoteAddr)
 		// Remove old entry (login::ip)
-		cc.Server.Redis.SRem(context.Background(), "mobius:online", login+"::"+ip)
+		cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+"::"+ip)
 		// Add new entry with login, nickname, ip
-		cc.Server.Redis.SAdd(context.Background(), "mobius:online", login+":"+string(cc.UserName)+":"+ip)
-		// Ban check for nickname
-		bannedNick, _ := cc.Server.Redis.SIsMember(context.Background(), "mobius:banned:nicknames", string(cc.UserName)).Result()
-		if bannedNick {
+		cc.Server.Redis.SAdd(context.Background(), hotline.RedisKeyOnline, login+":"+string(cc.UserName)+":"+ip)
+	}
+
+	// Ban check for nickname
+	if cc.Server.BanList != nil && cc.Server.BanList.IsNicknameBanned(string(cc.UserName)) {
+		if cc.Server.Redis != nil {
 			// Remove all possible online entries for this login and IP
-			cc.Server.Redis.SRem(context.Background(), "mobius:online", login+"::"+ip)
-			cc.Server.Redis.SRem(context.Background(), "mobius:online", login+":"+string(cc.UserName)+":"+ip)
-			// If we track the previous nickname, remove that too:
-			// cc.Server.Redis.SRem(context.Background(), "mobius:online", login+":"+oldNickname+":"+ip)
-			cc.Server.Redis.SAdd(context.Background(), "mobius:banned:ips", ip)
-			cc.Disconnect()
-			return res
+			cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+"::"+ip)
+			cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+":"+string(cc.UserName)+":"+ip)
 		}
+		if err := cc.Server.BanList.Add(ip, nil); err != nil {
+			cc.Logger.Error("Failed to ban IP for banned nickname", "ip", ip, "err", err)
+		}
+		cc.Disconnect()
+		return res
 	}
 
 	cc.Icon = t.GetField(hotline.FieldUserIconID).Data
@@ -1191,7 +1193,7 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 			))
 
 			banUntil := time.Now().Add(hotline.BanDuration)
-			ip, _, _ := net.SplitHostPort(clientConn.RemoteAddr)
+			ip := clientConn.IP()
 
 			err := cc.Server.BanList.Add(ip, &banUntil)
 			if err != nil {
@@ -1209,7 +1211,7 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 				hotline.NewField(hotline.FieldChatOptions, []byte{0, 0}),
 			))
 
-			ip, _, _ := net.SplitHostPort(clientConn.RemoteAddr)
+			ip := clientConn.IP()
 
 			err := cc.Server.BanList.Add(ip, nil)
 			if err != nil {
@@ -1802,29 +1804,35 @@ func HandleSetClientUserInfo(cc *hotline.ClientConn, t *hotline.Transaction) (re
 		oldNickname := string(cc.UserName)
 		newNickname := string(t.GetField(hotline.FieldUserName).Data)
 		cc.UserName = t.GetField(hotline.FieldUserName).Data
+
+		login := cc.Account.Login
+		ip := cc.IP()
+
 		if cc.Server.Redis != nil {
-			login := cc.Account.Login
-			ip, _, _ := net.SplitHostPort(cc.RemoteAddr)
 			// Remove old entry (login:oldnickname:ip) and (login::ip)
-			cc.Server.Redis.SRem(context.Background(), "mobius:online", login+"::"+ip)
+			cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+"::"+ip)
 			if oldNickname != "" {
-				cc.Server.Redis.SRem(context.Background(), "mobius:online", login+":"+oldNickname+":"+ip)
+				cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+":"+oldNickname+":"+ip)
 			}
 			// Add new entry
-			cc.Server.Redis.SAdd(context.Background(), "mobius:online", login+":"+newNickname+":"+ip)
-			// Ban check for nickname
-			bannedNick, _ := cc.Server.Redis.SIsMember(context.Background(), "mobius:banned:nicknames", newNickname).Result()
-			if bannedNick {
+			cc.Server.Redis.SAdd(context.Background(), hotline.RedisKeyOnline, login+":"+newNickname+":"+ip)
+		}
+
+		// Ban check for nickname
+		if cc.Server.BanList != nil && cc.Server.BanList.IsNicknameBanned(newNickname) {
+			if cc.Server.Redis != nil {
 				// Remove all possible online entries for this login and IP
-				cc.Server.Redis.SRem(context.Background(), "mobius:online", login+"::"+ip)
-				cc.Server.Redis.SRem(context.Background(), "mobius:online", login+":"+newNickname+":"+ip)
+				cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+"::"+ip)
+				cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+":"+newNickname+":"+ip)
 				if oldNickname != "" {
-					cc.Server.Redis.SRem(context.Background(), "mobius:online", login+":"+oldNickname+":"+ip)
+					cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+":"+oldNickname+":"+ip)
 				}
-				cc.Server.Redis.SAdd(context.Background(), "mobius:banned:ips", ip)
-				cc.Disconnect()
-				return res
 			}
+			if err := cc.Server.BanList.Add(ip, nil); err != nil {
+				cc.Logger.Error("Failed to ban IP for banned nickname", "ip", ip, "err", err)
+			}
+			cc.Disconnect()
+			return res
 		}
 	}
 

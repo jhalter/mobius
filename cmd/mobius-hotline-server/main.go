@@ -16,6 +16,7 @@ import (
 	"github.com/jhalter/mobius/hotline"
 	"github.com/jhalter/mobius/internal/mobius"
 	"github.com/oleksandr/bonjour"
+	"github.com/redis/go-redis/v9"
 )
 
 //go:embed mobius/config
@@ -114,10 +115,29 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv.BanList, err = mobius.NewBanFile(path.Join(*configDir, "Banlist.yaml"))
-	if err != nil {
-		slogger.Error("Error loading ban list", "err", err)
-		os.Exit(1)
+	// Initialize ban list - use Redis if configured, otherwise use file-based storage
+	if *redisAddr != "" {
+		redisClient := redis.NewClient(&redis.Options{
+			Addr:     *redisAddr,
+			Password: *redisPassword,
+			DB:       *redisDB,
+		})
+
+		// Verify Redis connection
+		if err := redisClient.Ping(ctx).Err(); err != nil {
+			slogger.Error("Error connecting to Redis", "err", err)
+			os.Exit(1)
+		}
+
+		srv.Redis = redisClient
+		srv.BanList = mobius.NewRedisBanMgr(redisClient, slogger)
+		slogger.Info("Using Redis for ban management", "addr", *redisAddr)
+	} else {
+		srv.BanList, err = mobius.NewBanFile(path.Join(*configDir, "Banlist.yaml"))
+		if err != nil {
+			slogger.Error("Error loading ban list", "err", err)
+			os.Exit(1)
+		}
 	}
 
 	srv.ThreadedNewsMgr, err = mobius.NewThreadedNewsYAML(path.Join(*configDir, "ThreadedNews.yaml"))
@@ -150,8 +170,11 @@ func main() {
 			slogger.Error("Error reloading news", "err", err)
 		}
 
-		if err := srv.BanList.(*mobius.BanFile).Load(); err != nil {
-			slogger.Error("Error reloading ban list", "err", err)
+		// Only reload ban list if using file-based storage (Redis doesn't need reload)
+		if banFile, ok := srv.BanList.(*mobius.BanFile); ok {
+			if err := banFile.Load(); err != nil {
+				slogger.Error("Error reloading ban list", "err", err)
+			}
 		}
 
 		if err := srv.ThreadedNewsMgr.(*mobius.ThreadedNewsYAML).Load(); err != nil {
@@ -171,7 +194,7 @@ func main() {
 	}
 
 	if *apiAddr != "" {
-		sh := mobius.NewAPIServer(srv, reloadFunc, slogger, *apiKey, *redisAddr, *redisPassword, *redisDB)
+		sh := mobius.NewAPIServer(srv, reloadFunc, slogger, *apiKey)
 		go sh.Serve(*apiAddr)
 	}
 

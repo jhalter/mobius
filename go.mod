@@ -3,6 +3,7 @@ module github.com/jhalter/mobius
 go 1.25.4
 
 require (
+	github.com/alicebob/miniredis/v2 v2.35.0
 	github.com/go-playground/validator/v10 v10.28.0
 	github.com/oleksandr/bonjour v0.0.0-20210301155756-30f43c61b915
 	github.com/redis/go-redis/v9 v9.17.0
@@ -25,6 +26,7 @@ require (
 	github.com/miekg/dns v1.1.68 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	golang.org/x/mod v0.30.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect

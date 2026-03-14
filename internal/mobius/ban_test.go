@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sort"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewBanFile(t *testing.T) {
@@ -29,8 +31,10 @@ func TestNewBanFile(t *testing.T) {
 			name: "Valid path with valid content",
 			args: args{path: path.Join(cwd, "test", "config", "Banlist.yaml")},
 			want: &BanFile{
-				filePath: path.Join(cwd, "test", "config", "Banlist.yaml"),
-				banList:  map[string]*time.Time{"192.168.86.29": &testTime},
+				filePath:    path.Join(cwd, "test", "config", "Banlist.yaml"),
+				banList:     map[string]*time.Time{"192.168.86.29": &testTime},
+				bannedUsers: make(map[string]bool),
+				bannedNicks: make(map[string]bool),
 			},
 			wantErr: assert.NoError,
 		},
@@ -151,4 +155,148 @@ func TestBanFile_IsBanned(t *testing.T) {
 			assert.Equalf(t, tt.want1, got1, "IsBanned(%v)", tt.args.ip)
 		})
 	}
+}
+
+func newTempBanFile(t *testing.T) *BanFile {
+	t.Helper()
+	tmpDir := t.TempDir()
+	return &BanFile{
+		filePath:    path.Join(tmpDir, "banfile.yaml"),
+		banList:     make(map[string]*time.Time),
+		bannedUsers: make(map[string]bool),
+		bannedNicks: make(map[string]bool),
+	}
+}
+
+func TestBanFile_UsernameBanning(t *testing.T) {
+	bf := newTempBanFile(t)
+
+	// Ban a username.
+	require.NoError(t, bf.BanUsername("baduser"))
+	assert.True(t, bf.IsUsernameBanned("baduser"))
+	assert.False(t, bf.IsUsernameBanned("gooduser"))
+
+	// Persist and reload.
+	bf2 := &BanFile{filePath: bf.filePath}
+	require.NoError(t, bf2.Load())
+	assert.True(t, bf2.IsUsernameBanned("baduser"))
+
+	// Unban.
+	require.NoError(t, bf2.UnbanUsername("baduser"))
+	assert.False(t, bf2.IsUsernameBanned("baduser"))
+
+	// Verify unban persists.
+	bf3 := &BanFile{filePath: bf.filePath}
+	require.NoError(t, bf3.Load())
+	assert.False(t, bf3.IsUsernameBanned("baduser"))
+}
+
+func TestBanFile_NicknameBanning(t *testing.T) {
+	bf := newTempBanFile(t)
+
+	// Ban a nickname.
+	require.NoError(t, bf.BanNickname("troll"))
+	assert.True(t, bf.IsNicknameBanned("troll"))
+	assert.False(t, bf.IsNicknameBanned("friend"))
+
+	// Persist and reload.
+	bf2 := &BanFile{filePath: bf.filePath}
+	require.NoError(t, bf2.Load())
+	assert.True(t, bf2.IsNicknameBanned("troll"))
+
+	// Unban.
+	require.NoError(t, bf2.UnbanNickname("troll"))
+	assert.False(t, bf2.IsNicknameBanned("troll"))
+
+	// Verify unban persists.
+	bf3 := &BanFile{filePath: bf.filePath}
+	require.NoError(t, bf3.Load())
+	assert.False(t, bf3.IsNicknameBanned("troll"))
+}
+
+func TestBanFile_UnbanIP(t *testing.T) {
+	bf := newTempBanFile(t)
+
+	require.NoError(t, bf.Add("10.0.0.1", nil))
+	banned, _ := bf.IsBanned("10.0.0.1")
+	assert.True(t, banned)
+
+	require.NoError(t, bf.UnbanIP("10.0.0.1"))
+	banned, _ = bf.IsBanned("10.0.0.1")
+	assert.False(t, banned)
+
+	// Verify unban persists.
+	bf2 := &BanFile{filePath: bf.filePath}
+	require.NoError(t, bf2.Load())
+	banned, _ = bf2.IsBanned("10.0.0.1")
+	assert.False(t, banned)
+}
+
+func TestBanFile_ListOperations(t *testing.T) {
+	bf := newTempBanFile(t)
+
+	require.NoError(t, bf.Add("1.2.3.4", nil))
+	require.NoError(t, bf.Add("5.6.7.8", nil))
+	require.NoError(t, bf.BanUsername("user1"))
+	require.NoError(t, bf.BanUsername("user2"))
+	require.NoError(t, bf.BanNickname("nick1"))
+
+	ips, err := bf.ListBannedIPs()
+	require.NoError(t, err)
+	sort.Strings(ips)
+	assert.Equal(t, []string{"1.2.3.4", "5.6.7.8"}, ips)
+
+	usernames, err := bf.ListBannedUsernames()
+	require.NoError(t, err)
+	sort.Strings(usernames)
+	assert.Equal(t, []string{"user1", "user2"}, usernames)
+
+	nicknames, err := bf.ListBannedNicknames()
+	require.NoError(t, err)
+	assert.Equal(t, []string{"nick1"}, nicknames)
+}
+
+func TestBanFile_PermanentBanViaAdd(t *testing.T) {
+	bf := newTempBanFile(t)
+
+	require.NoError(t, bf.Add("172.16.0.1", nil))
+
+	banned, until := bf.IsBanned("172.16.0.1")
+	assert.True(t, banned)
+	assert.Nil(t, until, "Add with nil should create a permanent ban")
+
+	// Verify persistence.
+	bf2 := &BanFile{filePath: bf.filePath}
+	require.NoError(t, bf2.Load())
+	banned, until = bf2.IsBanned("172.16.0.1")
+	assert.True(t, banned)
+	assert.Nil(t, until)
+}
+
+func TestBanFile_NewFormatPersistence(t *testing.T) {
+	bf := newTempBanFile(t)
+
+	expiry := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, bf.Add("10.0.0.1", nil))
+	require.NoError(t, bf.Add("10.0.0.2", &expiry))
+	require.NoError(t, bf.BanUsername("admin"))
+	require.NoError(t, bf.BanNickname("spammer"))
+
+	// Reload into a fresh BanFile.
+	bf2 := &BanFile{filePath: bf.filePath}
+	require.NoError(t, bf2.Load())
+
+	// Verify IPs.
+	banned, until := bf2.IsBanned("10.0.0.1")
+	assert.True(t, banned)
+	assert.Nil(t, until)
+
+	banned, until = bf2.IsBanned("10.0.0.2")
+	assert.True(t, banned)
+	require.NotNil(t, until)
+	assert.True(t, expiry.Equal(*until))
+
+	// Verify username and nickname.
+	assert.True(t, bf2.IsUsernameBanned("admin"))
+	assert.True(t, bf2.IsNicknameBanned("spammer"))
 }
