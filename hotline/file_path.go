@@ -115,14 +115,22 @@ func ReadPath(fileRoot string, filePath, fileName []byte) (fullPath string, err 
 		subPath = path.Join("/", subPath, string(pathItem.Name))
 	}
 
-	fullPath = path.Join(
-		fileRoot,
-		subPath,
-		path.Join("/", string(fileName)),
-	)
-	fullPath, err = txtDecoder.String(fullPath)
+	// Decode only client-provided path components from Mac Roman to UTF-8.
+	// The fileRoot is already a UTF-8 filesystem path and must not be decoded.
+	subPath, err = txtDecoder.String(subPath)
 	if err != nil {
 		return "", fmt.Errorf("invalid filepath encoding: %w", err)
 	}
+
+	decodedFileName, err := txtDecoder.String(string(fileName))
+	if err != nil {
+		return "", fmt.Errorf("invalid filename encoding: %w", err)
+	}
+
+	fullPath = path.Join(
+		fileRoot,
+		subPath,
+		path.Join("/", decodedFileName),
+	)
 	return fullPath, nil
 }

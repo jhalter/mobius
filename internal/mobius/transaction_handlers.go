@@ -568,11 +568,19 @@ func HandleNewFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 			subPath = path.Join("/", subPath, string(pathItem.Name))
 		}
 	}
-	newFolderPath := path.Join(cc.FileRoot(), subPath, folderName)
-	newFolderPath, err := txtDecoder.String(newFolderPath)
+
+	// Decode only client-provided path components from Mac Roman to UTF-8.
+	// The FileRoot is already a UTF-8 filesystem path and must not be decoded.
+	subPath, err := txtDecoder.String(subPath)
 	if err != nil {
 		return res
 	}
+	folderName, err = txtDecoder.String(folderName)
+	if err != nil {
+		return res
+	}
+
+	newFolderPath := path.Join(cc.FileRoot(), subPath, folderName)
 
 	// TODO: check path and folder Name lengths
 

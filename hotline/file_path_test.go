@@ -152,6 +152,29 @@ func Test_readPath(t *testing.T) {
 			},
 			want: "/usr/local/var/mobius/Files",
 		},
+		{
+			name: "when fileRoot contains non-ASCII UTF-8 characters",
+			args: args{
+				fileRoot: "/files/español",
+				filePath: nil,
+				fileName: []byte("foo"),
+			},
+			want: "/files/español/foo",
+		},
+		{
+			name: "when fileRoot contains non-ASCII and filePath has Mac Roman bytes",
+			args: args{
+				fileRoot: "/files/español",
+				filePath: []byte{
+					0x00, 0x01,
+					0x00, 0x00,
+					0x06,
+					0x63, 0x61, 0x66, 0x8e, 0x73, 0x21, // "caf\x8es!" where 0x8e is Mac Roman é
+				},
+				fileName: []byte("foo"),
+			},
+			want: "/files/español/cafés!/foo",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
