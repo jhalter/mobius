@@ -3,11 +3,14 @@ package hotline
 import (
 	"bytes"
 	"encoding/binary"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
 )
 
 func TestEncodeFilePath(t *testing.T) {
@@ -169,4 +172,50 @@ func TestCalcItemCount(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetFileNameList_Encoding(t *testing.T) {
+	// Create a temp dir with a file whose name contains a non-ASCII UTF-8 character.
+	tempDir, err := os.MkdirTemp("", "test-encoding")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	// "café.txt" — the é is UTF-8 on disk
+	if err := os.WriteFile(filepath.Join(tempDir, "café.txt"), []byte("hello"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// FileNameWithInfoHeader is 20 bytes: Type[4] + Creator[4] + FileSize[4] + RSVD[4] + NameScript[2] + NameSize[2]
+	const headerLen = 20
+
+	extractName := func(fields []Field) string {
+		for _, f := range fields {
+			if f.Type == FieldFileNameWithInfo {
+				nameSize := binary.BigEndian.Uint16(f.Data[headerLen-2 : headerLen])
+				return string(f.Data[headerLen : headerLen+nameSize])
+			}
+		}
+		return ""
+	}
+
+	t.Run("macintosh encoder converts UTF-8 to Mac Roman", func(t *testing.T) {
+		fields, err := GetFileNameList(tempDir, nil, charmap.Macintosh.NewEncoder(), slog.Default())
+		assert.NoError(t, err)
+		assert.Len(t, fields, 1)
+
+		name := extractName(fields)
+		// Mac Roman é is 0x8e, so "café.txt" becomes "caf\x8e.txt"
+		assert.Equal(t, "caf\x8e.txt", name)
+	})
+
+	t.Run("nop encoder passes UTF-8 through unchanged", func(t *testing.T) {
+		fields, err := GetFileNameList(tempDir, nil, encoding.Nop.NewEncoder(), slog.Default())
+		assert.NoError(t, err)
+		assert.Len(t, fields, 1)
+
+		name := extractName(fields)
+		assert.Equal(t, "café.txt", name)
+	})
 }

@@ -25,6 +25,13 @@ Trackers:
   - hotline.kicks-ass.net:5499
 # - example-tracker-with-password.com:5499:mypassword
 
+# Text encoding used for file and folder names sent to and from clients.
+# Supported values:
+#   "macintosh" - Translates between Mac Roman and UTF-8 (default, compatible with classic Hotline clients)
+#   "utf8"      - No conversion; passes file names through as-is (for servers with only modern UTF-8 clients)
+# If omitted, defaults to "macintosh".
+Encoding: macintosh
+
 # Preserve resource forks and file type/creator codes for files uploaded by Macintosh clients.
 # This comes with trade-offs.  For more details, see:
 # https://github.com/jhalter/mobius/wiki/Resource-fork-support-in-Mobius

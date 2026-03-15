@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/time/rate"
 )
@@ -29,12 +30,6 @@ var contextKeyReq = contextKey("req")
 type requestCtx struct {
 	remoteAddr string
 }
-
-// Converts bytes from Mac Roman encoding to UTF-8
-var txtDecoder = charmap.Macintosh.NewDecoder()
-
-// Converts bytes from UTF-8 to Mac Roman encoding
-var txtEncoder = charmap.Macintosh.NewEncoder()
 
 type Server struct {
 	NetInterface string
@@ -72,6 +67,9 @@ type Server struct {
 
 	// TrackerRegistrar handles tracker registration (injectable for testing)
 	TrackerRegistrar TrackerRegistrar
+
+	TextDecoder *encoding.Decoder
+	TextEncoder *encoding.Encoder
 
 	TLSConfig *tls.Config
 	TLSPort   int
@@ -138,6 +136,16 @@ func NewServer(options ...Option) (*Server, error) {
 
 	for _, opt := range options {
 		opt(&server)
+	}
+
+	// Initialize text encoding based on config.
+	switch server.Config.Encoding {
+	case "utf8":
+		server.TextDecoder = encoding.Nop.NewDecoder()
+		server.TextEncoder = encoding.Nop.NewEncoder()
+	default:
+		server.TextDecoder = charmap.Macintosh.NewDecoder()
+		server.TextEncoder = charmap.Macintosh.NewEncoder()
 	}
 
 	// generate a new random passID for tracker registration
@@ -690,7 +698,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 		"Name", string(fileTransfer.ClientConn.UserName),
 	)
 
-	fullPath, err := ReadPath(fileTransfer.FileRoot, fileTransfer.FilePath, fileTransfer.FileName)
+	fullPath, err := ReadPath(fileTransfer.FileRoot, fileTransfer.FilePath, fileTransfer.FileName, s.TextDecoder)
 	if err != nil {
 		return err
 	}

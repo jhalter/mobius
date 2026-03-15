@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/text/encoding"
 )
 
 var clientConnSortFunc = func(a, b *ClientConn) int {
@@ -43,6 +44,9 @@ type ClientConn struct {
 
 	mu sync.RWMutex
 }
+
+func (cc *ClientConn) TextDecoder() *encoding.Decoder { return cc.Server.TextDecoder }
+func (cc *ClientConn) TextEncoder() *encoding.Encoder { return cc.Server.TextEncoder }
 
 func (cc *ClientConn) FileRoot() string {
 	if cc.Account.FileRoot != "" {

@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/jhalter/mobius/hotline"
-	"golang.org/x/text/encoding/charmap"
 )
 
 // Public error message constants for reuse by other packages
@@ -95,12 +94,6 @@ const (
 	ErrMsgPostNewsArticle      = "Error posting news article."
 	ErrMsgReadMessageBoard     = "Error reading message board."
 )
-
-// Converts bytes from Mac Roman encoding to UTF-8
-var txtDecoder = charmap.Macintosh.NewDecoder()
-
-// Converts bytes from UTF-8 to Mac Roman encoding
-var txtEncoder = charmap.Macintosh.NewEncoder()
 
 // Assign functions to handle specific Hotline transaction types
 func RegisterHandlers(srv *hotline.Server) {
@@ -303,7 +296,7 @@ func HandleGetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 	fileName := t.GetField(hotline.FieldFileName).Data
 	filePath := t.GetField(hotline.FieldFilePath).Data
 
-	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName)
+	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName, cc.TextDecoder())
 	if err != nil {
 		return res
 	}
@@ -313,7 +306,7 @@ func HandleGetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		return res
 	}
 
-	encodedName, err := txtEncoder.String(fw.Name)
+	encodedName, err := cc.TextEncoder().String(fw.Name)
 	if err != nil {
 		return res
 	}
@@ -355,7 +348,7 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 	fileName := t.GetField(hotline.FieldFileName).Data
 	filePath := t.GetField(hotline.FieldFilePath).Data
 
-	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName)
+	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName, cc.TextDecoder())
 	if err != nil {
 		return res
 	}
@@ -394,7 +387,7 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		}
 	}
 
-	fullNewFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, t.GetField(hotline.FieldFileNewName).Data)
+	fullNewFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, t.GetField(hotline.FieldFileNewName).Data, cc.TextDecoder())
 	if err != nil {
 		return nil
 	}
@@ -416,11 +409,11 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 			if !cc.Authorize(hotline.AccessRenameFile) {
 				return cc.NewErrReply(t, ErrMsgNotAllowedRenameFiles)
 			}
-			fileDir, err := hotline.ReadPath(cc.FileRoot(), filePath, []byte{})
+			fileDir, err := hotline.ReadPath(cc.FileRoot(), filePath, []byte{}, cc.TextDecoder())
 			if err != nil {
 				return nil
 			}
-			hlFile.Name, err = txtDecoder.String(string(fileNewName))
+			hlFile.Name, err = cc.TextDecoder().String(string(fileNewName))
 			if err != nil {
 				return res
 			}
@@ -452,7 +445,7 @@ func HandleDeleteFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	fileName := t.GetField(hotline.FieldFileName).Data
 	filePath := t.GetField(hotline.FieldFilePath).Data
 
-	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName)
+	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName, cc.TextDecoder())
 	if err != nil {
 		return res
 	}
@@ -497,12 +490,12 @@ func HandleDeleteFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 func HandleMoveFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	fileName := string(t.GetField(hotline.FieldFileName).Data)
 
-	filePath, err := hotline.ReadPath(cc.FileRoot(), t.GetField(hotline.FieldFilePath).Data, t.GetField(hotline.FieldFileName).Data)
+	filePath, err := hotline.ReadPath(cc.FileRoot(), t.GetField(hotline.FieldFilePath).Data, t.GetField(hotline.FieldFileName).Data, cc.TextDecoder())
 	if err != nil {
 		return res
 	}
 
-	fileNewPath, err := hotline.ReadPath(cc.FileRoot(), t.GetField(hotline.FieldFileNewPath).Data, nil)
+	fileNewPath, err := hotline.ReadPath(cc.FileRoot(), t.GetField(hotline.FieldFileNewPath).Data, nil, cc.TextDecoder())
 	if err != nil {
 		return res
 	}
@@ -571,11 +564,11 @@ func HandleNewFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 
 	// Decode only client-provided path components from Mac Roman to UTF-8.
 	// The FileRoot is already a UTF-8 filesystem path and must not be decoded.
-	subPath, err := txtDecoder.String(subPath)
+	subPath, err := cc.TextDecoder().String(subPath)
 	if err != nil {
 		return res
 	}
-	folderName, err = txtDecoder.String(folderName)
+	folderName, err = cc.TextDecoder().String(folderName)
 	if err != nil {
 		return res
 	}
@@ -1594,7 +1587,7 @@ func HandleDownloadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 		dataOffset = int64(binary.BigEndian.Uint32(frd.ForkInfoList[0].DataSize[:]))
 	}
 
-	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName)
+	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName, cc.TextDecoder())
 	if err != nil {
 		return res
 	}
@@ -1658,7 +1651,7 @@ func HandleDownloadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 		return cc.NewErrReply(t, ErrMsgNotAllowedDownloadFolders)
 	}
 
-	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), t.GetField(hotline.FieldFilePath).Data, t.GetField(hotline.FieldFileName).Data)
+	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), t.GetField(hotline.FieldFilePath).Data, t.GetField(hotline.FieldFileName).Data, cc.TextDecoder())
 	if err != nil {
 		return nil
 	}
@@ -1769,7 +1762,7 @@ func HandleUploadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 			return cc.NewErrReply(t, fmt.Sprintf(ErrMsgUploadRestrictedTemplate, "file", string(fileName)))
 		}
 	}
-	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName)
+	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName, cc.TextDecoder())
 	if err != nil {
 		return res
 	}
@@ -1911,15 +1904,18 @@ func HandleGetFileNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res 
 		cc.FileRoot(),
 		t.GetField(hotline.FieldFilePath).Data,
 		nil,
+		cc.TextDecoder(),
 	)
 	if err != nil {
-		return res
+		cc.Logger.Error("error reading file path", "err", err)
+		return cc.NewErrReply(t, "Cannot get file list.")
 	}
 
 	var fp hotline.FilePath
 	if t.GetField(hotline.FieldFilePath).Data != nil {
 		if _, err = fp.Write(t.GetField(hotline.FieldFilePath).Data); err != nil {
-			return res
+			cc.Logger.Error("error parsing file path", "err", err)
+			return cc.NewErrReply(t, "Cannot get file list.")
 		}
 	}
 
@@ -1928,9 +1924,10 @@ func HandleGetFileNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res 
 		return cc.NewErrReply(t, ErrMsgNotAllowedViewDropBoxes)
 	}
 
-	fileNames, err := hotline.GetFileNameList(fullPath, cc.Server.Config.IgnoreFiles)
+	fileNames, err := hotline.GetFileNameList(fullPath, cc.Server.Config.IgnoreFiles, cc.TextEncoder(), cc.Logger)
 	if err != nil {
-		return res
+		cc.Logger.Error("error getting file name list", "err", err)
+		return cc.NewErrReply(t, "Cannot get file list.")
 	}
 
 	res = append(res, cc.NewReply(t, fileNames...))
@@ -2186,12 +2183,12 @@ func HandleMakeAlias(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 	filePath := t.GetField(hotline.FieldFilePath).Data
 	fileNewPath := t.GetField(hotline.FieldFileNewPath).Data
 
-	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName)
+	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName, cc.TextDecoder())
 	if err != nil {
 		return res
 	}
 
-	fullNewFilePath, err := hotline.ReadPath(cc.FileRoot(), fileNewPath, fileName)
+	fullNewFilePath, err := hotline.ReadPath(cc.FileRoot(), fileNewPath, fileName, cc.TextDecoder())
 	if err != nil {
 		return res
 	}

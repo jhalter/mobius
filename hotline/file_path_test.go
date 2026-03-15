@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
 )
 
 func TestFilePath_Write(t *testing.T) {
@@ -178,13 +180,63 @@ func Test_readPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ReadPath(tt.args.fileRoot, tt.args.filePath, tt.args.fileName)
+			got, err := ReadPath(tt.args.fileRoot, tt.args.filePath, tt.args.fileName, charmap.Macintosh.NewDecoder())
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ReadPath() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if got != tt.want {
 				t.Errorf("ReadPath() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_readPath_NopDecoder(t *testing.T) {
+	type args struct {
+		fileRoot string
+		filePath []byte
+		fileName []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "Mac Roman bytes pass through unchanged with Nop decoder",
+			args: args{
+				fileRoot: "/files",
+				filePath: []byte{
+					0x00, 0x01,
+					0x00, 0x00,
+					0x06,
+					0x63, 0x61, 0x66, 0x8e, 0x73, 0x21, // "caf\x8es!" where 0x8e is Mac Roman é
+				},
+				fileName: []byte("foo"),
+			},
+			// With Nop decoder, 0x8e is NOT converted to UTF-8 é — it passes through as the raw byte.
+			want: "/files/caf\x8es!/foo",
+		},
+		{
+			name: "plain ASCII is unchanged with Nop decoder",
+			args: args{
+				fileRoot: "/files",
+				filePath: nil,
+				fileName: []byte("hello.txt"),
+			},
+			want: "/files/hello.txt",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ReadPath(tt.args.fileRoot, tt.args.filePath, tt.args.fileName, encoding.Nop.NewDecoder())
+			if err != nil {
+				t.Errorf("ReadPath() error = %v", err)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("ReadPath() got = %q, want %q", got, tt.want)
 			}
 		})
 	}

@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
 )
 
 type mockReadWriter struct {
@@ -177,11 +179,63 @@ func TestServer_handleFileTransfer(t *testing.T) {
 				Logger:          tt.fields.Logger,
 				Stats:           tt.fields.Stats,
 				FS:              tt.fields.FS,
+				TextDecoder:     charmap.Macintosh.NewDecoder(),
+				TextEncoder:     charmap.Macintosh.NewEncoder(),
 			}
 
 			tt.wantErr(t, s.handleFileTransfer(tt.args.ctx, tt.args.rwc), fmt.Sprintf("handleFileTransfer(%v, %v)", tt.args.ctx, tt.args.rwc))
 
 			assertTransferBytesEqual(t, tt.wantDump, tt.args.rwc.(mockReadWriter).WBuf.Bytes())
+		})
+	}
+}
+
+func TestNewServer_Encoding(t *testing.T) {
+	tests := []struct {
+		name        string
+		encoding    string
+		wantDecoder *encoding.Decoder
+		wantEncoder *encoding.Encoder
+	}{
+		{
+			name:        "default empty string uses Mac Roman",
+			encoding:    "",
+			wantDecoder: charmap.Macintosh.NewDecoder(),
+			wantEncoder: charmap.Macintosh.NewEncoder(),
+		},
+		{
+			name:        "macintosh uses Mac Roman",
+			encoding:    "macintosh",
+			wantDecoder: charmap.Macintosh.NewDecoder(),
+			wantEncoder: charmap.Macintosh.NewEncoder(),
+		},
+		{
+			name:        "utf8 uses Nop (pass-through)",
+			encoding:    "utf8",
+			wantDecoder: encoding.Nop.NewDecoder(),
+			wantEncoder: encoding.Nop.NewEncoder(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv, err := NewServer(WithConfig(Config{Encoding: tt.encoding}))
+			assert.NoError(t, err)
+
+			// Verify encoder/decoder behavior by round-tripping a Mac Roman byte.
+			// 0x8e is Mac Roman for "é".
+			input := string([]byte{0x8e})
+
+			gotDec, err := srv.TextDecoder.String(input)
+			assert.NoError(t, err)
+			wantDec, err := tt.wantDecoder.String(input)
+			assert.NoError(t, err)
+			assert.Equal(t, wantDec, gotDec)
+
+			gotEnc, err := srv.TextEncoder.String("é")
+			assert.NoError(t, err)
+			wantEnc, err := tt.wantEncoder.String("é")
+			assert.NoError(t, err)
+			assert.Equal(t, wantEnc, gotEnc)
 		})
 	}
 }

@@ -15,4 +15,5 @@ type Config struct {
 	PreserveResourceForks     bool     `yaml:"PreserveResourceForks"`                     // Enable preservation of file info and resource forks in sidecar files
 	IgnoreFiles               []string `yaml:"IgnoreFiles"`                               // List of regular expression for filtering files from the file list
 	EnableBonjour             bool     `yaml:"EnableBonjour"`                             // Enable service announcement on local network with Bonjour
+	Encoding                  string   `yaml:"Encoding" validate:"omitempty,oneof=macintosh utf8"` // Text encoding for client communication
 }

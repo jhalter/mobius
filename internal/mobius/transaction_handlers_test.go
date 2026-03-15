@@ -17,6 +17,7 @@ import (
 	"github.com/jhalter/mobius/hotline"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"golang.org/x/text/encoding/charmap"
 )
 
 type mockReadWriteSeeker struct {
@@ -113,6 +114,8 @@ func TestHandleSetChatSubject(t *testing.T) {
 				cc: &hotline.ClientConn{
 					UserName: []byte{0x00, 0x01},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ChatMgr: func() *hotline.MockChatManager {
 							m := hotline.MockChatManager{}
 							m.On("Members", hotline.ChatID{0x0, 0x0, 0x0, 0x1}).Return([]*hotline.ClientConn{
@@ -227,6 +230,8 @@ func TestHandleLeaveChat(t *testing.T) {
 				cc: &hotline.ClientConn{
 					ID: [2]byte{0, 2},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ChatMgr: func() *hotline.MockChatManager {
 							m := hotline.MockChatManager{}
 							m.On("Members", hotline.ChatID{0x0, 0x0, 0x0, 0x1}).Return([]*hotline.ClientConn{
@@ -302,6 +307,8 @@ func TestHandleGetUserNameList(t *testing.T) {
 				cc: &hotline.ClientConn{
 					ID: [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
@@ -374,6 +381,8 @@ func TestHandleChatSend(t *testing.T) {
 					},
 					UserName: []byte{0x00, 0x01},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
@@ -435,6 +444,8 @@ func TestHandleChatSend(t *testing.T) {
 					},
 					UserName: []byte{0x00, 0x01},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
@@ -491,6 +502,8 @@ func TestHandleChatSend(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						//Accounts: map[string]*Account{},
 					},
 				},
@@ -522,6 +535,8 @@ func TestHandleChatSend(t *testing.T) {
 					},
 					UserName: []byte("Testy McTest"),
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
@@ -584,6 +599,8 @@ func TestHandleChatSend(t *testing.T) {
 					},
 					UserName: []byte("Testy McTest"),
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
@@ -642,6 +659,8 @@ func TestHandleChatSend(t *testing.T) {
 					},
 					UserName: []byte{0x00, 0x01},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
@@ -694,6 +713,8 @@ func TestHandleChatSend(t *testing.T) {
 					},
 					UserName: []byte{0x00, 0x01},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ChatMgr: func() *hotline.MockChatManager {
 							m := hotline.MockChatManager{}
 							m.On("Members", hotline.ChatID{0x0, 0x0, 0x0, 0x1}).Return([]*hotline.ClientConn{
@@ -786,6 +807,8 @@ func TestHandleGetFileInfo(t *testing.T) {
 					ID:      [2]byte{0, 1},
 					Account: &hotline.Account{},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						FS: &hotline.OSFileStore{},
 						Config: hotline.Config{
 							FileRoot: func() string {
@@ -884,6 +907,8 @@ func TestHandleNewFolder(t *testing.T) {
 					},
 					ID: [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						Config: hotline.Config{
 							FileRoot: "/Files/",
 						},
@@ -926,6 +951,8 @@ func TestHandleNewFolder(t *testing.T) {
 					},
 					ID: [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						Config: hotline.Config{
 							FileRoot: "/Files",
 						},
@@ -962,6 +989,8 @@ func TestHandleNewFolder(t *testing.T) {
 					},
 					ID: [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						Config: hotline.Config{
 							FileRoot: "/Files/",
 						},
@@ -996,6 +1025,8 @@ func TestHandleNewFolder(t *testing.T) {
 					},
 					ID: [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						Config: hotline.Config{
 							FileRoot: "/Files/",
 						},
@@ -1032,6 +1063,8 @@ func TestHandleNewFolder(t *testing.T) {
 					},
 					ID: [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						Config: hotline.Config{
 							FileRoot: "/Files/",
 						},
@@ -1091,6 +1124,8 @@ func TestHandleUploadFile(t *testing.T) {
 			args: args{
 				cc: &hotline.ClientConn{
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						FS:              &hotline.OSFileStore{},
 						FileTransferMgr: hotline.NewMemFileTransferMgr(),
 						Config: hotline.Config{
@@ -1190,6 +1225,8 @@ func TestHandleMakeAlias(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						Config: hotline.Config{
 							FileRoot: func() string {
 								path, _ := os.Getwd()
@@ -1236,6 +1273,8 @@ func TestHandleMakeAlias(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						Config: hotline.Config{
 							FileRoot: func() string {
 								path, _ := os.Getwd()
@@ -1281,6 +1320,8 @@ func TestHandleMakeAlias(t *testing.T) {
 						Access: hotline.AccessBitmap{},
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						Config: hotline.Config{
 							FileRoot: func() string {
 								path, _ := os.Getwd()
@@ -1347,6 +1388,8 @@ func TestHandleGetUser(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						AccountManager: func() *MockAccountManager {
 							m := MockAccountManager{}
 							m.On("Get", "guest").Return(&hotline.Account{
@@ -1387,6 +1430,8 @@ func TestHandleGetUser(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						//Accounts: map[string]*Account{},
 					},
 				},
@@ -1417,6 +1462,8 @@ func TestHandleGetUser(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						AccountManager: func() *MockAccountManager {
 							m := MockAccountManager{}
 							m.On("Get", "nonExistentUser").Return((*hotline.Account)(nil))
@@ -1472,6 +1519,8 @@ func TestHandleDeleteUser(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						AccountManager: func() *MockAccountManager {
 							m := MockAccountManager{}
 							m.On("Delete", "testuser").Return(nil)
@@ -1506,6 +1555,8 @@ func TestHandleDeleteUser(t *testing.T) {
 						Access: hotline.AccessBitmap{},
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						//Accounts: map[string]*Account{},
 					},
 				},
@@ -1555,6 +1606,8 @@ func TestHandleGetMsgs(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						MessageBoard: func() *mockReadWriteSeeker {
 							m := mockReadWriteSeeker{}
 							m.On("Seek", int64(0), 0).Return(int64(0), nil)
@@ -1592,6 +1645,8 @@ func TestHandleGetMsgs(t *testing.T) {
 					},
 					Logger: NewTestLogger(),
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						MessageBoard: func() *mockReadWriteSeeker {
 							m := mockReadWriteSeeker{}
 							m.On("Seek", int64(0), 0).Return(int64(0), nil)
@@ -1622,6 +1677,8 @@ func TestHandleGetMsgs(t *testing.T) {
 						Access: hotline.AccessBitmap{},
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						//Accounts: map[string]*Account{},
 					},
 				},
@@ -1669,6 +1726,8 @@ func TestHandleNewUser(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						//Accounts: map[string]*Account{},
 					},
 				},
@@ -1698,6 +1757,8 @@ func TestHandleNewUser(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						AccountManager: func() *MockAccountManager {
 							m := MockAccountManager{}
 							m.On("Get", "userB").Return((*hotline.Account)(nil))
@@ -1758,6 +1819,8 @@ func TestHandleListUsers(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						//Accounts: map[string]*Account{},
 					},
 				},
@@ -1787,6 +1850,8 @@ func TestHandleListUsers(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						AccountManager: func() *MockAccountManager {
 							m := MockAccountManager{}
 							m.On("List").Return([]hotline.Account{
@@ -1849,7 +1914,7 @@ func TestHandleDownloadFile(t *testing.T) {
 							return bits
 						}(),
 					},
-					Server: &hotline.Server{},
+					Server: &hotline.Server{TextDecoder: charmap.Macintosh.NewDecoder(), TextEncoder: charmap.Macintosh.NewEncoder()},
 				},
 				t: hotline.NewTransaction(hotline.TranDownloadFile, [2]byte{0, 1}),
 			},
@@ -1876,6 +1941,8 @@ func TestHandleDownloadFile(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						FS:              &hotline.OSFileStore{},
 						FileTransferMgr: hotline.NewMemFileTransferMgr(),
 						Config: hotline.Config{
@@ -1915,6 +1982,8 @@ func TestHandleDownloadFile(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						FS: &hotline.OSFileStore{},
 
 						// FS: func() *hotline.MockFileStore {
@@ -2005,6 +2074,8 @@ func TestHandleUpdateUser(t *testing.T) {
 				cc: &hotline.ClientConn{
 					Logger: NewTestLogger(),
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						AccountManager: func() *MockAccountManager {
 							m := MockAccountManager{}
 							m.On("Get", "bbb").Return((*hotline.Account)(nil))
@@ -2056,6 +2127,8 @@ func TestHandleUpdateUser(t *testing.T) {
 				cc: &hotline.ClientConn{
 					Logger: NewTestLogger(),
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						Logger: NewTestLogger(),
 						AccountManager: func() *MockAccountManager {
 							m := MockAccountManager{}
@@ -2109,7 +2182,7 @@ func TestHandleUpdateUser(t *testing.T) {
 			args: args{
 				cc: &hotline.ClientConn{
 					Logger: NewTestLogger(),
-					Server: &hotline.Server{},
+					Server: &hotline.Server{TextDecoder: charmap.Macintosh.NewDecoder(), TextEncoder: charmap.Macintosh.NewEncoder()},
 					Account: &hotline.Account{
 						Access: hotline.AccessBitmap{},
 					},
@@ -2194,6 +2267,8 @@ func TestHandleDelNewsArt(t *testing.T) {
 					Logger: NewTestLogger(),
 					ID:     [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
 							m := hotline.MockThreadNewsMgr{}
 							m.On("DeleteArticle", []string{"test"}, uint32(1), false).Return(errors.New("write error"))
@@ -2275,6 +2350,8 @@ func TestHandleDisconnectUser(t *testing.T) {
 			args: args{
 				cc: &hotline.ClientConn{
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("Get", hotline.ClientID{0x0, 0x1}).Return(&hotline.ClientConn{
@@ -2374,6 +2451,8 @@ func TestHandleSendInstantMsg(t *testing.T) {
 					ID:       [2]byte{0, 1},
 					UserName: []byte("User1"),
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("Get", hotline.ClientID{0x0, 0x2}).Return(&hotline.ClientConn{
@@ -2422,6 +2501,8 @@ func TestHandleSendInstantMsg(t *testing.T) {
 					ID:       [2]byte{0, 1},
 					UserName: []byte("User1"),
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("Get", hotline.ClientID{0x0, 0x2}).Return(&hotline.ClientConn{
@@ -2479,6 +2560,8 @@ func TestHandleSendInstantMsg(t *testing.T) {
 					ID:       [2]byte{0, 1},
 					UserName: []byte("User1"),
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("Get", hotline.ClientID{0x0, 0x2}).Return(&hotline.ClientConn{
@@ -2544,6 +2627,8 @@ func TestHandleDeleteFile(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						Config: hotline.Config{
 							FileRoot: func() string {
 								return "/fakeRoot/Files"
@@ -2600,6 +2685,8 @@ func TestHandleDeleteFile(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						Config: hotline.Config{
 							FileRoot: func() string {
 								return "/fakeRoot/Files"
@@ -2678,6 +2765,8 @@ func TestHandleGetFileNameList(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 
 						Config: hotline.Config{
 							FileRoot: func() string {
@@ -2717,7 +2806,7 @@ func TestHandleGetFileNameList(t *testing.T) {
 							return filepath.Join(path, "/test/config/Files/getFileNameListTestDir")
 						}(),
 					},
-					Server: &hotline.Server{},
+					Server: &hotline.Server{TextDecoder: charmap.Macintosh.NewDecoder(), TextEncoder: charmap.Macintosh.NewEncoder()},
 				},
 				t: hotline.NewTransaction(
 					hotline.TranGetFileNameList, [2]byte{0, 1},
@@ -2783,6 +2872,8 @@ func TestHandleGetClientInfoText(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						//Accounts: map[string]*Account{},
 					},
 				},
@@ -2817,6 +2908,8 @@ func TestHandleGetClientInfoText(t *testing.T) {
 						Login: "test",
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("Get", hotline.ClientID{0x0, 0x1}).Return(&hotline.ClientConn{
@@ -2916,6 +3009,8 @@ func TestHandleTranAgreed(t *testing.T) {
 					ID:      [2]byte{0, 1},
 					Logger:  NewTestLogger(),
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						Config: hotline.Config{
 							BannerFile: "Banner.jpg",
 						},
@@ -2971,6 +3066,8 @@ func TestHandleTranAgreed(t *testing.T) {
 					ID:      [2]byte{0, 1},
 					Logger:  NewTestLogger(),
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						Config: hotline.Config{
 							BannerFile: "Banner.gif",
 						},
@@ -3036,6 +3133,8 @@ func TestHandleSetClientUserInfo(t *testing.T) {
 					UserName: []byte("Guest"),
 					Flags:    [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
@@ -3080,6 +3179,8 @@ func TestHandleSetClientUserInfo(t *testing.T) {
 					UserName: []byte("Guest"),
 					Flags:    [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
@@ -3122,6 +3223,8 @@ func TestHandleSetClientUserInfo(t *testing.T) {
 					UserName: []byte("Guest"),
 					Flags:    [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
@@ -3164,6 +3267,8 @@ func TestHandleSetClientUserInfo(t *testing.T) {
 					UserName: []byte("Guest"),
 					Flags:    [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
@@ -3207,6 +3312,8 @@ func TestHandleSetClientUserInfo(t *testing.T) {
 					Flags:    [2]byte{0, 1},
 					Version:  []byte{0x01, 0x03},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
@@ -3251,6 +3358,8 @@ func TestHandleSetClientUserInfo(t *testing.T) {
 					Flags:    [2]byte{0, 1},
 					Version:  []byte{0x01, 0x03},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
@@ -3307,6 +3416,8 @@ func TestHandleDelNewsItem(t *testing.T) {
 					},
 					ID: [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
 							m := hotline.MockThreadNewsMgr{}
 							m.On("NewsItem", []string{"test"}).Return(hotline.NewsCategoryListData15{
@@ -3348,6 +3459,8 @@ func TestHandleDelNewsItem(t *testing.T) {
 					},
 					ID: [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
 							m := hotline.MockThreadNewsMgr{}
 							m.On("NewsItem", []string{"test"}).Return(hotline.NewsCategoryListData15{
@@ -3393,6 +3506,8 @@ func TestHandleDelNewsItem(t *testing.T) {
 					},
 					ID: [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
 							m := hotline.MockThreadNewsMgr{}
 							m.On("NewsItem", []string{"test"}).Return(hotline.NewsCategoryListData15{Type: hotline.NewsBundle})
@@ -3476,6 +3591,8 @@ func TestHandleTranOldPostNews(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						Config: hotline.Config{
 							NewsDateFormat: "",
 						},
@@ -3566,6 +3683,8 @@ func TestHandleInviteNewChat(t *testing.T) {
 					Icon:     []byte{0, 1},
 					Flags:    [2]byte{0, 0},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("Get", hotline.ClientID{0x0, 0x2}).Return(&hotline.ClientConn{
@@ -3625,6 +3744,8 @@ func TestHandleInviteNewChat(t *testing.T) {
 					Icon:     []byte{0, 1},
 					Flags:    [2]byte{0, 0},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ClientMgr: func() *hotline.MockClientMgr {
 							m := hotline.MockClientMgr{}
 							m.On("Get", hotline.ClientID{0, 2}).Return(&hotline.ClientConn{
@@ -3722,6 +3843,8 @@ func TestHandleGetNewsArtData(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
 							m := hotline.MockThreadNewsMgr{}
 							m.On("GetArticle", []string{"Example Category"}, uint32(1)).Return(&hotline.NewsArtData{
@@ -3795,6 +3918,8 @@ func TestHandleGetNewsArtNameList(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						//Accounts: map[string]*Account{},
 					},
 				},
@@ -3826,6 +3951,8 @@ func TestHandleGetNewsArtNameList(t *testing.T) {
 		//				}(),
 		//			},
 		//			Server: &hotline.Server{
+		//				TextDecoder: charmap.Macintosh.NewDecoder(),
+		//				TextEncoder: charmap.Macintosh.NewEncoder(),
 		//				ThreadedNewsMgr: func() *mockThreadNewsMgr {
 		//					m := mockThreadNewsMgr{}
 		//					m.On("ListArticles", []string{"Example Category"}).Return(NewsArtListData{
@@ -3893,6 +4020,8 @@ func TestHandleNewNewsFldr(t *testing.T) {
 						}(),
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						//Accounts: map[string]*Account{},
 					},
 				},
@@ -3926,6 +4055,8 @@ func TestHandleNewNewsFldr(t *testing.T) {
 					Logger: NewTestLogger(),
 					ID:     [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
 							m := hotline.MockThreadNewsMgr{}
 							m.On("CreateGrouping", []string{"test"}, "testFolder", hotline.NewsBundle).Return(nil)
@@ -3968,6 +4099,8 @@ func TestHandleNewNewsFldr(t *testing.T) {
 					Logger: NewTestLogger(),
 					ID:     [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
 							m := hotline.MockThreadNewsMgr{}
 							m.On("CreateGrouping", []string{"test"}, "testFolder", hotline.NewsBundle).Return(errors.New("write error"))
@@ -4071,6 +4204,8 @@ func TestHandlePostNewsArt(t *testing.T) {
 			args: args{
 				cc: &hotline.ClientConn{
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
 							m := hotline.MockThreadNewsMgr{}
 							m.On("PostArticle", []string{"www"}, uint32(0), mock.AnythingOfType("hotline.NewsArtData")).Return(nil)
@@ -4105,6 +4240,8 @@ func TestHandlePostNewsArt(t *testing.T) {
 			args: args{
 				cc: &hotline.ClientConn{
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
 							m := hotline.MockThreadNewsMgr{}
 							m.On("PostArticle", []string{"www"}, uint32(0), mock.AnythingOfType("hotline.NewsArtData")).Return(errors.New("write error"))
@@ -4261,6 +4398,8 @@ func TestHandleJoinChat(t *testing.T) {
 						Access: hotline.AccessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ChatMgr: func() *hotline.MockChatManager {
 							m := hotline.MockChatManager{}
 							// Mock existing members before join
@@ -4377,6 +4516,8 @@ func TestHandleJoinChat(t *testing.T) {
 						Access: hotline.AccessBitmap{255, 255, 255, 255, 255, 255, 255, 255},
 					},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ChatMgr: func() *hotline.MockChatManager {
 							m := hotline.MockChatManager{}
 							// Mock empty chat before join
@@ -4446,6 +4587,8 @@ func TestHandleRejectChatInvite(t *testing.T) {
 					UserName: []byte("RejectUser"),
 					ID:       [2]byte{0, 3},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ChatMgr: func() *hotline.MockChatManager {
 							m := hotline.MockChatManager{}
 							// Mock current members of the chat
@@ -4497,6 +4640,8 @@ func TestHandleRejectChatInvite(t *testing.T) {
 					UserName: []byte("LoneRejecter"),
 					ID:       [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ChatMgr: func() *hotline.MockChatManager {
 							m := hotline.MockChatManager{}
 							// Mock empty chat (no members)
@@ -4524,6 +4669,8 @@ func TestHandleRejectChatInvite(t *testing.T) {
 					UserName: []byte("Shy"),
 					ID:       [2]byte{0, 2},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ChatMgr: func() *hotline.MockChatManager {
 							m := hotline.MockChatManager{}
 							// Mock chat with single member
@@ -4738,7 +4885,7 @@ func TestHandleSetUser(t *testing.T) {
 							return bits
 						}(),
 					},
-					Server: &hotline.Server{},
+					Server: &hotline.Server{TextDecoder: charmap.Macintosh.NewDecoder(), TextEncoder: charmap.Macintosh.NewEncoder()},
 				},
 				t: hotline.NewTransaction(
 					hotline.TranSetUser, [2]byte{0, 1},
@@ -4770,6 +4917,8 @@ func TestHandleSetUser(t *testing.T) {
 					Logger: NewTestLogger(),
 					ID:     [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						AccountManager: func() *MockAccountManager {
 							m := MockAccountManager{}
 							m.On("Get", "testuser").Return((*hotline.Account)(nil))
@@ -4809,6 +4958,8 @@ func TestHandleSetUser(t *testing.T) {
 					Logger: NewTestLogger(),
 					ID:     [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						AccountManager: func() *MockAccountManager {
 							m := MockAccountManager{}
 							m.On("Get", "testuser").Return(&hotline.Account{
@@ -4868,7 +5019,7 @@ func TestHandleNewNewsCat(t *testing.T) {
 							return bits
 						}(),
 					},
-					Server: &hotline.Server{},
+					Server: &hotline.Server{TextDecoder: charmap.Macintosh.NewDecoder(), TextEncoder: charmap.Macintosh.NewEncoder()},
 				},
 				t: hotline.NewTransaction(
 					hotline.TranNewNewsCat, [2]byte{0, 1},
@@ -4900,6 +5051,8 @@ func TestHandleNewNewsCat(t *testing.T) {
 					Logger: NewTestLogger(),
 					ID:     [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
 							m := hotline.MockThreadNewsMgr{}
 							m.On("CreateGrouping", []string{"test"}, "TestCat", hotline.NewsCategory).Return(errors.New("write error"))
@@ -4945,6 +5098,8 @@ func TestHandleNewNewsCat(t *testing.T) {
 					Logger: NewTestLogger(),
 					ID:     [2]byte{0, 1},
 					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
 						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
 							m := hotline.MockThreadNewsMgr{}
 							m.On("CreateGrouping", []string{"test"}, "TestCat", hotline.NewsCategory).Return(nil)

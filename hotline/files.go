@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"golang.org/x/text/encoding"
 )
 
 func FileTypeFromFilename(filename string) fileType {
@@ -34,7 +37,7 @@ func fileTypeFromInfo(info fs.FileInfo) (ft fileType, err error) {
 
 const maxFileSize = 4294967296
 
-func GetFileNameList(path string, ignoreList []string) (fields []Field, err error) {
+func GetFileNameList(path string, ignoreList []string, encoder *encoding.Encoder, logger *slog.Logger) (fields []Field, err error) {
 	files, err := os.ReadDir(path)
 	if err != nil {
 		return fields, fmt.Errorf("error reading path: %s: %w", path, err)
@@ -123,8 +126,9 @@ func GetFileNameList(path string, ignoreList []string) (fields []Field, err erro
 		}
 
 		strippedName := strings.ReplaceAll(file.Name(), ".incomplete", "")
-		strippedName, err = txtEncoder.String(strippedName)
+		strippedName, err = encoder.String(strippedName)
 		if err != nil {
+			logger.Warn("skipping file with unencodable name", "name", file.Name(), "err", err)
 			continue
 		}
 

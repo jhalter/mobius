@@ -9,6 +9,8 @@ import (
 	"io"
 	"path"
 	"strings"
+
+	"golang.org/x/text/encoding"
 )
 
 // FilePathItem represents the file or directory portion of a delimited file path (e.g. foo and bar in "/foo/bar")
@@ -102,7 +104,7 @@ func (fp *FilePath) Len() uint16 {
 	return binary.BigEndian.Uint16(fp.ItemCount[:])
 }
 
-func ReadPath(fileRoot string, filePath, fileName []byte) (fullPath string, err error) {
+func ReadPath(fileRoot string, filePath, fileName []byte, decoder *encoding.Decoder) (fullPath string, err error) {
 	var fp FilePath
 	if filePath != nil {
 		if _, err = fp.Write(filePath); err != nil {
@@ -115,14 +117,14 @@ func ReadPath(fileRoot string, filePath, fileName []byte) (fullPath string, err 
 		subPath = path.Join("/", subPath, string(pathItem.Name))
 	}
 
-	// Decode only client-provided path components from Mac Roman to UTF-8.
+	// Decode only client-provided path components using the configured text encoding.
 	// The fileRoot is already a UTF-8 filesystem path and must not be decoded.
-	subPath, err = txtDecoder.String(subPath)
+	subPath, err = decoder.String(subPath)
 	if err != nil {
 		return "", fmt.Errorf("invalid filepath encoding: %w", err)
 	}
 
-	decodedFileName, err := txtDecoder.String(string(fileName))
+	decodedFileName, err := decoder.String(string(fileName))
 	if err != nil {
 		return "", fmt.Errorf("invalid filename encoding: %w", err)
 	}
