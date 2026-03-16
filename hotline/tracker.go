@@ -43,14 +43,7 @@ func (tr *TrackerRegistration) Read(p []byte) (int, error) {
 		[]byte(tr.Password),
 	)
 
-	if tr.readOffset >= len(buf) {
-		return 0, io.EOF // All bytes have been read
-	}
-
-	n := copy(p, buf[tr.readOffset:])
-	tr.readOffset += n
-
-	return n, nil
+	return readFrom(p, &tr.readOffset, buf)
 }
 
 // Dialer interface to abstract the dialing operation

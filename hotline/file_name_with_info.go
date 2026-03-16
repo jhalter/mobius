@@ -3,7 +3,6 @@ package hotline
 import (
 	"bytes"
 	"encoding/binary"
-	"io"
 	"slices"
 )
 
@@ -40,14 +39,7 @@ func (f *FileNameWithInfo) Read(p []byte) (int, error) {
 		f.Name,
 	)
 
-	if f.readOffset >= len(buf) {
-		return 0, io.EOF // All bytes have been read
-	}
-
-	n := copy(p, buf[f.readOffset:])
-	f.readOffset += n
-
-	return n, nil
+	return readFrom(p, &f.readOffset, buf)
 }
 
 func (f *FileNameWithInfo) Write(p []byte) (int, error) {

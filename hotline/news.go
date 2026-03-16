@@ -132,13 +132,7 @@ func (nald *NewsArtListData) Read(p []byte) (int, error) {
 		nald.NewsArtList,
 	)
 
-	if nald.readOffset >= len(buf) {
-		return 0, io.EOF // All bytes have been read
-	}
-	n := copy(p, buf[nald.readOffset:])
-	nald.readOffset += n
-
-	return n, nil
+	return readFrom(p, &nald.readOffset, buf)
 }
 
 func (nald *NewsArtListData) Write(p []byte) (int, error) {
@@ -257,14 +251,7 @@ func (nal *NewsArtList) Read(p []byte) (int, error) {
 		nal.ArticleSize[:],
 	)
 
-	if nal.readOffset >= len(out) {
-		return 0, io.EOF // All bytes have been read
-	}
-
-	n := copy(p, out[nal.readOffset:])
-	nal.readOffset += n
-
-	return n, nil
+	return readFrom(p, &nal.readOffset, out)
 }
 
 type NewsFlavorList struct {
@@ -293,15 +280,7 @@ func (newscat *NewsCategoryListData15) Read(p []byte) (int, error) {
 		[]byte(newscat.Name),
 	)
 
-	if newscat.readOffset >= len(out) {
-		return 0, io.EOF // All bytes have been read
-	}
-
-	n := copy(p, out)
-
-	newscat.readOffset = n
-
-	return n, nil
+	return readFrom(p, &newscat.readOffset, out)
 }
 
 func (newscat *NewsCategoryListData15) Write(p []byte) (int, error) {

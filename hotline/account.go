@@ -55,14 +55,7 @@ func (a *Account) Read(p []byte) (int, error) {
 	}
 
 	buf := slices.Concat(fieldCount, fieldBytes)
-	if a.readOffset >= len(buf) {
-		return 0, io.EOF // All bytes have been read
-	}
-
-	n := copy(p, buf[a.readOffset:])
-	a.readOffset += n
-
-	return n, nil
+	return readFrom(p, &a.readOffset, buf)
 }
 
 // HashAndSalt generates a password hash from a users obfuscated plaintext password

@@ -151,14 +151,7 @@ func (ffif *FlatFileInformationFork) Read(p []byte) (int, error) {
 		ffif.Comment,
 	)
 
-	if ffif.readOffset >= len(buf) {
-		return 0, io.EOF // All bytes have been read
-	}
-
-	n := copy(p, buf[ffif.readOffset:])
-	ffif.readOffset += n
-
-	return n, nil
+	return readFrom(p, &ffif.readOffset, buf)
 }
 
 // Write implements the io.Writer interface for FlatFileInformationFork
@@ -253,14 +246,7 @@ func (ffo *flattenedFileObject) Read(p []byte) (int, error) {
 		ffo.FlatFileDataForkHeader.DataSize[:],
 	)
 
-	if ffo.readOffset >= len(buf) {
-		return 0, io.EOF // All bytes have been read
-	}
-
-	n := copy(p, buf[ffo.readOffset:])
-	ffo.readOffset += n
-
-	return n, nil
+	return readFrom(p, &ffo.readOffset, buf)
 }
 
 func (ffo *flattenedFileObject) ReadFrom(r io.Reader) (int64, error) {

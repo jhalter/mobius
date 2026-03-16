@@ -2,7 +2,6 @@ package hotline
 
 import (
 	"encoding/binary"
-	"io"
 	"math/big"
 	"slices"
 )
@@ -64,14 +63,7 @@ func (u *User) Read(p []byte) (int, error) {
 		[]byte(u.Name),
 	)
 
-	if u.readOffset >= len(b) {
-		return 0, io.EOF // All bytes have been read
-	}
-
-	n := copy(p, b)
-	u.readOffset = n
-
-	return n, nil
+	return readFrom(p, &u.readOffset, b)
 }
 
 func (u *User) Write(p []byte) (int, error) {

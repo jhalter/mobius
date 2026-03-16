@@ -2,7 +2,6 @@ package mobius
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"slices"
 	"strings"
@@ -49,15 +48,7 @@ func (f *FlatNews) Read(p []byte) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	if f.readOffset >= len(f.data) {
-		return 0, io.EOF // All bytes have been read
-	}
-
-	n := copy(p, f.data[f.readOffset:])
-
-	f.readOffset += n
-
-	return n, nil
+	return readFrom(p, &f.readOffset, f.data)
 }
 
 // Write implements io.Writer for flat news.

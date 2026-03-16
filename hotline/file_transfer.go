@@ -241,14 +241,7 @@ func (fh *FileHeader) Read(p []byte) (int, error) {
 		fh.FilePath,
 	)
 
-	if fh.readOffset >= len(buf) {
-		return 0, io.EOF // All bytes have been read
-	}
-
-	n := copy(p, buf[fh.readOffset:])
-	fh.readOffset += n
-
-	return n, nil
+	return readFrom(p, &fh.readOffset, buf)
 }
 
 func DownloadHandler(w io.Writer, fullPath string, fileTransfer *FileTransfer, fs FileStore, rLogger *slog.Logger, preserveForks bool) error {

@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"math/rand"
 	"slices"
 )
@@ -253,14 +252,7 @@ func (t *Transaction) Read(p []byte) (int, error) {
 		bbuf.Bytes(),
 	)
 
-	if t.readOffset >= len(buf) {
-		return 0, io.EOF // All bytes have been read
-	}
-
-	n := copy(p, buf[t.readOffset:])
-	t.readOffset += n
-
-	return n, nil
+	return readFrom(p, &t.readOffset, buf)
 }
 
 // Size returns the total size of the transaction payload

@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"io"
 	"slices"
 )
 
@@ -157,15 +156,7 @@ func (f *Field) DecodeNewsPath() ([]string, error) {
 // Read implements io.Reader for Field
 func (f *Field) Read(p []byte) (int, error) {
 	buf := slices.Concat(f.Type[:], f.FieldSize[:], f.Data)
-
-	if f.readOffset >= len(buf) {
-		return 0, io.EOF // All bytes have been read
-	}
-
-	n := copy(p, buf[f.readOffset:])
-	f.readOffset += n
-
-	return n, nil
+	return readFrom(p, &f.readOffset, buf)
 }
 
 // Write implements io.Writer for Field

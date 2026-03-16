@@ -2,7 +2,6 @@ package mobius
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,15 +59,7 @@ func (a *Agreement) Read(p []byte) (int, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.readOffset >= len(a.data) {
-		return 0, io.EOF // All bytes have been read
-	}
-
-	n := copy(p, a.data[a.readOffset:])
-
-	a.readOffset += n
-
-	return n, nil
+	return readFrom(p, &a.readOffset, a.data)
 }
 
 func (a *Agreement) Seek(offset int64, _ int) (int64, error) {
