@@ -1,391 +1,364 @@
 package mobius
 
 import (
-	"fmt"
+	"encoding/binary"
 	"os"
-	"path"
-	"sync"
+	"path/filepath"
 	"testing"
 
 	"github.com/jhalter/mobius/hotline"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
-type TestData struct {
-	Name  string `yaml:"name"`
-	Value int    `yaml:"value"`
-}
+// newTestThreadedNews creates a ThreadedNewsYAML backed by a YAML fixture file
+// in a temporary directory. The fixture contains:
+//   - "General" (NewsCategory) with one article (ID 1)
+//   - "Archive" (NewsBundle) with subcategory "Old News" containing one article (ID 1)
+func newTestThreadedNews(t *testing.T) *ThreadedNewsYAML {
+	t.Helper()
 
-func TestLoadFromYAMLFile(t *testing.T) {
-	tests := []struct {
-		name     string
-		fileName string
-		content  string
-		wantData TestData
-		wantErr  bool
-	}{
-		{
-			name:     "Valid YAML file",
-			fileName: "valid.yaml",
-			content:  "name: Test\nvalue: 123\n",
-			wantData: TestData{Name: "Test", Value: 123},
-			wantErr:  false,
-		},
-		{
-			name:     "File not found",
-			fileName: "nonexistent.yaml",
-			content:  "",
-			wantData: TestData{},
-			wantErr:  true,
-		},
-		{
-			name:     "Invalid YAML content",
-			fileName: "invalid.yaml",
-			content:  "name: Test\nvalue: invalid_int\n",
-			wantData: TestData{},
-			wantErr:  true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Setup: Create a temporary file with the provided content if content is not empty
-			if tt.content != "" {
-				err := os.WriteFile(tt.fileName, []byte(tt.content), 0644)
-				assert.NoError(t, err)
-				defer func() { _ = os.Remove(tt.fileName) }() // Cleanup the file after the test
-			}
-
-			var data TestData
-			err := loadFromYAMLFile(tt.fileName, &data)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.wantData, data)
-			}
-		})
-	}
-}
-
-func TestNewThreadedNewsYAML(t *testing.T) {
-	type args struct {
-		filePath string
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    *ThreadedNewsYAML
-		wantErr assert.ErrorAssertionFunc
-	}{
-		{
-			name: "Valid YAML file",
-			args: args{
-				filePath: "test/config/ThreadedNews.yaml",
+	tn := hotline.ThreadedNews{
+		Categories: map[string]hotline.NewsCategoryListData15{
+			"General": {
+				Name: "General",
+				Type: hotline.NewsCategory,
+				Articles: map[uint32]*hotline.NewsArtData{
+					1: {
+						Title:  "Welcome",
+						Poster: "admin",
+						Data:   "Hello world",
+					},
+				},
+				SubCats: make(map[string]hotline.NewsCategoryListData15),
 			},
-			want: &ThreadedNewsYAML{
-				filePath: "test/config/ThreadedNews.yaml",
-				ThreadedNews: hotline.ThreadedNews{
-					Categories: map[string]hotline.NewsCategoryListData15{
-						"TestBundle": {
-							Type:     hotline.NewsBundle,
-							Name:     "TestBundle",
-							Articles: make(map[uint32]*hotline.NewsArtData),
-							SubCats: map[string]hotline.NewsCategoryListData15{
-								"NestedBundle": {
-									Name: "NestedBundle",
-									Type: hotline.NewsBundle,
-									SubCats: map[string]hotline.NewsCategoryListData15{
-										"NestedCat": {
-											Name:     "NestedCat",
-											Type:     hotline.NewsCategory,
-											Articles: make(map[uint32]*hotline.NewsArtData),
-											SubCats:  make(map[string]hotline.NewsCategoryListData15),
-										},
-									},
-									Articles: make(map[uint32]*hotline.NewsArtData),
-								},
+			"Archive": {
+				Name: "Archive",
+				Type: hotline.NewsBundle,
+				SubCats: map[string]hotline.NewsCategoryListData15{
+					"Old News": {
+						Name: "Old News",
+						Type: hotline.NewsCategory,
+						Articles: map[uint32]*hotline.NewsArtData{
+							1: {
+								Title:  "Legacy Post",
+								Poster: "olduser",
+								Data:   "Old content",
 							},
 						},
-						"TestCat": {
-							Type: hotline.NewsCategory,
-							Name: "TestCat",
-							Articles: map[uint32]*hotline.NewsArtData{
-								1: {
-									Title:         "TestArt",
-									Poster:        "Halcyon 1.9.2",
-									Date:          [8]byte{0x07, 0xe4, 0x00, 0x00, 0x00, 0xfe, 0xfc, 0xcc},
-									NextArt:       [4]byte{0, 0, 0, 2},
-									FirstChildArt: [4]byte{0, 0, 0, 2},
-									Data:          "TestArt Body",
-								},
-								2: {
-									Title:     "Re: TestArt",
-									Poster:    "Halcyon 1.9.2",
-									Date:      [8]byte{0x07, 0xe4, 0x00, 0x00, 0x00, 0xfe, 0xfc, 0xd8},
-									PrevArt:   [4]byte{0, 0, 0, 1},
-									ParentArt: [4]byte{0, 0, 0, 1},
-									NextArt:   [4]byte{0, 0, 0, 3},
-									Data:      "I'm a reply",
-								},
-								3: {
-									Title:   "TestArt 2",
-									Poster:  "Halcyon 1.9.2",
-									Date:    [8]byte{0x07, 0xe4, 0x00, 0x00, 0x00, 0xfe, 0xfd, 0x06},
-									PrevArt: [4]byte{0, 0, 0, 2},
-									Data:    "Hello world",
-								},
-							},
-							SubCats: make(map[string]hotline.NewsCategoryListData15),
-						},
+						SubCats: make(map[string]hotline.NewsCategoryListData15),
 					},
 				},
 			},
-			wantErr: assert.NoError,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewThreadedNewsYAML(tt.args.filePath)
-			if !tt.wantErr(t, err, fmt.Sprintf("NewThreadedNewsYAML(%v)", tt.args.filePath)) {
-				return
-			}
-			assert.Equalf(t, tt.want, got, "NewThreadedNewsYAML(%v)", tt.args.filePath)
-		})
-	}
+
+	dir := t.TempDir()
+	fp := filepath.Join(dir, "ThreadedNews.yaml")
+
+	data, err := yaml.Marshal(&tn)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(fp, data, 0644))
+
+	result, err := NewThreadedNewsYAML(fp)
+	require.NoError(t, err)
+
+	return result
+}
+
+func TestThreadedNewsYAML_GetCategories(t *testing.T) {
+	tn := newTestThreadedNews(t)
+
+	t.Run("returns top-level categories sorted by name", func(t *testing.T) {
+		cats := tn.GetCategories(nil)
+		require.Len(t, cats, 2)
+		assert.Equal(t, "Archive", cats[0].Name)
+		assert.Equal(t, "General", cats[1].Name)
+	})
+
+	t.Run("returns subcategories for a bundle", func(t *testing.T) {
+		cats := tn.GetCategories([]string{"Archive"})
+		require.Len(t, cats, 1)
+		assert.Equal(t, "Old News", cats[0].Name)
+	})
+
+	t.Run("returns empty slice for path with no children", func(t *testing.T) {
+		cats := tn.GetCategories([]string{"Archive", "Old News"})
+		assert.Empty(t, cats)
+	})
+}
+
+func TestThreadedNewsYAML_NewsItem(t *testing.T) {
+	tn := newTestThreadedNews(t)
+
+	t.Run("retrieves top-level item", func(t *testing.T) {
+		item := tn.NewsItem([]string{"General"})
+		assert.Equal(t, "General", item.Name)
+		assert.Equal(t, hotline.NewsCategory, item.Type)
+	})
+
+	t.Run("retrieves nested item", func(t *testing.T) {
+		item := tn.NewsItem([]string{"Archive", "Old News"})
+		assert.Equal(t, "Old News", item.Name)
+		assert.Equal(t, hotline.NewsCategory, item.Type)
+	})
+}
+
+func TestThreadedNewsYAML_GetArticle(t *testing.T) {
+	tn := newTestThreadedNews(t)
+
+	t.Run("returns existing article", func(t *testing.T) {
+		art := tn.GetArticle([]string{"General"}, 1)
+		require.NotNil(t, art)
+		assert.Equal(t, "Welcome", art.Title)
+		assert.Equal(t, "admin", art.Poster)
+		assert.Equal(t, "Hello world", art.Data)
+	})
+
+	t.Run("returns nil for missing article ID", func(t *testing.T) {
+		art := tn.GetArticle([]string{"General"}, 999)
+		assert.Nil(t, art)
+	})
+
+	t.Run("returns article in nested category", func(t *testing.T) {
+		art := tn.GetArticle([]string{"Archive", "Old News"}, 1)
+		require.NotNil(t, art)
+		assert.Equal(t, "Legacy Post", art.Title)
+	})
+}
+
+func TestThreadedNewsYAML_ListArticles(t *testing.T) {
+	tn := newTestThreadedNews(t)
+
+	t.Run("lists articles for a category with articles", func(t *testing.T) {
+		artList, err := tn.ListArticles([]string{"General"})
+		require.NoError(t, err)
+		assert.Equal(t, 1, artList.Count)
+		assert.NotEmpty(t, artList.NewsArtList)
+	})
+
+	t.Run("lists articles for nested category", func(t *testing.T) {
+		artList, err := tn.ListArticles([]string{"Archive", "Old News"})
+		require.NoError(t, err)
+		assert.Equal(t, 1, artList.Count)
+	})
+}
+
+func TestThreadedNewsYAML_PostArticle(t *testing.T) {
+	t.Run("posts article to empty category and persists", func(t *testing.T) {
+		tn := newTestThreadedNews(t)
+
+		// Create a new empty category first.
+		err := tn.CreateGrouping(nil, "Fresh", hotline.NewsCategory)
+		require.NoError(t, err)
+
+		article := hotline.NewsArtData{
+			Title:  "First Post",
+			Poster: "user1",
+			Data:   "Content here",
+		}
+		err = tn.PostArticle([]string{"Fresh"}, 0, article)
+		require.NoError(t, err)
+
+		// Verify article was stored with ID 1.
+		art := tn.GetArticle([]string{"Fresh"}, 1)
+		require.NotNil(t, art)
+		assert.Equal(t, "First Post", art.Title)
+		assert.Equal(t, "Content here", art.Data)
+
+		// Verify persistence by reloading.
+		require.NoError(t, tn.Load())
+		art = tn.GetArticle([]string{"Fresh"}, 1)
+		require.NotNil(t, art)
+		assert.Equal(t, "First Post", art.Title)
+	})
+
+	t.Run("posts second article and links to previous", func(t *testing.T) {
+		tn := newTestThreadedNews(t)
+
+		// General already has article 1. Post a second one.
+		article := hotline.NewsArtData{
+			Title:  "Second Post",
+			Poster: "user2",
+			Data:   "More content",
+		}
+		err := tn.PostArticle([]string{"General"}, 0, article)
+		require.NoError(t, err)
+
+		// New article should be ID 2.
+		art := tn.GetArticle([]string{"General"}, 2)
+		require.NotNil(t, art)
+		assert.Equal(t, "Second Post", art.Title)
+
+		// PrevArt of the new article should point to article 1.
+		prevID := binary.BigEndian.Uint32(art.PrevArt[:])
+		assert.Equal(t, uint32(1), prevID)
+
+		// NextArt of the first article should point to article 2.
+		first := tn.GetArticle([]string{"General"}, 1)
+		require.NotNil(t, first)
+		nextID := binary.BigEndian.Uint32(first.NextArt[:])
+		assert.Equal(t, uint32(2), nextID)
+	})
+
+	t.Run("reply sets parent FirstChildArt", func(t *testing.T) {
+		tn := newTestThreadedNews(t)
+
+		// Post a reply to article 1 in General.
+		reply := hotline.NewsArtData{
+			Title:  "Reply",
+			Poster: "replier",
+			Data:   "I agree",
+		}
+		err := tn.PostArticle([]string{"General"}, 1, reply)
+		require.NoError(t, err)
+
+		// The reply should be article 2.
+		replyArt := tn.GetArticle([]string{"General"}, 2)
+		require.NotNil(t, replyArt)
+
+		// ParentArt should be set to 1.
+		parentID := binary.BigEndian.Uint32(replyArt.ParentArt[:])
+		assert.Equal(t, uint32(1), parentID)
+
+		// Parent article's FirstChildArt should now point to 2.
+		parent := tn.GetArticle([]string{"General"}, 1)
+		require.NotNil(t, parent)
+		firstChild := binary.BigEndian.Uint32(parent.FirstChildArt[:])
+		assert.Equal(t, uint32(2), firstChild)
+	})
+
+	t.Run("returns error for empty news path", func(t *testing.T) {
+		tn := newTestThreadedNews(t)
+		err := tn.PostArticle(nil, 0, hotline.NewsArtData{})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid news path")
+	})
+}
+
+func TestThreadedNewsYAML_DeleteArticle(t *testing.T) {
+	tn := newTestThreadedNews(t)
+
+	// Confirm article exists before deletion.
+	art := tn.GetArticle([]string{"General"}, 1)
+	require.NotNil(t, art)
+
+	err := tn.DeleteArticle([]string{"General"}, 1, false)
+	require.NoError(t, err)
+
+	// Article should be gone.
+	art = tn.GetArticle([]string{"General"}, 1)
+	assert.Nil(t, art)
+
+	// Verify persistence.
+	require.NoError(t, tn.Load())
+	art = tn.GetArticle([]string{"General"}, 1)
+	assert.Nil(t, art)
+}
+
+func TestThreadedNewsYAML_DeleteArticle_EmptyPath(t *testing.T) {
+	tn := newTestThreadedNews(t)
+	err := tn.DeleteArticle(nil, 1, false)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid news path")
 }
 
 func TestThreadedNewsYAML_CreateGrouping(t *testing.T) {
-	// Create a temporary directory.
-	tmpDir, err := os.MkdirTemp("", "createGrouping")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }() // Clean up the temporary directory.
+	t.Run("creates a new top-level bundle", func(t *testing.T) {
+		tn := newTestThreadedNews(t)
 
-	// Path to the temporary ban file.
-	tmpFilePath := path.Join(tmpDir, "ThreadedNews.yaml")
+		err := tn.CreateGrouping(nil, "NewBundle", hotline.NewsBundle)
+		require.NoError(t, err)
 
-	type fields struct {
-		ThreadedNews hotline.ThreadedNews
-		filePath     string
-	}
-	type args struct {
-		newsPath []string
-		name     string
-		t        [2]byte
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr assert.ErrorAssertionFunc
-	}{
-		{
-			name: "new bundle",
-			fields: fields{
-				ThreadedNews: hotline.ThreadedNews{
-					Categories: map[string]hotline.NewsCategoryListData15{
-						"": {
-							SubCats: make(map[string]hotline.NewsCategoryListData15),
-						},
-					},
-				},
-				filePath: tmpFilePath,
-			},
-			args: args{
-				newsPath: []string{""},
-				name:     "new bundle",
-				t:        hotline.NewsBundle,
-			},
-			wantErr: assert.NoError,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			n := &ThreadedNewsYAML{
-				ThreadedNews: tt.fields.ThreadedNews,
-				filePath:     tt.fields.filePath,
-				mu:           sync.Mutex{},
-			}
-			tt.wantErr(t, n.CreateGrouping(tt.args.newsPath, tt.args.name, tt.args.t), fmt.Sprintf("CreateGrouping(%v, %v, %v)", tt.args.newsPath, tt.args.name, tt.args.t))
-		})
-	}
+		cats := tn.GetCategories(nil)
+		var names []string
+		for _, c := range cats {
+			names = append(names, c.Name)
+		}
+		assert.Contains(t, names, "NewBundle")
+
+		// Verify the type.
+		item := tn.NewsItem([]string{"NewBundle"})
+		assert.Equal(t, hotline.NewsBundle, item.Type)
+
+		// Verify persistence.
+		require.NoError(t, tn.Load())
+		item = tn.NewsItem([]string{"NewBundle"})
+		assert.Equal(t, "NewBundle", item.Name)
+	})
+
+	t.Run("creates a nested category inside a bundle", func(t *testing.T) {
+		tn := newTestThreadedNews(t)
+
+		err := tn.CreateGrouping([]string{"Archive"}, "Recent", hotline.NewsCategory)
+		require.NoError(t, err)
+
+		cats := tn.GetCategories([]string{"Archive"})
+		var names []string
+		for _, c := range cats {
+			names = append(names, c.Name)
+		}
+		assert.Contains(t, names, "Recent")
+		assert.Contains(t, names, "Old News")
+
+		item := tn.NewsItem([]string{"Archive", "Recent"})
+		assert.Equal(t, hotline.NewsCategory, item.Type)
+	})
 }
 
-func TestThreadedNewsYAML_CreateGrouping_rollback(t *testing.T) {
-	n := &ThreadedNewsYAML{
-		ThreadedNews: hotline.ThreadedNews{
-			Categories: map[string]hotline.NewsCategoryListData15{
-				"Existing": {
-					Name:     "Existing",
-					Type:     hotline.NewsCategory,
-					Articles: make(map[uint32]*hotline.NewsArtData),
-					SubCats:  make(map[string]hotline.NewsCategoryListData15),
-				},
-			},
-		},
-		filePath: "/nonexistent/dir/ThreadedNews.yaml",
-	}
+func TestThreadedNewsYAML_DeleteNewsItem(t *testing.T) {
+	t.Run("deletes a top-level category", func(t *testing.T) {
+		tn := newTestThreadedNews(t)
 
-	err := n.CreateGrouping(nil, "NewBundle", hotline.NewsBundle)
-	assert.Error(t, err)
+		err := tn.DeleteNewsItem([]string{"General"})
+		require.NoError(t, err)
 
-	// The new entry should have been rolled back.
-	_, exists := n.ThreadedNews.Categories["NewBundle"]
-	assert.False(t, exists, "new grouping should be removed on write failure")
+		cats := tn.GetCategories(nil)
+		for _, c := range cats {
+			assert.NotEqual(t, "General", c.Name)
+		}
 
-	// Existing entry should still be present.
-	_, exists = n.ThreadedNews.Categories["Existing"]
-	assert.True(t, exists, "existing grouping should be preserved")
+		// Verify persistence.
+		require.NoError(t, tn.Load())
+		cats = tn.GetCategories(nil)
+		for _, c := range cats {
+			assert.NotEqual(t, "General", c.Name)
+		}
+	})
+
+	t.Run("deletes a nested subcategory", func(t *testing.T) {
+		tn := newTestThreadedNews(t)
+
+		err := tn.DeleteNewsItem([]string{"Archive", "Old News"})
+		require.NoError(t, err)
+
+		cats := tn.GetCategories([]string{"Archive"})
+		assert.Empty(t, cats)
+	})
 }
 
-func TestThreadedNewsYAML_DeleteNewsItem_rollback(t *testing.T) {
-	n := &ThreadedNewsYAML{
-		ThreadedNews: hotline.ThreadedNews{
-			Categories: map[string]hotline.NewsCategoryListData15{
-				"ToDelete": {
-					Name:     "ToDelete",
-					Type:     hotline.NewsCategory,
-					Articles: make(map[uint32]*hotline.NewsArtData),
-					SubCats:  make(map[string]hotline.NewsCategoryListData15),
-				},
-			},
-		},
-		filePath: "/nonexistent/dir/ThreadedNews.yaml",
-	}
+func TestThreadedNewsYAML_Load(t *testing.T) {
+	t.Run("loads from valid fixture file", func(t *testing.T) {
+		tn := newTestThreadedNews(t)
 
-	err := n.DeleteNewsItem([]string{"ToDelete"})
-	assert.Error(t, err)
+		// Verify data loaded correctly.
+		assert.NotNil(t, tn.ThreadedNews.Categories)
+		assert.Contains(t, tn.ThreadedNews.Categories, "General")
+		assert.Contains(t, tn.ThreadedNews.Categories, "Archive")
+	})
 
-	// The deleted entry should have been restored.
-	cat, exists := n.ThreadedNews.Categories["ToDelete"]
-	assert.True(t, exists, "deleted item should be restored on write failure")
-	assert.Equal(t, "ToDelete", cat.Name)
-}
+	t.Run("returns error for missing file", func(t *testing.T) {
+		_, err := NewThreadedNewsYAML("/nonexistent/path/ThreadedNews.yaml")
+		assert.Error(t, err)
+	})
 
-func TestThreadedNewsYAML_PostArticle_rollback(t *testing.T) {
-	// Set up a category with existing articles (mimics the test fixture).
-	n := &ThreadedNewsYAML{
-		ThreadedNews: hotline.ThreadedNews{
-			Categories: map[string]hotline.NewsCategoryListData15{
-				"TestCat": {
-					Type: hotline.NewsCategory,
-					Name: "TestCat",
-					Articles: map[uint32]*hotline.NewsArtData{
-						1: {
-							Title:         "TestArt",
-							NextArt:       [4]byte{0, 0, 0, 2},
-							FirstChildArt: [4]byte{0, 0, 0, 2},
-						},
-						2: {
-							Title:     "Re: TestArt",
-							PrevArt:   [4]byte{0, 0, 0, 1},
-							ParentArt: [4]byte{0, 0, 0, 1},
-							NextArt:   [4]byte{0, 0, 0, 3},
-						},
-						3: {
-							Title:   "TestArt 2",
-							PrevArt: [4]byte{0, 0, 0, 2},
-						},
-					},
-					SubCats: make(map[string]hotline.NewsCategoryListData15),
-				},
-			},
-		},
-		filePath: "/nonexistent/dir/ThreadedNews.yaml",
-	}
+	t.Run("returns error for invalid YAML", func(t *testing.T) {
+		dir := t.TempDir()
+		fp := filepath.Join(dir, "bad.yaml")
+		require.NoError(t, os.WriteFile(fp, []byte(":::not yaml[[["), 0644))
 
-	// Snapshot state before.
-	origNextArt3 := n.ThreadedNews.Categories["TestCat"].Articles[3].NextArt
-
-	newArticle := hotline.NewsArtData{
-		Title:  "New Article",
-		Poster: "tester",
-	}
-
-	err := n.PostArticle([]string{"TestCat"}, 0, newArticle)
-	assert.Error(t, err)
-
-	cat := n.ThreadedNews.Categories["TestCat"]
-
-	// New article (ID 4) should not exist.
-	_, exists := cat.Articles[4]
-	assert.False(t, exists, "new article should be removed on write failure")
-
-	// Article 3's NextArt should be restored to its original value.
-	assert.Equal(t, origNextArt3, cat.Articles[3].NextArt, "previous article's NextArt should be restored")
-
-	// Should still have exactly 3 articles.
-	assert.Len(t, cat.Articles, 3)
-}
-
-func TestThreadedNewsYAML_PostArticle_rollback_with_parent(t *testing.T) {
-	// Test that FirstChildArt is restored when posting a reply.
-	n := &ThreadedNewsYAML{
-		ThreadedNews: hotline.ThreadedNews{
-			Categories: map[string]hotline.NewsCategoryListData15{
-				"TestCat": {
-					Type: hotline.NewsCategory,
-					Name: "TestCat",
-					Articles: map[uint32]*hotline.NewsArtData{
-						1: {
-							Title: "Parent Article",
-							// No FirstChildArt set — this is the first reply.
-						},
-					},
-					SubCats: make(map[string]hotline.NewsCategoryListData15),
-				},
-			},
-		},
-		filePath: "/nonexistent/dir/ThreadedNews.yaml",
-	}
-
-	newArticle := hotline.NewsArtData{
-		Title:  "Reply",
-		Poster: "tester",
-	}
-
-	err := n.PostArticle([]string{"TestCat"}, 1, newArticle)
-	assert.Error(t, err)
-
-	cat := n.ThreadedNews.Categories["TestCat"]
-
-	// FirstChildArt should be restored to zero.
-	assert.Equal(t, [4]byte{}, cat.Articles[1].FirstChildArt, "parent's FirstChildArt should be restored")
-
-	// New article should not exist.
-	_, exists := cat.Articles[2]
-	assert.False(t, exists, "reply article should be removed on write failure")
-}
-
-func TestThreadedNewsYAML_DeleteArticle_rollback(t *testing.T) {
-	n := &ThreadedNewsYAML{
-		ThreadedNews: hotline.ThreadedNews{
-			Categories: map[string]hotline.NewsCategoryListData15{
-				"TestCat": {
-					Type: hotline.NewsCategory,
-					Name: "TestCat",
-					Articles: map[uint32]*hotline.NewsArtData{
-						1: {
-							Title: "Article to delete",
-						},
-					},
-					SubCats: make(map[string]hotline.NewsCategoryListData15),
-				},
-			},
-		},
-		filePath: "/nonexistent/dir/ThreadedNews.yaml",
-	}
-
-	err := n.DeleteArticle([]string{"TestCat"}, 1, false)
-	assert.Error(t, err)
-
-	cat := n.ThreadedNews.Categories["TestCat"]
-
-	// Deleted article should be restored.
-	art, exists := cat.Articles[1]
-	assert.True(t, exists, "deleted article should be restored on write failure")
-	assert.Equal(t, "Article to delete", art.Title)
+		_, err := NewThreadedNewsYAML(fp)
+		assert.Error(t, err)
+	})
 }

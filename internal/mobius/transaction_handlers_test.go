@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -41,6 +42,12 @@ func (m *mockReadWriteSeeker) Seek(offset int64, whence int) (int64, error) {
 
 	return args.Get(0).(int64), args.Error(1)
 }
+
+type nopReadWriteCloser struct{}
+
+func (nopReadWriteCloser) Read([]byte) (int, error)  { return 0, io.EOF }
+func (nopReadWriteCloser) Write(p []byte) (int, error) { return len(p), nil }
+func (nopReadWriteCloser) Close() error                { return nil }
 
 func NewTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -1575,6 +1582,117 @@ func TestHandleDeleteUser(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "when user is currently connected",
+			args: args{
+				cc: &hotline.ClientConn{
+					Logger: NewTestLogger(),
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessDeleteUser)
+							return bits
+						}(),
+					},
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						Logger:      NewTestLogger(),
+						AccountManager: func() *MockAccountManager {
+							m := MockAccountManager{}
+							m.On("Delete", "testuser").Return(nil)
+							return &m
+						}(),
+						ClientMgr: func() *hotline.MockClientMgr {
+							m := hotline.MockClientMgr{}
+							m.On("List").Return([]*hotline.ClientConn{
+								{
+									ID: [2]byte{0, 2},
+									Account: &hotline.Account{
+										Login: "testuser",
+									},
+									Connection: nopReadWriteCloser{},
+									Server: &hotline.Server{
+										ClientMgr: hotline.NewMemClientMgr(),
+										Logger:    NewTestLogger(),
+									},
+								},
+							})
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranDeleteUser, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldUserLogin, hotline.EncodeString([]byte("testuser"))),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID: [2]byte{0, 2},
+					Type:     hotline.TranServerMsg,
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldData, []byte(ErrMsgAccountDeleted)),
+						hotline.NewField(hotline.FieldChatOptions, []byte{2}),
+					},
+				},
+				{
+					Flags:   0x00,
+					IsReply: 0x01,
+					Type:    [2]byte{0, 0},
+					Fields:  []hotline.Field(nil),
+				},
+			},
+		},
+		{
+			name: "when no matching connected clients",
+			args: args{
+				cc: &hotline.ClientConn{
+					Logger: NewTestLogger(),
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessDeleteUser)
+							return bits
+						}(),
+					},
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						Logger:      NewTestLogger(),
+						AccountManager: func() *MockAccountManager {
+							m := MockAccountManager{}
+							m.On("Delete", "testuser").Return(nil)
+							return &m
+						}(),
+						ClientMgr: func() *hotline.MockClientMgr {
+							m := hotline.MockClientMgr{}
+							m.On("List").Return([]*hotline.ClientConn{
+								{
+									ID: [2]byte{0, 3},
+									Account: &hotline.Account{
+										Login: "otheruser",
+									},
+								},
+							})
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranDeleteUser, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldUserLogin, hotline.EncodeString([]byte("testuser"))),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					Flags:   0x00,
+					IsReply: 0x01,
+					Type:    [2]byte{0, 0},
+					Fields:  []hotline.Field(nil),
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1785,6 +1903,90 @@ func TestHandleNewUser(t *testing.T) {
 					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []hotline.Field{
 						hotline.NewField(hotline.FieldError, []byte("Cannot create account with more access than yourself.")),
+					},
+				},
+			},
+		},
+		{
+			name: "when account is created successfully",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							for i := 0; i < 64; i++ {
+								bits.Set(i)
+							}
+							return bits
+						}(),
+					},
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						AccountManager: func() *MockAccountManager {
+							m := MockAccountManager{}
+							m.On("Get", "userB").Return((*hotline.Account)(nil))
+							m.On("Create", mock.Anything).Return(nil)
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranNewUser, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldUserLogin, hotline.EncodeString([]byte("userB"))),
+					hotline.NewField(hotline.FieldUserName, []byte("User B")),
+					hotline.NewField(hotline.FieldUserPassword, []byte("pass")),
+					hotline.NewField(
+						hotline.FieldUserAccess,
+						func() []byte {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessCreateUser)
+							return bits[:]
+						}(),
+					),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					IsReply: 0x01,
+				},
+			},
+		},
+		{
+			name: "when account already exists",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessCreateUser)
+							return bits
+						}(),
+					},
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						AccountManager: func() *MockAccountManager {
+							m := MockAccountManager{}
+							m.On("Get", "userB").Return(&hotline.Account{Login: "userB"})
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranNewUser, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldUserLogin, hotline.EncodeString([]byte("userB"))),
+					hotline.NewField(hotline.FieldUserName, []byte("User B")),
+					hotline.NewField(hotline.FieldUserPassword, []byte("pass")),
+					hotline.NewField(hotline.FieldUserAccess, make([]byte, 8)),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte(fmt.Sprintf(ErrMsgAccountExistsTemplate, "userB"))),
 					},
 				},
 			},
@@ -2208,6 +2410,391 @@ func TestHandleUpdateUser(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "when action is delete user with permission",
+			args: args{
+				cc: &hotline.ClientConn{
+					Logger: NewTestLogger(),
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						Logger:      NewTestLogger(),
+						AccountManager: func() *MockAccountManager {
+							m := MockAccountManager{}
+							m.On("Delete", "testuser").Return(nil)
+							return &m
+						}(),
+						ClientMgr: func() *hotline.MockClientMgr {
+							m := hotline.MockClientMgr{}
+							m.On("List").Return([]*hotline.ClientConn{
+								{
+									Account: &hotline.Account{
+										Login: "testuser",
+									},
+									Connection: nopReadWriteCloser{},
+									Server: &hotline.Server{
+										ClientMgr: hotline.NewMemClientMgr(),
+										Logger:    NewTestLogger(),
+									},
+								},
+							})
+							return &m
+						}(),
+					},
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessDeleteUser)
+							return bits
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranUpdateUser,
+					[2]byte{0, 0},
+					hotline.NewField(hotline.FieldData, []byte{
+						0x00, 0x01, // 1 subfield (delete)
+						0x00, 0x65, // FieldData = 101
+						0x00, 0x08, // length
+						0x8b, 0x9a, 0x8c, 0x8b, 0x8a, 0x8c, 0x9a, 0x8d, // obfuscated "testuser"
+					}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					Type: hotline.TranServerMsg,
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldData, []byte(ErrMsgAccountDeleted)),
+						hotline.NewField(hotline.FieldChatOptions, []byte{0}),
+					},
+				},
+				{
+					IsReply: 0x01,
+				},
+			},
+		},
+		{
+			name: "when action is delete user and Delete returns error",
+			args: args{
+				cc: &hotline.ClientConn{
+					Logger: NewTestLogger(),
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						Logger:      NewTestLogger(),
+						AccountManager: func() *MockAccountManager {
+							m := MockAccountManager{}
+							m.On("Delete", "testuser").Return(errors.New("disk error"))
+							return &m
+						}(),
+					},
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessDeleteUser)
+							return bits
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranUpdateUser,
+					[2]byte{0, 0},
+					hotline.NewField(hotline.FieldData, []byte{
+						0x00, 0x01,
+						0x00, 0x65,
+						0x00, 0x08,
+						0x8b, 0x9a, 0x8c, 0x8b, 0x8a, 0x8c, 0x9a, 0x8d,
+					}),
+				),
+			},
+			wantRes: nil,
+		},
+		{
+			name: "when action is modify existing user with password",
+			args: args{
+				cc: &hotline.ClientConn{
+					Logger: NewTestLogger(),
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						Logger:      NewTestLogger(),
+						AccountManager: func() *MockAccountManager {
+							m := MockAccountManager{}
+							m.On("Get", "bbb").Return(&hotline.Account{
+								Login: "bbb",
+								Name:  "old name",
+							})
+							m.On("Update", mock.Anything, "bbb").Return(nil)
+							return &m
+						}(),
+					},
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessModifyUser)
+							return bits
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranUpdateUser,
+					[2]byte{0, 0},
+					hotline.NewField(hotline.FieldData, []byte{
+						0x00, 0x04, // field count
+
+						0x00, 0x69, // FieldUserLogin = 105
+						0x00, 0x03,
+						0x9d, 0x9d, 0x9d,
+
+						0x00, 0x6a, // FieldUserPassword = 106
+						0x00, 0x03,
+						0x9c, 0x9c, 0x9c,
+
+						0x00, 0x66, // FieldUserName = 102
+						0x00, 0x03,
+						0x61, 0x61, 0x61,
+
+						0x00, 0x6e, // FieldUserAccess = 110
+						0x00, 0x08,
+						0x60, 0x70, 0x0c, 0x20, 0x03, 0x80, 0x00, 0x00,
+					}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					IsReply: 0x01,
+				},
+			},
+		},
+		{
+			name: "when action is modify existing user with password cleared",
+			args: args{
+				cc: &hotline.ClientConn{
+					Logger: NewTestLogger(),
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						Logger:      NewTestLogger(),
+						AccountManager: func() *MockAccountManager {
+							m := MockAccountManager{}
+							m.On("Get", "bbb").Return(&hotline.Account{
+								Login: "bbb",
+								Name:  "old name",
+							})
+							m.On("Update", mock.Anything, "bbb").Return(nil)
+							return &m
+						}(),
+					},
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessModifyUser)
+							return bits
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranUpdateUser,
+					[2]byte{0, 0},
+					hotline.NewField(hotline.FieldData, []byte{
+						0x00, 0x03, // field count (3 subfields, no password)
+
+						0x00, 0x69, // FieldUserLogin = 105
+						0x00, 0x03,
+						0x9d, 0x9d, 0x9d,
+
+						0x00, 0x66, // FieldUserName = 102
+						0x00, 0x03,
+						0x61, 0x61, 0x61,
+
+						0x00, 0x6e, // FieldUserAccess = 110
+						0x00, 0x08,
+						0x60, 0x70, 0x0c, 0x20, 0x03, 0x80, 0x00, 0x00,
+					}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					IsReply: 0x01,
+				},
+			},
+		},
+		{
+			name: "when action is create user with valid permissions",
+			args: args{
+				cc: &hotline.ClientConn{
+					Logger: NewTestLogger(),
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						Logger:      NewTestLogger(),
+						AccountManager: func() *MockAccountManager {
+							m := MockAccountManager{}
+							m.On("Get", "bbb").Return((*hotline.Account)(nil))
+							m.On("Create", mock.Anything).Return(nil)
+							return &m
+						}(),
+					},
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessCreateUser)
+							// Set all bits that the new account will have
+							for i := 0; i < 64; i++ {
+								bits.Set(i)
+							}
+							return bits
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranUpdateUser,
+					[2]byte{0, 0},
+					hotline.NewField(hotline.FieldData, []byte{
+						0x00, 0x04, // field count
+
+						0x00, 0x69, // FieldUserLogin = 105
+						0x00, 0x03,
+						0x9d, 0x9d, 0x9d,
+
+						0x00, 0x6a, // FieldUserPassword = 106
+						0x00, 0x03,
+						0x9c, 0x9c, 0x9c,
+
+						0x00, 0x66, // FieldUserName = 102
+						0x00, 0x03,
+						0x61, 0x61, 0x61,
+
+						0x00, 0x6e, // FieldUserAccess = 110
+						0x00, 0x08,
+						0x60, 0x70, 0x0c, 0x20, 0x03, 0x80, 0x00, 0x00,
+					}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					IsReply: 0x01,
+				},
+			},
+		},
+		{
+			name: "when action is create user with escalated privileges",
+			args: args{
+				cc: &hotline.ClientConn{
+					Logger: NewTestLogger(),
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						Logger:      NewTestLogger(),
+						AccountManager: func() *MockAccountManager {
+							m := MockAccountManager{}
+							m.On("Get", "bbb").Return((*hotline.Account)(nil))
+							return &m
+						}(),
+					},
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessCreateUser)
+							return bits
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranUpdateUser,
+					[2]byte{0, 0},
+					hotline.NewField(hotline.FieldData, []byte{
+						0x00, 0x04, // field count
+
+						0x00, 0x69, // FieldUserLogin = 105
+						0x00, 0x03,
+						0x9d, 0x9d, 0x9d,
+
+						0x00, 0x6a, // FieldUserPassword = 106
+						0x00, 0x03,
+						0x9c, 0x9c, 0x9c,
+
+						0x00, 0x66, // FieldUserName = 102
+						0x00, 0x03,
+						0x61, 0x61, 0x61,
+
+						0x00, 0x6e, // FieldUserAccess = 110
+						0x00, 0x08,
+						0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, // AccessDisconUser set (bit 22)
+					}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte("Cannot create account with more access than yourself.")),
+					},
+				},
+			},
+		},
+		{
+			name: "when action is create user and Create returns error",
+			args: args{
+				cc: &hotline.ClientConn{
+					Logger: NewTestLogger(),
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						Logger:      NewTestLogger(),
+						AccountManager: func() *MockAccountManager {
+							m := MockAccountManager{}
+							m.On("Get", "bbb").Return((*hotline.Account)(nil))
+							m.On("Create", mock.Anything).Return(errors.New("account exists"))
+							return &m
+						}(),
+					},
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							// Set all bits so privilege check passes
+							for i := 0; i < 64; i++ {
+								bits.Set(i)
+							}
+							return bits
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranUpdateUser,
+					[2]byte{0, 0},
+					hotline.NewField(hotline.FieldData, []byte{
+						0x00, 0x04, // field count
+
+						0x00, 0x69, // FieldUserLogin = 105
+						0x00, 0x03,
+						0x9d, 0x9d, 0x9d,
+
+						0x00, 0x6a, // FieldUserPassword = 106
+						0x00, 0x03,
+						0x9c, 0x9c, 0x9c,
+
+						0x00, 0x66, // FieldUserName = 102
+						0x00, 0x03,
+						0x61, 0x61, 0x61,
+
+						0x00, 0x6e, // FieldUserAccess = 110
+						0x00, 0x08,
+						0x60, 0x70, 0x0c, 0x20, 0x03, 0x80, 0x00, 0x00,
+					}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte(ErrMsgAccountExists)),
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2389,6 +2976,134 @@ func TestHandleDisconnectUser(t *testing.T) {
 					Fields: []hotline.Field{
 						hotline.NewField(hotline.FieldError, []byte("unnamed is not allowed to be disconnected.")),
 					},
+				},
+			},
+		},
+		{
+			name: "with temporary ban option",
+			args: args{
+				cc: &hotline.ClientConn{
+					Logger: NewTestLogger(),
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						ClientMgr: func() *hotline.MockClientMgr {
+							m := hotline.MockClientMgr{}
+							m.On("Get", hotline.ClientID{0x0, 0x1}).Return(&hotline.ClientConn{
+								ID:         hotline.ClientID{0x0, 0x1},
+								UserName:   []byte("baduser"),
+								RemoteAddr: "10.0.0.1:12345",
+								Connection: nopReadWriteCloser{},
+								Account: &hotline.Account{
+									Login: "baduser",
+									Access: func() hotline.AccessBitmap {
+										var bits hotline.AccessBitmap
+										return bits
+									}(),
+								},
+								Server: &hotline.Server{
+									ClientMgr: hotline.NewMemClientMgr(),
+									Logger:    NewTestLogger(),
+								},
+							})
+							return &m
+						}(),
+						BanList: func() *hotline.MockBanMgr {
+							m := hotline.MockBanMgr{}
+							m.On("Add", "10.0.0.1", mock.AnythingOfType("*time.Time")).Return(nil)
+							return &m
+						}(),
+					},
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessDisconUser)
+							return bits
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranDisconnectUser,
+					[2]byte{0, 0},
+					hotline.NewField(hotline.FieldUserID, []byte{0, 1}),
+					hotline.NewField(hotline.FieldOptions, []byte{0, 1}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID: [2]byte{0, 1},
+					Type:     hotline.TranServerMsg,
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldData, []byte(ErrMsgTemporaryBan)),
+						hotline.NewField(hotline.FieldChatOptions, []byte{0, 0}),
+					},
+				},
+				{
+					IsReply: 0x01,
+				},
+			},
+		},
+		{
+			name: "with permanent ban option",
+			args: args{
+				cc: &hotline.ClientConn{
+					Logger: NewTestLogger(),
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						ClientMgr: func() *hotline.MockClientMgr {
+							m := hotline.MockClientMgr{}
+							m.On("Get", hotline.ClientID{0x0, 0x1}).Return(&hotline.ClientConn{
+								ID:         hotline.ClientID{0x0, 0x1},
+								UserName:   []byte("baduser"),
+								RemoteAddr: "10.0.0.2:12345",
+								Connection: nopReadWriteCloser{},
+								Account: &hotline.Account{
+									Login: "baduser",
+									Access: func() hotline.AccessBitmap {
+										var bits hotline.AccessBitmap
+										return bits
+									}(),
+								},
+								Server: &hotline.Server{
+									ClientMgr: hotline.NewMemClientMgr(),
+									Logger:    NewTestLogger(),
+								},
+							})
+							return &m
+						}(),
+						BanList: func() *hotline.MockBanMgr {
+							m := hotline.MockBanMgr{}
+							m.On("Add", "10.0.0.2", (*time.Time)(nil)).Return(nil)
+							return &m
+						}(),
+					},
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessDisconUser)
+							return bits
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranDisconnectUser,
+					[2]byte{0, 0},
+					hotline.NewField(hotline.FieldUserID, []byte{0, 1}),
+					hotline.NewField(hotline.FieldOptions, []byte{0, 2}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID: [2]byte{0, 1},
+					Type:     hotline.TranServerMsg,
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldData, []byte(ErrMsgPermanentBan)),
+						hotline.NewField(hotline.FieldChatOptions, []byte{0, 0}),
+					},
+				},
+				{
+					IsReply: 0x01,
 				},
 			},
 		},
@@ -3939,56 +4654,53 @@ func TestHandleGetNewsArtNameList(t *testing.T) {
 				},
 			},
 		},
-		//{
-		//	name: "when user has required access",
-		//	args: args{
-		//		cc: &hotline.ClientConn{
-		//			Account: &hotline.Account{
-		//				Access: func() hotline.AccessBitmap {
-		//					var bits hotline.AccessBitmap
-		//					bits.Set(hotline.AccessNewsReadArt)
-		//					return bits
-		//				}(),
-		//			},
-		//			Server: &hotline.Server{
-		//				TextDecoder: charmap.Macintosh.NewDecoder(),
-		//				TextEncoder: charmap.Macintosh.NewEncoder(),
-		//				ThreadedNewsMgr: func() *mockThreadNewsMgr {
-		//					m := mockThreadNewsMgr{}
-		//					m.On("ListArticles", []string{"Example Category"}).Return(NewsArtListData{
-		//						Name:        []byte("testTitle"),
-		//						NewsArtList: []byte{},
-		//					})
-		//					return &m
-		//				}(),
-		//			},
-		//		},
-		//		t: NewTransaction(
-		//			TranGetNewsArtNameList,
-		//			[2]byte{0, 1},
-		//			//  00000000  00 01 00 00 10 45 78 61  6d 70 6c 65 20 43 61 74  |.....Example Cat|
-		//			//  00000010  65 67 6f 72 79                                    |egory|
-		//			NewField(hotline.FieldNewsPath, []byte{
-		//				0x00, 0x01, 0x00, 0x00, 0x10, 0x45, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x20, 0x43, 0x61, 0x74, 0x65, 0x67, 0x6f, 0x72, 0x79,
-		//			}),
-		//		),
-		//	},
-		//	wantRes: []hotline.Transaction{
-		//		{
-		//			IsReply: 0x01,
-		//			Fields: []hotline.Field{
-		//				NewField(hotline.FieldNewsArtListData, []byte{
-		//					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
-		//					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-		//					0x09, 0x74, 0x65, 0x73, 0x74, 0x54, 0x69, 0x74, 0x6c, 0x65, 0x0a, 0x74, 0x65, 0x73, 0x74, 0x50,
-		//					0x6f, 0x73, 0x74, 0x65, 0x72, 0x0a, 0x74, 0x65, 0x78, 0x74, 0x2f, 0x70, 0x6c, 0x61, 0x69, 0x6e,
-		//					0x00, 0x08,
-		//				},
-		//				),
-		//			},
-		//		},
-		//	},
-		//},
+		{
+			name: "when user has required access",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessNewsReadArt)
+							return bits
+						}(),
+					},
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
+							m := hotline.MockThreadNewsMgr{}
+							m.On("ListArticles", []string{"Example Category"}).Return(hotline.NewsArtListData{
+								Name:        []byte{},
+								Description: []byte{},
+								NewsArtList: []byte{},
+							}, nil)
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranGetNewsArtNameList,
+					[2]byte{0, 1},
+					hotline.NewField(hotline.FieldNewsPath, []byte{
+						0x00, 0x01, 0x00, 0x00, 0x10, 0x45, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x20, 0x43, 0x61, 0x74, 0x65, 0x67, 0x6f, 0x72, 0x79,
+					}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					IsReply: 0x01,
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldNewsArtListData, []byte{
+							0x00, 0x00, 0x00, 0x00,
+							0x00, 0x00, 0x00, 0x00,
+							0x00,
+							0x00,
+						}),
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -4143,24 +4855,32 @@ func TestHandleNewNewsFldr(t *testing.T) {
 }
 
 func TestHandleDownloadBanner(t *testing.T) {
-	type args struct {
-		cc *hotline.ClientConn
-		t  hotline.Transaction
-	}
-	tests := []struct {
-		name    string
-		args    args
-		wantRes []hotline.Transaction
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotRes := HandleDownloadBanner(tt.args.cc, &tt.args.t)
+	t.Run("returns banner transfer info", func(t *testing.T) {
+		cc := &hotline.ClientConn{
+			ClientFileTransferMgr: hotline.NewClientFileTransferMgr(),
+			Server: &hotline.Server{
+				Banner:          []byte("test-banner-data"),
+				FileTransferMgr: hotline.NewMemFileTransferMgr(),
+			},
+		}
+		tran := hotline.NewTransaction(hotline.TranDownloadBanner, [2]byte{0, 1})
 
-			assert.Equalf(t, tt.wantRes, gotRes, "HandleDownloadBanner(%v, %v)", tt.args.cc, &tt.args.t)
-		})
-	}
+		gotRes := HandleDownloadBanner(cc, &tran)
+
+		assert.Len(t, gotRes, 1)
+		assert.Equal(t, byte(0x01), gotRes[0].IsReply)
+
+		// Verify transfer size field matches banner length
+		transferSizeField := gotRes[0].GetField(hotline.FieldTransferSize)
+		assert.NotNil(t, transferSizeField)
+		gotSize := binary.BigEndian.Uint32(transferSizeField.Data)
+		assert.Equal(t, uint32(len("test-banner-data")), gotSize)
+
+		// Verify refnum field is present
+		refNumField := gotRes[0].GetField(hotline.FieldRefNum)
+		assert.NotNil(t, refNumField)
+		assert.Len(t, refNumField.Data, 4)
+	})
 }
 
 func TestHandlePostNewsArt(t *testing.T) {
@@ -4317,6 +5037,79 @@ func TestHandleUploadFolder(t *testing.T) {
 					ErrorCode: [4]byte{0, 0, 0, 1},
 					Fields: []hotline.Field{
 						hotline.NewField(hotline.FieldError, []byte("You are not allowed to upload folders.")),
+					},
+				},
+			},
+		},
+		{
+			name: "when user has upload access but not upload anywhere and path is not upload dir",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessUploadFolder)
+							return bits
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranUploadFldr, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldFileName, []byte("myFolder")),
+					hotline.NewField(hotline.FieldFilePath, []byte{
+						0x00, 0x01,
+						0x00, 0x00,
+						0x05,
+						0x46, 0x69, 0x6c, 0x65, 0x73, // "Files"
+					}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte("Cannot accept upload of the folder \"myFolder\" because you are only allowed to upload to the \"Uploads\" folder.")),
+					},
+				},
+			},
+		},
+		{
+			name: "when user has upload access and upload anywhere permission",
+			args: args{
+				cc: &hotline.ClientConn{
+					ClientFileTransferMgr: hotline.NewClientFileTransferMgr(),
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessUploadFolder)
+							bits.Set(hotline.AccessUploadAnywhere)
+							return bits
+						}(),
+					},
+					Server: &hotline.Server{
+						FileTransferMgr: hotline.NewMemFileTransferMgr(),
+						Config:          hotline.Config{FileRoot: "/fakeRoot"},
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranUploadFldr, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldFileName, []byte("myFolder")),
+					hotline.NewField(hotline.FieldFilePath, []byte{
+						0x00, 0x01,
+						0x00, 0x00,
+						0x05,
+						0x46, 0x69, 0x6c, 0x65, 0x73, // "Files"
+					}),
+					hotline.NewField(hotline.FieldTransferSize, []byte{0, 0, 0x10, 0}),
+					hotline.NewField(hotline.FieldFolderItemCount, []byte{0, 0, 0, 5}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					IsReply: 0x01,
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldRefNum, []byte{0, 0, 0, 0}), // placeholder, TranAssertEqual strips this
 					},
 				},
 			},
@@ -4989,6 +5782,53 @@ func TestHandleSetUser(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "when update is successful with password change",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessModifyUser)
+							return bits
+						}(),
+					},
+					Logger: NewTestLogger(),
+					ID:     [2]byte{0, 1},
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						AccountManager: func() *MockAccountManager {
+							m := MockAccountManager{}
+							m.On("Get", "testuser").Return(&hotline.Account{
+								Login: "testuser",
+								Name:  "Old Name",
+							})
+							m.On("Update", mock.Anything, "testuser").Return(nil)
+							return &m
+						}(),
+						ClientMgr: func() *hotline.MockClientMgr {
+							m := hotline.MockClientMgr{}
+							m.On("List").Return([]*hotline.ClientConn{})
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranSetUser, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldUserLogin, hotline.EncodeString([]byte("testuser"))),
+					hotline.NewField(hotline.FieldUserName, []byte("New Name")),
+					hotline.NewField(hotline.FieldUserPassword, []byte("newpass")),
+					hotline.NewField(hotline.FieldUserAccess, make([]byte, 8)),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID: [2]byte{0, 1},
+					IsReply:  0x01,
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -5136,4 +5976,552 @@ func TestHandleNewNewsCat(t *testing.T) {
 			TranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
+}
+
+func TestHandleKeepAlive(t *testing.T) {
+	cc := &hotline.ClientConn{
+		ID: [2]byte{0, 1},
+	}
+	tran := &hotline.Transaction{
+		ID: [4]byte{0, 0, 0, 1},
+	}
+
+	got := HandleKeepAlive(cc, tran)
+
+	assert.Len(t, got, 1)
+	assert.Equal(t, byte(1), got[0].IsReply)
+	assert.Equal(t, tran.ID, got[0].ID)
+}
+
+func TestHandleUserBroadcast(t *testing.T) {
+	type args struct {
+		cc *hotline.ClientConn
+		t  hotline.Transaction
+	}
+	tests := []struct {
+		name string
+		args args
+		want []hotline.Transaction
+	}{
+		{
+			name: "without broadcast access returns error",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{Access: hotline.AccessBitmap{}},
+					ID:      [2]byte{0, 1},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranUserBroadcast, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldData, []byte("hello")),
+				),
+			},
+			want: []hotline.Transaction{
+				{
+					ClientID:  [2]byte{0, 1},
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte(ErrMsgNotAllowedSendBroadcast)),
+					},
+				},
+			},
+		},
+		{
+			name: "with broadcast access sends broadcast and returns success",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessBroadcast)
+							return bits
+						}(),
+					},
+					ID: [2]byte{0, 1},
+					Server: &hotline.Server{
+						ClientMgr: func() *hotline.MockClientMgr {
+							m := hotline.MockClientMgr{}
+							m.On("List").Return([]*hotline.ClientConn{})
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranUserBroadcast, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldData, []byte("hello everyone")),
+				),
+			},
+			want: []hotline.Transaction{
+				{
+					ClientID: [2]byte{0, 1},
+					IsReply:  0x01,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := HandleUserBroadcast(tt.args.cc, &tt.args.t)
+			TranAssertEqual(t, tt.want, got)
+		})
+	}
+}
+
+func TestHandleGetNewsCatNameList(t *testing.T) {
+	type args struct {
+		cc *hotline.ClientConn
+		t  hotline.Transaction
+	}
+	tests := []struct {
+		name string
+		args args
+		want []hotline.Transaction
+	}{
+		{
+			name: "without news read access returns error",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{Access: hotline.AccessBitmap{}},
+					ID:      [2]byte{0, 1},
+				},
+				t: hotline.NewTransaction(hotline.TranGetNewsCatNameList, [2]byte{0, 1}),
+			},
+			want: []hotline.Transaction{
+				{
+					ClientID:  [2]byte{0, 1},
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte(ErrMsgNotAllowedReadNews)),
+					},
+				},
+			},
+		},
+		{
+			name: "with access returns news categories",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessNewsReadArt)
+							return bits
+						}(),
+					},
+					ID: [2]byte{0, 1},
+					Logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
+					Server: &hotline.Server{
+						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
+							m := hotline.MockThreadNewsMgr{}
+							m.On("GetCategories", []string{}).Return([]hotline.NewsCategoryListData15{
+								{
+									Type: hotline.NewsBundle,
+									Name: "Test Bundle",
+								},
+							})
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(hotline.TranGetNewsCatNameList, [2]byte{0, 1}),
+			},
+			want: []hotline.Transaction{
+				{
+					ClientID: [2]byte{0, 1},
+					IsReply:  0x01,
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldNewsCatListData15, []byte{
+							0x00, 0x02, // Type: bundle
+							0x00, 0x00, // Count: 0 articles+subcats
+							0x0b,                                                                             // Name length: 11
+							0x54, 0x65, 0x73, 0x74, 0x20, 0x42, 0x75, 0x6e, 0x64, 0x6c, 0x65, // "Test Bundle"
+						}),
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := HandleGetNewsCatNameList(tt.args.cc, &tt.args.t)
+			TranAssertEqual(t, tt.want, got)
+		})
+	}
+}
+
+func TestHandleMoveFile(t *testing.T) {
+	type args struct {
+		cc *hotline.ClientConn
+		t  hotline.Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []hotline.Transaction
+	}{
+		{
+			name: "when user does not have permission to move a file",
+			args: args{
+				cc: &hotline.ClientConn{
+					ID: [2]byte{0, 1},
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							return bits
+						}(),
+					},
+					Logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						Config: hotline.Config{
+							FileRoot: "/fakeRoot/Files",
+						},
+						FS: func() *hotline.MockFileStore {
+							mfi := &hotline.MockFileInfo{}
+							mfi.On("Mode").Return(fs.FileMode(0))
+							mfi.On("Size").Return(int64(100))
+							mfi.On("ModTime").Return(time.Parse(time.Layout, time.Layout))
+							mfi.On("IsDir").Return(false)
+							mfi.On("Name").Return("testfile")
+
+							mfs := &hotline.MockFileStore{}
+							// NewFile calls: Stat data, Stat info, Stat rsrc
+							mfs.On("Stat", "/fakeRoot/Files/aaa/testfile").Return(mfi, nil)
+							mfs.On("Stat", "/fakeRoot/Files/aaa/.info_testfile").Return(nil, errors.New("err"))
+							mfs.On("Stat", "/fakeRoot/Files/aaa/.rsrc_testfile").Return(nil, errors.New("err"))
+
+							return mfs
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranMoveFile, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldFileName, []byte("testfile")),
+					hotline.NewField(hotline.FieldFilePath, []byte{
+						0x00, 0x01,
+						0x00, 0x00,
+						0x03,
+						0x61, 0x61, 0x61,
+					}),
+					hotline.NewField(hotline.FieldFileNewPath, []byte{
+						0x00, 0x01,
+						0x00, 0x00,
+						0x03,
+						0x62, 0x62, 0x62,
+					}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID:  [2]byte{0, 1},
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte("You are not allowed to move files.")),
+					},
+				},
+			},
+		},
+		{
+			name: "when user does not have permission to move a folder",
+			args: args{
+				cc: &hotline.ClientConn{
+					ID: [2]byte{0, 1},
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							return bits
+						}(),
+					},
+					Logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						Config: hotline.Config{
+							FileRoot: "/fakeRoot/Files",
+						},
+						FS: func() *hotline.MockFileStore {
+							mfi := &hotline.MockFileInfo{}
+							mfi.On("Mode").Return(fs.ModeDir)
+							mfi.On("Size").Return(int64(0))
+							mfi.On("ModTime").Return(time.Parse(time.Layout, time.Layout))
+							mfi.On("IsDir").Return(true)
+							mfi.On("Name").Return("testfolder")
+
+							mfs := &hotline.MockFileStore{}
+							mfs.On("Stat", "/fakeRoot/Files/aaa/testfolder").Return(mfi, nil)
+							mfs.On("Stat", "/fakeRoot/Files/aaa/.info_testfolder").Return(nil, errors.New("err"))
+							mfs.On("Stat", "/fakeRoot/Files/aaa/.rsrc_testfolder").Return(nil, errors.New("err"))
+
+							return mfs
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranMoveFile, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldFileName, []byte("testfolder")),
+					hotline.NewField(hotline.FieldFilePath, []byte{
+						0x00, 0x01,
+						0x00, 0x00,
+						0x03,
+						0x61, 0x61, 0x61,
+					}),
+					hotline.NewField(hotline.FieldFileNewPath, []byte{
+						0x00, 0x01,
+						0x00, 0x00,
+						0x03,
+						0x62, 0x62, 0x62,
+					}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID:  [2]byte{0, 1},
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte("You are not allowed to move folders.")),
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes := HandleMoveFile(tt.args.cc, &tt.args.t)
+			TranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}
+
+func TestHandleSetFileInfo(t *testing.T) {
+	type args struct {
+		cc *hotline.ClientConn
+		t  hotline.Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantRes []hotline.Transaction
+	}{
+		{
+			name: "when user does not have permission to set file comment",
+			args: args{
+				cc: &hotline.ClientConn{
+					ID: [2]byte{0, 1},
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							return bits
+						}(),
+					},
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						Config: hotline.Config{
+							FileRoot: "/fakeRoot/Files",
+						},
+						FS: func() *hotline.MockFileStore {
+							mfi := &hotline.MockFileInfo{}
+							mfi.On("Mode").Return(fs.FileMode(0))
+							mfi.On("Size").Return(int64(100))
+							mfi.On("ModTime").Return(time.Parse(time.Layout, time.Layout))
+							mfi.On("IsDir").Return(false)
+							mfi.On("Name").Return("testfile")
+
+							mfs := &hotline.MockFileStore{}
+							mfs.On("Stat", "/fakeRoot/Files/testfile").Return(mfi, nil)
+							mfs.On("Stat", "/fakeRoot/Files/.info_testfile").Return(nil, errors.New("err"))
+							mfs.On("Stat", "/fakeRoot/Files/.rsrc_testfile").Return(nil, errors.New("err"))
+
+							return mfs
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranSetFileInfo, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldFileName, []byte("testfile")),
+					hotline.NewField(hotline.FieldFilePath, []byte{0x00, 0x00}),
+					hotline.NewField(hotline.FieldFileComment, []byte("a comment")),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID:  [2]byte{0, 1},
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte("You are not allowed to set comments for files.")),
+					},
+				},
+			},
+		},
+		{
+			name: "when user does not have permission to rename a file",
+			args: args{
+				cc: &hotline.ClientConn{
+					ID: [2]byte{0, 1},
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							return bits
+						}(),
+					},
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						Config: hotline.Config{
+							FileRoot: "/fakeRoot/Files",
+						},
+						FS: func() *hotline.MockFileStore {
+							mfi := &hotline.MockFileInfo{}
+							mfi.On("Mode").Return(fs.FileMode(0))
+							mfi.On("Size").Return(int64(100))
+							mfi.On("ModTime").Return(time.Parse(time.Layout, time.Layout))
+							mfi.On("IsDir").Return(false)
+							mfi.On("Name").Return("testfile")
+
+							mfs := &hotline.MockFileStore{}
+							mfs.On("Stat", "/fakeRoot/Files/testfile").Return(mfi, nil)
+							mfs.On("Stat", "/fakeRoot/Files/.info_testfile").Return(nil, errors.New("err"))
+							mfs.On("Stat", "/fakeRoot/Files/.rsrc_testfile").Return(nil, errors.New("err"))
+
+							return mfs
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranSetFileInfo, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldFileName, []byte("testfile")),
+					hotline.NewField(hotline.FieldFilePath, []byte{0x00, 0x00}),
+					hotline.NewField(hotline.FieldFileNewName, []byte("newname")),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID:  [2]byte{0, 1},
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte("You are not allowed to rename files.")),
+					},
+				},
+			},
+		},
+		{
+			name: "when user does not have permission to set folder comment",
+			args: args{
+				cc: &hotline.ClientConn{
+					ID: [2]byte{0, 1},
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							return bits
+						}(),
+					},
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						Config: hotline.Config{
+							FileRoot: "/fakeRoot/Files",
+						},
+						FS: func() *hotline.MockFileStore {
+							mfi := &hotline.MockFileInfo{}
+							mfi.On("Mode").Return(fs.ModeDir)
+							mfi.On("Size").Return(int64(0))
+							mfi.On("ModTime").Return(time.Parse(time.Layout, time.Layout))
+							mfi.On("IsDir").Return(true)
+							mfi.On("Name").Return("testfolder")
+
+							mfs := &hotline.MockFileStore{}
+							mfs.On("Stat", "/fakeRoot/Files/testfolder").Return(mfi, nil)
+							mfs.On("Stat", "/fakeRoot/Files/.info_testfolder").Return(nil, errors.New("err"))
+							mfs.On("Stat", "/fakeRoot/Files/.rsrc_testfolder").Return(nil, errors.New("err"))
+
+							return mfs
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranSetFileInfo, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldFileName, []byte("testfolder")),
+					hotline.NewField(hotline.FieldFilePath, []byte{0x00, 0x00}),
+					hotline.NewField(hotline.FieldFileComment, []byte("a comment")),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID:  [2]byte{0, 1},
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte("You are not allowed to set comments for folders.")),
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRes := HandleSetFileInfo(tt.args.cc, &tt.args.t)
+			TranAssertEqual(t, tt.wantRes, gotRes)
+		})
+	}
+}
+
+func TestRegisterHandlers(t *testing.T) {
+	srv, err := hotline.NewServer()
+	assert.NoError(t, err)
+
+	RegisterHandlers(srv)
+
+	// Verify that a known transaction type is handled by sending a transaction
+	// that requires no permission. We can't inspect the handlers map directly
+	// since it's unexported, but we can verify RegisterHandlers doesn't panic
+	// and the server is functional.
+}
+
+func TestHandleDownloadFolder_withAccess(t *testing.T) {
+	// Create a temp dir with files to act as the download folder
+	tmpDir := t.TempDir()
+	dlDir := filepath.Join(tmpDir, "testFolder")
+	err := os.MkdirAll(dlDir, 0755)
+	assert.NoError(t, err)
+
+	// Create a test file inside the folder
+	err = os.WriteFile(filepath.Join(dlDir, "file.txt"), []byte("hello"), 0644)
+	assert.NoError(t, err)
+
+	cc := &hotline.ClientConn{
+		ClientFileTransferMgr: hotline.NewClientFileTransferMgr(),
+		Account: &hotline.Account{
+			Access: func() hotline.AccessBitmap {
+				var bits hotline.AccessBitmap
+				bits.Set(hotline.AccessDownloadFolder)
+				return bits
+			}(),
+		},
+		Server: &hotline.Server{
+			TextDecoder:     charmap.Macintosh.NewDecoder(),
+			TextEncoder:     charmap.Macintosh.NewEncoder(),
+			FileTransferMgr: hotline.NewMemFileTransferMgr(),
+			Config:          hotline.Config{FileRoot: tmpDir},
+		},
+	}
+
+	tran := hotline.NewTransaction(
+		hotline.TranDownloadFldr, [2]byte{0, 1},
+		hotline.NewField(hotline.FieldFileName, []byte("testFolder")),
+		hotline.NewField(hotline.FieldFilePath, []byte{0x00, 0x00}),
+	)
+
+	gotRes := HandleDownloadFolder(cc, &tran)
+	assert.Len(t, gotRes, 1)
+	assert.Equal(t, byte(0x01), gotRes[0].IsReply)
+
+	// Verify expected fields are present
+	assert.NotNil(t, gotRes[0].GetField(hotline.FieldRefNum))
+	assert.NotNil(t, gotRes[0].GetField(hotline.FieldTransferSize))
+	assert.NotNil(t, gotRes[0].GetField(hotline.FieldFolderItemCount))
 }

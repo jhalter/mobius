@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 )
@@ -749,6 +750,107 @@ func TestServer_registerWithTrackers_EdgeCases(t *testing.T) {
 	}
 }
 
+func TestServer_CurrentStats(t *testing.T) {
+	stats := NewStats()
+	stats.Increment(StatCurrentlyConnected)
+	stats.Increment(StatDownloadCounter)
+	stats.Increment(StatDownloadCounter)
+
+	srv := &Server{Stats: stats}
+	result := srv.CurrentStats()
+
+	assert.Equal(t, 1, result["CurrentlyConnected"])
+	assert.Equal(t, 2, result["DownloadCounter"])
+	assert.Equal(t, 0, result["UploadsInProgress"])
+}
+
+func TestServer_sendTransaction(t *testing.T) {
+	t.Run("sends transaction to client connection", func(t *testing.T) {
+		wBuf := &bytes.Buffer{}
+		mockMgr := &MockClientMgr{}
+		mockMgr.On("Get", ClientID{0, 1}).Return(&ClientConn{
+			Connection: &nopCloserRWC{Buffer: wBuf},
+		})
+
+		srv := &Server{ClientMgr: mockMgr}
+
+		tran := NewTransaction(TranChatMsg, ClientID{0, 1}, NewField(FieldData, []byte("hello")))
+		err := srv.sendTransaction(tran)
+
+		assert.NoError(t, err)
+		assert.Greater(t, wBuf.Len(), 0)
+		mockMgr.AssertExpectations(t)
+	})
+
+	t.Run("returns nil when client not found", func(t *testing.T) {
+		mockMgr := &MockClientMgr{}
+		mockMgr.On("Get", ClientID{0, 99}).Return((*ClientConn)(nil))
+
+		srv := &Server{ClientMgr: mockMgr}
+
+		tran := NewTransaction(TranChatMsg, ClientID{0, 99})
+		err := srv.sendTransaction(tran)
+
+		assert.NoError(t, err)
+		mockMgr.AssertExpectations(t)
+	})
+}
+
+func TestServer_SendAll(t *testing.T) {
+	mockMgr := &MockClientMgr{}
+	mockMgr.On("List").Return([]*ClientConn{
+		{ID: ClientID{0, 1}},
+		{ID: ClientID{0, 2}},
+		{ID: ClientID{0, 3}},
+	})
+
+	outbox := make(chan Transaction, 10)
+	srv := &Server{
+		ClientMgr: mockMgr,
+		outbox:    outbox,
+	}
+
+	srv.SendAll(TranChatMsg, NewField(FieldData, []byte("broadcast")))
+
+	assert.Len(t, outbox, 3)
+
+	// Verify each transaction targets a different client
+	clientIDs := make(map[ClientID]bool)
+	for range 3 {
+		tran := <-outbox
+		clientIDs[tran.ClientID] = true
+		assert.Equal(t, TranChatMsg, tran.Type)
+	}
+	assert.True(t, clientIDs[ClientID{0, 1}])
+	assert.True(t, clientIDs[ClientID{0, 2}])
+	assert.True(t, clientIDs[ClientID{0, 3}])
+
+	mockMgr.AssertExpectations(t)
+}
+
+type nopCloserRWC struct {
+	*bytes.Buffer
+}
+
+func (n *nopCloserRWC) Close() error { return nil }
+
+func TestServer_NewClientConn(t *testing.T) {
+	mockMgr := &MockClientMgr{}
+	mockMgr.On("Add", mock.AnythingOfType("*hotline.ClientConn")).Return()
+
+	srv := &Server{ClientMgr: mockMgr}
+
+	rwc := &nopCloserRWC{Buffer: &bytes.Buffer{}}
+
+	cc := srv.NewClientConn(rwc, "192.168.1.1:12345")
+
+	assert.NotNil(t, cc)
+	assert.Equal(t, "192.168.1.1:12345", cc.RemoteAddr)
+	assert.Equal(t, []byte{0, 0}, cc.Icon)
+	assert.Equal(t, srv, cc.Server)
+	mockMgr.AssertExpectations(t)
+}
+
 func TestServer_registerWithAllTrackers(t *testing.T) {
 	tests := []struct {
 		name                      string
@@ -818,4 +920,12 @@ func TestServer_registerWithAllTrackers(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSendBanMessage(t *testing.T) {
+	buf := &bytes.Buffer{}
+	sendBanMessage(buf, "You are banned")
+
+	assert.Greater(t, buf.Len(), 0)
+	assert.Contains(t, buf.String(), "You are banned")
 }
