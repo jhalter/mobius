@@ -173,19 +173,15 @@ func (m *mockClientMgr) Delete(id hotline.ClientID) {
 }
 
 type mockCounter struct {
-	vals map[string]interface{}
+	vals hotline.StatValues
 }
 
-func (m *mockCounter) Increment(_ ...int) {}
-func (m *mockCounter) Decrement(_ int)    {}
-func (m *mockCounter) Set(_, _ int)       {}
-func (m *mockCounter) Get(_ int) int      { return 0 }
-func (m *mockCounter) Values() map[string]interface{} {
-	if m.vals == nil {
-		return map[string]interface{}{}
-	}
-	return m.vals
-}
+func (m *mockCounter) Increment(_ ...hotline.StatKey) {}
+func (m *mockCounter) Decrement(_ ...hotline.StatKey) {}
+func (m *mockCounter) Set(_ hotline.StatKey, _ int)   {}
+func (m *mockCounter) Max(_ hotline.StatKey, _ int)   {}
+func (m *mockCounter) Get(_ hotline.StatKey) int      { return 0 }
+func (m *mockCounter) Values() hotline.StatValues     { return m.vals }
 
 // --- Test helper ---
 
@@ -651,9 +647,9 @@ func TestShutdownHandler(t *testing.T) {
 func TestRenderStats(t *testing.T) {
 	t.Run("returns JSON stats", func(t *testing.T) {
 		srv, _, _, counter := newTestAPIServer(t, "")
-		counter.vals = map[string]interface{}{
-			"connections": 42,
-			"downloads":   10,
+		counter.vals = hotline.StatValues{
+			CurrentlyConnected: 42,
+			DownloadCounter:    10,
 		}
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil)
@@ -666,11 +662,11 @@ func TestRenderStats(t *testing.T) {
 		var stats map[string]interface{}
 		err := json.Unmarshal(rr.Body.Bytes(), &stats)
 		require.NoError(t, err)
-		assert.Equal(t, float64(42), stats["connections"])
-		assert.Equal(t, float64(10), stats["downloads"])
+		assert.Equal(t, float64(42), stats["CurrentlyConnected"])
+		assert.Equal(t, float64(10), stats["DownloadCounter"])
 	})
 
-	t.Run("returns empty stats when no data", func(t *testing.T) {
+	t.Run("returns zero-valued stats when no data", func(t *testing.T) {
 		srv, _, _, _ := newTestAPIServer(t, "")
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil)
@@ -683,6 +679,7 @@ func TestRenderStats(t *testing.T) {
 		var stats map[string]interface{}
 		err := json.Unmarshal(rr.Body.Bytes(), &stats)
 		require.NoError(t, err)
-		assert.Empty(t, stats)
+		assert.Equal(t, float64(0), stats["CurrentlyConnected"])
+		assert.Contains(t, stats, "Since")
 	})
 }

@@ -759,9 +759,9 @@ func TestServer_CurrentStats(t *testing.T) {
 	srv := &Server{Stats: stats}
 	result := srv.CurrentStats()
 
-	assert.Equal(t, 1, result["CurrentlyConnected"])
-	assert.Equal(t, 2, result["DownloadCounter"])
-	assert.Equal(t, 0, result["UploadsInProgress"])
+	assert.Equal(t, 1, result.CurrentlyConnected)
+	assert.Equal(t, 2, result.DownloadCounter)
+	assert.Equal(t, 0, result.UploadsInProgress)
 }
 
 func TestServer_sendTransaction(t *testing.T) {

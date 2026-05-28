@@ -157,7 +157,7 @@ func NewServer(options ...Option) (*Server, error) {
 	return &server, nil
 }
 
-func (s *Server) CurrentStats() map[string]interface{} {
+func (s *Server) CurrentStats() StatValues {
 	return s.Stats.Values()
 }
 
@@ -648,9 +648,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	c.Server.Stats.Increment(StatConnectionCounter, StatCurrentlyConnected)
 	defer c.Server.Stats.Decrement(StatCurrentlyConnected)
 
-	if len(s.ClientMgr.List()) > c.Server.Stats.Get(StatConnectionPeak) {
-		c.Server.Stats.Set(StatConnectionPeak, len(s.ClientMgr.List()))
-	}
+	c.Server.Stats.Max(StatConnectionPeak, len(s.ClientMgr.List()))
 
 	// Scan for new transactions and handle them as they come in.
 	for scanner.Scan() {

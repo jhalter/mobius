@@ -1,8 +1,9 @@
 package hotline
 
 import (
+	"encoding/json"
+	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -10,20 +11,20 @@ import (
 func TestStats_Increment(t *testing.T) {
 	tests := []struct {
 		name     string
-		keys     []int
-		expected map[int]int
+		keys     []StatKey
+		expected map[StatKey]int
 	}{
 		{
 			name: "single key increment",
-			keys: []int{StatCurrentlyConnected},
-			expected: map[int]int{
+			keys: []StatKey{StatCurrentlyConnected},
+			expected: map[StatKey]int{
 				StatCurrentlyConnected: 1,
 			},
 		},
 		{
 			name: "multiple keys increment",
-			keys: []int{StatCurrentlyConnected, StatDownloadCounter, StatUploadCounter},
-			expected: map[int]int{
+			keys: []StatKey{StatCurrentlyConnected, StatDownloadCounter, StatUploadCounter},
+			expected: map[StatKey]int{
 				StatCurrentlyConnected: 1,
 				StatDownloadCounter:    1,
 				StatUploadCounter:      1,
@@ -31,8 +32,8 @@ func TestStats_Increment(t *testing.T) {
 		},
 		{
 			name: "duplicate keys increment",
-			keys: []int{StatCurrentlyConnected, StatCurrentlyConnected},
-			expected: map[int]int{
+			keys: []StatKey{StatCurrentlyConnected, StatCurrentlyConnected},
+			expected: map[StatKey]int{
 				StatCurrentlyConnected: 2,
 			},
 		},
@@ -68,7 +69,7 @@ func TestStats_Decrement(t *testing.T) {
 	tests := []struct {
 		name       string
 		setupValue int
-		key        int
+		key        StatKey
 		expected   int
 	}{
 		{
@@ -119,7 +120,7 @@ func TestStats_Decrement_Multiple_Calls(t *testing.T) {
 func TestStats_Set(t *testing.T) {
 	tests := []struct {
 		name     string
-		key      int
+		key      StatKey
 		value    int
 		expected int
 	}{
@@ -167,7 +168,7 @@ func TestStats_Set(t *testing.T) {
 func TestStats_Get(t *testing.T) {
 	tests := []struct {
 		name     string
-		key      int
+		key      StatKey
 		setValue int
 		expected int
 	}{
@@ -210,7 +211,7 @@ func TestStats_Get(t *testing.T) {
 func TestStats_Get_Default_Values(t *testing.T) {
 	stats := NewStats()
 
-	expectedDefaults := map[int]int{
+	expectedDefaults := map[StatKey]int{
 		StatCurrentlyConnected:  0,
 		StatDownloadsInProgress: 0,
 		StatUploadsInProgress:   0,
@@ -232,19 +233,15 @@ func TestStats_Values(t *testing.T) {
 	// Test default values
 	values := stats.Values()
 
-	assert.Equal(t, 0, values["CurrentlyConnected"])
-	assert.Equal(t, 0, values["DownloadsInProgress"])
-	assert.Equal(t, 0, values["UploadsInProgress"])
-	assert.Equal(t, 0, values["WaitingDownloads"])
-	assert.Equal(t, 0, values["ConnectionPeak"])
-	assert.Equal(t, 0, values["ConnectionCounter"])
-	assert.Equal(t, 0, values["DownloadCounter"])
-	assert.Equal(t, 0, values["UploadCounter"])
-	assert.NotNil(t, values["Since"])
-
-	// Verify Since is a time.Time
-	_, ok := values["Since"].(time.Time)
-	assert.True(t, ok, "Since should be a time.Time")
+	assert.Equal(t, 0, values.CurrentlyConnected)
+	assert.Equal(t, 0, values.DownloadsInProgress)
+	assert.Equal(t, 0, values.UploadsInProgress)
+	assert.Equal(t, 0, values.WaitingDownloads)
+	assert.Equal(t, 0, values.ConnectionPeak)
+	assert.Equal(t, 0, values.ConnectionCounter)
+	assert.Equal(t, 0, values.DownloadCounter)
+	assert.Equal(t, 0, values.UploadCounter)
+	assert.False(t, values.Since.IsZero(), "Since should be set")
 }
 
 func TestStats_Values_WithModifiedStats(t *testing.T) {
@@ -258,19 +255,23 @@ func TestStats_Values_WithModifiedStats(t *testing.T) {
 
 	values := stats.Values()
 
-	assert.Equal(t, 10, values["CurrentlyConnected"])
-	assert.Equal(t, 5, values["DownloadsInProgress"])
-	assert.Equal(t, 0, values["UploadsInProgress"])
-	assert.Equal(t, 0, values["WaitingDownloads"])
-	assert.Equal(t, 0, values["ConnectionPeak"])
-	assert.Equal(t, 1, values["ConnectionCounter"])
-	assert.Equal(t, 1, values["DownloadCounter"])
-	assert.Equal(t, 1, values["UploadCounter"])
+	assert.Equal(t, 10, values.CurrentlyConnected)
+	assert.Equal(t, 5, values.DownloadsInProgress)
+	assert.Equal(t, 0, values.UploadsInProgress)
+	assert.Equal(t, 0, values.WaitingDownloads)
+	assert.Equal(t, 0, values.ConnectionPeak)
+	assert.Equal(t, 1, values.ConnectionCounter)
+	assert.Equal(t, 1, values.DownloadCounter)
+	assert.Equal(t, 1, values.UploadCounter)
 }
 
-func TestStats_Values_ContainsAllKeys(t *testing.T) {
-	stats := NewStats()
-	values := stats.Values()
+// TestStats_Values_JSONKeys locks the JSON wire format served at /api/v1/stats.
+func TestStats_Values_JSONKeys(t *testing.T) {
+	b, err := json.Marshal(NewStats().Values())
+	assert.NoError(t, err)
+
+	var decoded map[string]interface{}
+	assert.NoError(t, json.Unmarshal(b, &decoded))
 
 	expectedKeys := []string{
 		"CurrentlyConnected",
@@ -285,10 +286,52 @@ func TestStats_Values_ContainsAllKeys(t *testing.T) {
 	}
 
 	for _, key := range expectedKeys {
-		_, exists := values[key]
-		assert.True(t, exists, "Key %s should exist in Values() output", key)
+		_, exists := decoded[key]
+		assert.True(t, exists, "Key %s should exist in JSON output", key)
 	}
 
-	// Should have exactly 9 keys
-	assert.Equal(t, 9, len(values))
+	assert.Equal(t, len(expectedKeys), len(decoded))
+}
+
+func TestStats_Max(t *testing.T) {
+	stats := NewStats()
+
+	stats.Max(StatConnectionPeak, 5)
+	assert.Equal(t, 5, stats.Get(StatConnectionPeak), "raises to a larger value")
+
+	stats.Max(StatConnectionPeak, 3)
+	assert.Equal(t, 5, stats.Get(StatConnectionPeak), "no-op for a smaller value")
+
+	stats.Max(StatConnectionPeak, 5)
+	assert.Equal(t, 5, stats.Get(StatConnectionPeak), "no-op for an equal value")
+
+	stats.Max(StatConnectionPeak, 10)
+	assert.Equal(t, 10, stats.Get(StatConnectionPeak), "raises again")
+}
+
+// TestStats_Concurrent exercises the counter from many goroutines so the race
+// detector can catch unsynchronized access (run with -race).
+func TestStats_Concurrent(t *testing.T) {
+	stats := NewStats()
+
+	const goroutines = 50
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		go func(n int) {
+			defer wg.Done()
+			stats.Increment(StatConnectionCounter)
+			stats.Max(StatConnectionPeak, n)
+			stats.Set(StatCurrentlyConnected, n)
+			_ = stats.Get(StatCurrentlyConnected)
+			_ = stats.Values()
+			stats.Decrement(StatConnectionCounter)
+		}(i)
+	}
+
+	wg.Wait()
+
+	assert.Equal(t, 0, stats.Get(StatConnectionCounter), "increments and decrements balance out")
+	assert.Equal(t, goroutines-1, stats.Get(StatConnectionPeak), "peak captures the largest value")
 }
