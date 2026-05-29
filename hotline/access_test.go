@@ -75,6 +75,16 @@ func Test_accessBitmap_UnmarshalYAML(t *testing.T) {
 			wantErr:  false,
 		},
 		{
+			name:     "legacy array with non-int element returns error",
+			yamlData: `access: [96, "nope", 12, 32, 3, 128, 0, 0]`,
+			wantErr:  true,
+		},
+		{
+			name:     "legacy array with too many elements returns error",
+			yamlData: "access: [1, 2, 3, 4, 5, 6, 7, 8, 9]",
+			wantErr:  true,
+		},
+		{
 			name: "unmarshal map format with true values",
 			yamlData: `access:
   DownloadFile: true

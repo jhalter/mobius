@@ -690,8 +690,12 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 		time.Sleep(3 * time.Second)
 	}()
 
+	var remoteAddr string
+	if rc, ok := ctx.Value(contextKeyReq).(requestCtx); ok {
+		remoteAddr = rc.remoteAddr
+	}
 	rLogger := s.Logger.With(
-		"remoteAddr", ctx.Value(contextKeyReq).(requestCtx).remoteAddr,
+		"remoteAddr", remoteAddr,
 		"login", fileTransfer.ClientConn.Account.Login,
 		"Name", string(fileTransfer.ClientConn.UserName),
 	)

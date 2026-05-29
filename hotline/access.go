@@ -67,8 +67,15 @@ func (bits *AccessBitmap) UnmarshalYAML(unmarshal func(interface{}) error) error
 		// Mobius versions < v0.17.0 store the user access bitmap as an array of int values like:
 		// [96, 112, 12, 32, 3, 128, 0, 0]
 		// This case supports reading of user config files using this format.
-		for i, v := range flags.([]interface{}) {
-			bits[i] = byte(v.(int))
+		for i, elem := range v {
+			if i >= len(bits) {
+				return fmt.Errorf("unmarshal access bitmap: too many elements (%d, max %d)", len(v), len(bits))
+			}
+			n, ok := elem.(int)
+			if !ok {
+				return fmt.Errorf("unmarshal access bitmap: element %d is %T, want int", i, elem)
+			}
+			bits[i] = byte(n)
 		}
 	case map[string]interface{}:
 		// Mobius versions >= v0.17.0 store the user access bitmap as map[string]bool to provide a human-readable view of
