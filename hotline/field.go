@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"slices"
 )
 
@@ -137,17 +138,26 @@ func (f *Field) DecodeNewsPath() ([]string, error) {
 	if len(f.Data) == 0 {
 		return []string{}, nil
 	}
+	if len(f.Data) < 2 {
+		return nil, fmt.Errorf("news path too short: %d bytes", len(f.Data))
+	}
 
 	pathCount := binary.BigEndian.Uint16(f.Data[0:2])
 
 	scanner := bufio.NewScanner(bytes.NewReader(f.Data[2:]))
 	scanner.Split(newsPathScanner)
 
-	var paths []string
+	paths := make([]string, 0, pathCount)
 
 	for i := uint16(0); i < pathCount; i++ {
-		scanner.Scan()
+		if !scanner.Scan() {
+			return nil, fmt.Errorf("news path truncated: declared %d items, found %d", pathCount, i)
+		}
 		paths = append(paths, scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan news path: %w", err)
 	}
 
 	return paths, nil

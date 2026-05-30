@@ -248,6 +248,22 @@ func TestField_DecodeNewsPath(t *testing.T) {
 			wantErr: assert.NoError,
 		},
 		{
+			name:    "one byte of data returns an error instead of panicking",
+			fields:  fields{Data: []byte{0x00}},
+			want:    nil,
+			wantErr: assert.Error,
+		},
+		{
+			name: "declared path count exceeding available items returns an error",
+			fields: fields{Data: []byte{
+				0x00, 0x02, // path count = 2
+				0x00, 0x00, 0x05, // 2 bytes unused + 1 byte length (5)
+				0x48, 0x65, 0x6c, 0x6c, 0x6f, // "Hello" (only 1 item present)
+			}},
+			want:    nil,
+			wantErr: assert.Error,
+		},
+		{
 			name: "single path",
 			fields: fields{Data: []byte{
 				0x00, 0x01, // path count = 1

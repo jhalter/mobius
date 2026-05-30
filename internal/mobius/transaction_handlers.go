@@ -83,15 +83,33 @@ const (
 	ErrMsgPermanentBan = "You are permanently banned on this server"
 
 	// General error messages
+	ErrMsgFileNotFound         = "File not found."
+	ErrMsgGetFileInfo          = "Error getting file information."
+	ErrMsgSetFileInfo          = "Error setting file information."
+	ErrMsgRenameFile           = "Error renaming file."
+	ErrMsgRenameFolder         = "Error renaming folder."
+	ErrMsgDeleteFile           = "Error deleting file."
+	ErrMsgMoveFile             = "Error moving file."
+	ErrMsgCreateFolder         = "Error creating folder."
+	ErrMsgDownloadFolder       = "Error downloading folder."
+	ErrMsgUploadFile           = "Error uploading file."
+	ErrMsgUploadFolder         = "Error uploading folder."
+	ErrMsgFileResumeData       = "Invalid file resume data."
 	ErrMsgAccountNotFound      = "Account not found."
 	ErrMsgUserNotFound         = "User not found."
 	ErrMsgCreateAlias          = "Error creating alias"
 	ErrMsgUpdateAccount        = "Error updating account."
+	ErrMsgDeleteAccount        = "Error deleting account."
+	ErrMsgGetUserList          = "Error getting user list."
+	ErrMsgJoinChat             = "Error joining chat."
 	ErrMsgReadNewsCategories   = "Error reading news categories."
+	ErrMsgReadNewsArticles     = "Error reading news articles."
 	ErrMsgCreateNewsCategory   = "Error creating news category."
 	ErrMsgCreateNewsFolder     = "Error creating news folder."
 	ErrMsgDeleteNewsArticle    = "Error deleting news article."
+	ErrMsgDeleteNewsItem       = "Error deleting news item."
 	ErrMsgPostNewsArticle      = "Error posting news article."
+	ErrMsgPostNews             = "Error posting news."
 	ErrMsgReadMessageBoard     = "Error reading message board."
 )
 
@@ -239,6 +257,8 @@ func HandleSendInstantMsg(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 
 	otherClient := cc.Server.ClientMgr.Get([2]byte(userID.Data))
 	if otherClient == nil {
+		// Target user is no longer connected. The protocol defines no reply for
+		// this transaction, so there is nothing to send back.
 		return res
 	}
 
@@ -298,17 +318,20 @@ func HandleGetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 
 	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName, cc.TextDecoder())
 	if err != nil {
-		return res
+		cc.Logger.Error("get file info: read path", "err", err)
+		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 
 	fw, err := hotline.NewFile(cc.Server.FS, fullFilePath, 0)
 	if err != nil {
-		return res
+		cc.Logger.Error("get file info: open file", "err", err)
+		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 
 	encodedName, err := cc.TextEncoder().String(fw.Name)
 	if err != nil {
-		return res
+		cc.Logger.Error("get file info: encode name", "err", err)
+		return cc.NewErrReply(t, ErrMsgGetFileInfo)
 	}
 
 	fields := []hotline.Field{
@@ -350,17 +373,20 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 
 	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName, cc.TextDecoder())
 	if err != nil {
-		return res
+		cc.Logger.Error("set file info: read path", "err", err)
+		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 
 	fi, err := cc.Server.FS.Stat(fullFilePath)
 	if err != nil {
-		return res
+		cc.Logger.Error("set file info: stat file", "err", err)
+		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 
 	hlFile, err := hotline.NewFile(cc.Server.FS, fullFilePath, 0)
 	if err != nil {
-		return res
+		cc.Logger.Error("set file info: open file", "err", err)
+		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 	if t.GetField(hotline.FieldFileComment).Data != nil {
 		switch mode := fi.Mode(); {
@@ -375,21 +401,25 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		}
 
 		if err := hlFile.Ffo.FlatFileInformationFork.SetComment(t.GetField(hotline.FieldFileComment).Data); err != nil {
-			return res
+			cc.Logger.Error("set file info: set comment", "err", err)
+			return cc.NewErrReply(t, ErrMsgSetFileInfo)
 		}
 		w, err := hlFile.InfoForkWriter()
 		if err != nil {
-			return res
+			cc.Logger.Error("set file info: open info fork writer", "err", err)
+			return cc.NewErrReply(t, ErrMsgSetFileInfo)
 		}
 		_, err = io.Copy(w, &hlFile.Ffo.FlatFileInformationFork)
 		if err != nil {
-			return res
+			cc.Logger.Error("set file info: write info fork", "err", err)
+			return cc.NewErrReply(t, ErrMsgSetFileInfo)
 		}
 	}
 
 	fullNewFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, t.GetField(hotline.FieldFileNewName).Data, cc.TextDecoder())
 	if err != nil {
-		return nil
+		cc.Logger.Error("set file info: read new name path", "err", err)
+		return cc.NewErrReply(t, ErrMsgRenameFile)
 	}
 
 	fileNewName := t.GetField(hotline.FieldFileNewName).Data
@@ -403,7 +433,10 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 			err = os.Rename(fullFilePath, fullNewFilePath)
 			if os.IsNotExist(err) {
 				return cc.NewErrReply(t, fmt.Sprintf(ErrMsgCannotRenameFolderNotFound, string(fileName)))
-
+			}
+			if err != nil {
+				cc.Logger.Error("set file info: rename folder", "err", err)
+				return cc.NewErrReply(t, ErrMsgRenameFolder)
 			}
 		case mode.IsRegular():
 			if !cc.Authorize(hotline.AccessRenameFile) {
@@ -411,11 +444,13 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 			}
 			fileDir, err := hotline.ReadPath(cc.FileRoot(), filePath, []byte{}, cc.TextDecoder())
 			if err != nil {
-				return nil
+				cc.Logger.Error("set file info: read file dir", "err", err)
+				return cc.NewErrReply(t, ErrMsgRenameFile)
 			}
 			hlFile.Name, err = cc.TextDecoder().String(string(fileNewName))
 			if err != nil {
-				return res
+				cc.Logger.Error("set file info: decode new name", "err", err)
+				return cc.NewErrReply(t, ErrMsgRenameFile)
 			}
 
 			err = hlFile.Move(fileDir)
@@ -423,7 +458,8 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 				return cc.NewErrReply(t, fmt.Sprintf(ErrMsgCannotRenameFileNotFound, string(fileName)))
 			}
 			if err != nil {
-				return res
+				cc.Logger.Error("set file info: rename file", "err", err)
+				return cc.NewErrReply(t, ErrMsgRenameFile)
 			}
 		}
 	}
@@ -447,12 +483,14 @@ func HandleDeleteFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 
 	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName, cc.TextDecoder())
 	if err != nil {
-		return res
+		cc.Logger.Error("delete file: read path", "err", err)
+		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 
 	hlFile, err := hotline.NewFile(cc.Server.FS, fullFilePath, 0)
 	if err != nil {
-		return res
+		cc.Logger.Error("delete file: open file", "err", err)
+		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 
 	fi, err := hlFile.DataFile()
@@ -472,7 +510,8 @@ func HandleDeleteFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	}
 
 	if err := hlFile.Delete(); err != nil {
-		return res
+		cc.Logger.Error("delete file: delete", "err", err)
+		return cc.NewErrReply(t, ErrMsgDeleteFile)
 	}
 
 	res = append(res, cc.NewReply(t))
@@ -492,19 +531,22 @@ func HandleMoveFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 
 	filePath, err := hotline.ReadPath(cc.FileRoot(), t.GetField(hotline.FieldFilePath).Data, t.GetField(hotline.FieldFileName).Data, cc.TextDecoder())
 	if err != nil {
-		return res
+		cc.Logger.Error("move file: read source path", "err", err)
+		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 
 	fileNewPath, err := hotline.ReadPath(cc.FileRoot(), t.GetField(hotline.FieldFileNewPath).Data, nil, cc.TextDecoder())
 	if err != nil {
-		return res
+		cc.Logger.Error("move file: read destination path", "err", err)
+		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 
 	cc.Logger.Info("Move file", "src", filePath+"/"+fileName, "dst", fileNewPath+"/"+fileName)
 
 	hlFile, err := hotline.NewFile(cc.Server.FS, filePath, 0)
 	if err != nil {
-		return res
+		cc.Logger.Error("move file: open file", "err", err)
+		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 
 	fi, err := hlFile.DataFile()
@@ -522,7 +564,8 @@ func HandleMoveFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 		}
 	}
 	if err := hlFile.Move(fileNewPath); err != nil {
-		return res
+		cc.Logger.Error("move file: move", "err", err)
+		return cc.NewErrReply(t, ErrMsgMoveFile)
 	}
 	// TODO: handle other possible errors; e.g. file delete fails due to permission issue
 
@@ -554,7 +597,8 @@ func HandleNewFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 		var newFp hotline.FilePath
 		_, err := newFp.Write(t.GetField(hotline.FieldFilePath).Data)
 		if err != nil {
-			return res
+			cc.Logger.Error("new folder: parse file path", "err", err)
+			return cc.NewErrReply(t, ErrMsgCreateFolder)
 		}
 
 		for _, pathItem := range newFp.Items {
@@ -566,11 +610,13 @@ func HandleNewFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 	// The FileRoot is already a UTF-8 filesystem path and must not be decoded.
 	subPath, err := cc.TextDecoder().String(subPath)
 	if err != nil {
-		return res
+		cc.Logger.Error("new folder: decode sub path", "err", err)
+		return cc.NewErrReply(t, ErrMsgCreateFolder)
 	}
 	folderName, err = cc.TextDecoder().String(folderName)
 	if err != nil {
-		return res
+		cc.Logger.Error("new folder: decode folder name", "err", err)
+		return cc.NewErrReply(t, ErrMsgCreateFolder)
 	}
 
 	newFolderPath := path.Join(cc.FileRoot(), subPath, folderName)
@@ -750,7 +796,8 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 
 			var field hotline.Field
 			if _, err := field.Write(scanner.Bytes()); err != nil {
-				return res
+				cc.Logger.Error("update user: parse sub-field", "err", err)
+				return cc.NewErrReply(t, ErrMsgUpdateAccount)
 			}
 			subFields = append(subFields, field)
 		}
@@ -767,7 +814,7 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 
 			if err := cc.Server.AccountManager.Delete(login); err != nil {
 				cc.Logger.Error("Error deleting account", "Err", err)
-				return res
+				return cc.NewErrReply(t, ErrMsgDeleteAccount)
 			}
 
 			for _, client := range cc.Server.ClientMgr.List() {
@@ -844,7 +891,8 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 			err := cc.Server.AccountManager.Update(*acc, string(hotline.EncodeString(hotline.GetField(hotline.FieldUserLogin, &subFields).Data)))
 
 			if err != nil {
-				return res
+				cc.Logger.Error("update user: update account", "err", err)
+				return cc.NewErrReply(t, ErrMsgUpdateAccount)
 			}
 		} else {
 			if !cc.Authorize(hotline.AccessCreateUser) {
@@ -940,7 +988,7 @@ func HandleDeleteUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 
 	if err := cc.Server.AccountManager.Delete(login); err != nil {
 		cc.Logger.Error("Error deleting account", "Err", err)
-		return res
+		return cc.NewErrReply(t, ErrMsgDeleteAccount)
 	}
 
 	for _, client := range cc.Server.ClientMgr.List() {
@@ -1028,7 +1076,8 @@ func HandleGetUserNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res 
 			Name:  string(c.UserName),
 		})
 		if err != nil {
-			return nil
+			cc.Logger.Error("get user name list: read user info", "err", err)
+			return cc.NewErrReply(t, ErrMsgGetUserList)
 		}
 
 		fields = append(fields, hotline.NewField(hotline.FieldUsernameWithInfo, b))
@@ -1076,6 +1125,7 @@ func HandleTranAgreed(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 			cc.Logger.Error("Failed to ban IP for banned nickname", "ip", ip, "err", err)
 		}
 		cc.Disconnect()
+		// Connection is being torn down; no reply is sent to the client.
 		return res
 	}
 
@@ -1151,7 +1201,7 @@ func HandleTranOldPostNews(cc *hotline.ClientConn, t *hotline.Transaction) (res 
 	_, err := cc.Server.MessageBoard.Write([]byte(newsPost))
 	if err != nil {
 		cc.Logger.Error("error writing news post", "err", err)
-		return nil
+		return cc.NewErrReply(t, ErrMsgPostNews)
 	}
 
 	// Notify all clients of updated news
@@ -1252,7 +1302,7 @@ func HandleGetNewsCatNameList(cc *hotline.ClientConn, t *hotline.Transaction) (r
 	pathStrs, err := t.GetField(hotline.FieldNewsPath).DecodeNewsPath()
 	if err != nil {
 		cc.Logger.Error("get news path", "err", err)
-		return nil
+		return cc.NewErrReply(t, ErrMsgReadNewsCategories)
 	}
 
 	var fields []hotline.Field
@@ -1286,7 +1336,8 @@ func HandleNewNewsCat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	name := string(t.GetField(hotline.FieldNewsCatName).Data)
 	pathStrs, err := t.GetField(hotline.FieldNewsPath).DecodeNewsPath()
 	if err != nil {
-		return res
+		cc.Logger.Error("new news category: decode news path", "err", err)
+		return cc.NewErrReply(t, ErrMsgCreateNewsCategory)
 	}
 
 	err = cc.Server.ThreadedNewsMgr.CreateGrouping(pathStrs, name, hotline.NewsCategory)
@@ -1315,7 +1366,8 @@ func HandleNewNewsFldr(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 	name := string(t.GetField(hotline.FieldFileName).Data)
 	pathStrs, err := t.GetField(hotline.FieldNewsPath).DecodeNewsPath()
 	if err != nil {
-		return res
+		cc.Logger.Error("new news folder: decode news path", "err", err)
+		return cc.NewErrReply(t, ErrMsgCreateNewsFolder)
 	}
 
 	err = cc.Server.ThreadedNewsMgr.CreateGrouping(pathStrs, name, hotline.NewsBundle)
@@ -1341,17 +1393,20 @@ func HandleGetNewsArtNameList(cc *hotline.ClientConn, t *hotline.Transaction) (r
 
 	pathStrs, err := t.GetField(hotline.FieldNewsPath).DecodeNewsPath()
 	if err != nil {
-		return res
+		cc.Logger.Error("get news article list: decode news path", "err", err)
+		return cc.NewErrReply(t, ErrMsgReadNewsArticles)
 	}
 
 	nald, err := cc.Server.ThreadedNewsMgr.ListArticles(pathStrs)
 	if err != nil {
-		return res
+		cc.Logger.Error("get news article list: list articles", "err", err)
+		return cc.NewErrReply(t, ErrMsgReadNewsArticles)
 	}
 
 	b, err := io.ReadAll(&nald)
 	if err != nil {
-		return res
+		cc.Logger.Error("get news article list: read article list data", "err", err)
+		return cc.NewErrReply(t, ErrMsgReadNewsArticles)
 	}
 
 	return append(res, cc.NewReply(t, hotline.NewField(hotline.FieldNewsArtListData, b)))
@@ -1383,12 +1438,14 @@ func HandleGetNewsArtData(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 
 	newsPath, err := t.GetField(hotline.FieldNewsPath).DecodeNewsPath()
 	if err != nil {
-		return res
+		cc.Logger.Error("get news article: decode news path", "err", err)
+		return cc.NewErrReply(t, ErrMsgReadNewsArticles)
 	}
 
 	convertedID, err := t.GetField(hotline.FieldNewsArtID).DecodeInt()
 	if err != nil {
-		return res
+		cc.Logger.Error("get news article: decode article ID", "err", err)
+		return cc.NewErrReply(t, ErrMsgReadNewsArticles)
 	}
 
 	art := cc.Server.ThreadedNewsMgr.GetArticle(newsPath, uint32(convertedID))
@@ -1421,8 +1478,8 @@ func HandleGetNewsArtData(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 func HandleDelNewsItem(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	pathStrs, err := t.GetField(hotline.FieldNewsPath).DecodeNewsPath()
 	if err != nil || len(pathStrs) == 0 {
-		cc.Logger.Error("invalid news path")
-		return nil
+		cc.Logger.Error("delete news item: invalid news path", "err", err)
+		return cc.NewErrReply(t, ErrMsgDeleteNewsItem)
 	}
 
 	item := cc.Server.ThreadedNewsMgr.NewsItem(pathStrs)
@@ -1439,7 +1496,8 @@ func HandleDelNewsItem(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 
 	err = cc.Server.ThreadedNewsMgr.DeleteNewsItem(pathStrs)
 	if err != nil {
-		return res
+		cc.Logger.Error("delete news item", "err", err)
+		return cc.NewErrReply(t, ErrMsgDeleteNewsItem)
 	}
 
 	return append(res, cc.NewReply(t))
@@ -1463,13 +1521,14 @@ func HandleDelNewsArt(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 
 	pathStrs, err := t.GetField(hotline.FieldNewsPath).DecodeNewsPath()
 	if err != nil {
-		return res
+		cc.Logger.Error("delete news article: decode news path", "err", err)
+		return cc.NewErrReply(t, ErrMsgDeleteNewsArticle)
 	}
 
 	articleID, err := t.GetField(hotline.FieldNewsArtID).DecodeInt()
 	if err != nil {
-		cc.Logger.Error("error reading article Type", "err", err)
-		return
+		cc.Logger.Error("delete news article: decode article ID", "err", err)
+		return cc.NewErrReply(t, ErrMsgDeleteNewsArticle)
 	}
 
 	deleteRecursive := bytes.Equal([]byte{0, 1}, t.GetField(hotline.FieldNewsArtRecurseDel).Data)
@@ -1503,13 +1562,14 @@ func HandlePostNewsArt(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 
 	pathStrs, err := t.GetField(hotline.FieldNewsPath).DecodeNewsPath()
 	if err != nil || len(pathStrs) == 0 {
-		cc.Logger.Error("invalid news path")
-		return res
+		cc.Logger.Error("post news article: invalid news path", "err", err)
+		return cc.NewErrReply(t, ErrMsgPostNewsArticle)
 	}
 
 	parentArticleID, err := t.GetField(hotline.FieldNewsArtID).DecodeInt()
 	if err != nil {
-		return res
+		cc.Logger.Error("post news article: decode parent article ID", "err", err)
+		return cc.NewErrReply(t, ErrMsgPostNewsArticle)
 	}
 
 	err = cc.Server.ThreadedNewsMgr.PostArticle(
@@ -1581,7 +1641,8 @@ func HandleDownloadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 	var frd hotline.FileResumeData
 	if resumeData != nil {
 		if err := frd.UnmarshalBinary(t.GetField(hotline.FieldFileResumeData).Data); err != nil {
-			return res
+			cc.Logger.Error("download file: unmarshal resume data", "err", err)
+			return cc.NewErrReply(t, ErrMsgFileResumeData)
 		}
 		// TODO: handle rsrc fork offset
 		dataOffset = int64(binary.BigEndian.Uint32(frd.ForkInfoList[0].DataSize[:]))
@@ -1589,12 +1650,14 @@ func HandleDownloadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 
 	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName, cc.TextDecoder())
 	if err != nil {
-		return res
+		cc.Logger.Error("download file: read path", "err", err)
+		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 
 	hlFile, err := hotline.NewFile(cc.Server.FS, fullFilePath, dataOffset)
 	if err != nil {
-		return res
+		cc.Logger.Error("download file: open file", "err", err)
+		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 
 	xferSize := hlFile.Ffo.TransferSize(0)
@@ -1610,7 +1673,8 @@ func HandleDownloadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 	if resumeData != nil {
 		var frd hotline.FileResumeData
 		if err := frd.UnmarshalBinary(t.GetField(hotline.FieldFileResumeData).Data); err != nil {
-			return res
+			cc.Logger.Error("download file: unmarshal resume data", "err", err)
+			return cc.NewErrReply(t, ErrMsgFileResumeData)
 		}
 		ft.FileResumeData = &frd
 	}
@@ -1653,16 +1717,19 @@ func HandleDownloadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 
 	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), t.GetField(hotline.FieldFilePath).Data, t.GetField(hotline.FieldFileName).Data, cc.TextDecoder())
 	if err != nil {
-		return nil
+		cc.Logger.Error("download folder: read path", "err", err)
+		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 
 	transferSize, err := hotline.CalcTotalSize(fullFilePath)
 	if err != nil {
-		return nil
+		cc.Logger.Error("download folder: calc total size", "err", err)
+		return cc.NewErrReply(t, ErrMsgDownloadFolder)
 	}
 	itemCount, err := hotline.CalcItemCount(fullFilePath)
 	if err != nil {
-		return nil
+		cc.Logger.Error("download folder: calc item count", "err", err)
+		return cc.NewErrReply(t, ErrMsgDownloadFolder)
 	}
 
 	fileTransfer := cc.NewFileTransfer(hotline.FolderDownload, cc.FileRoot(), t.GetField(hotline.FieldFileName).Data, t.GetField(hotline.FieldFilePath).Data, transferSize)
@@ -1670,7 +1737,8 @@ func HandleDownloadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 	var fp hotline.FilePath
 	_, err = fp.Write(t.GetField(hotline.FieldFilePath).Data)
 	if err != nil {
-		return nil
+		cc.Logger.Error("download folder: parse file path", "err", err)
+		return cc.NewErrReply(t, ErrMsgDownloadFolder)
 	}
 
 	res = append(res, cc.NewReply(t,
@@ -1703,7 +1771,8 @@ func HandleUploadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 	var fp hotline.FilePath
 	if t.GetField(hotline.FieldFilePath).Data != nil {
 		if _, err := fp.Write(t.GetField(hotline.FieldFilePath).Data); err != nil {
-			return res
+			cc.Logger.Error("upload folder: parse file path", "err", err)
+			return cc.NewErrReply(t, ErrMsgUploadFolder)
 		}
 	}
 
@@ -1752,7 +1821,8 @@ func HandleUploadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	var fp hotline.FilePath
 	if filePath != nil {
 		if _, err := fp.Write(filePath); err != nil {
-			return res
+			cc.Logger.Error("upload file: parse file path", "err", err)
+			return cc.NewErrReply(t, ErrMsgUploadFile)
 		}
 	}
 
@@ -1764,7 +1834,8 @@ func HandleUploadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	}
 	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName, cc.TextDecoder())
 	if err != nil {
-		return res
+		cc.Logger.Error("upload file: read path", "err", err)
+		return cc.NewErrReply(t, ErrMsgUploadFile)
 	}
 
 	if _, err := cc.Server.FS.Stat(fullFilePath); err == nil {
@@ -1777,23 +1848,24 @@ func HandleUploadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 
 	// client has requested to resume a partially transferred file
 	if transferOptions != nil {
-		fileInfo, err := cc.Server.FS.Stat(fullFilePath + hotline.IncompleteFileSuffix)
-		if err != nil {
-			return res
+		// If there is no partial file to resume from, fall back to a normal upload
+		// reply (with the reference number already set) rather than discarding it.
+		if fileInfo, err := cc.Server.FS.Stat(fullFilePath + hotline.IncompleteFileSuffix); err != nil {
+			cc.Logger.Info("upload file: no partial file to resume, starting fresh upload", "err", err)
+		} else {
+			offset := make([]byte, 4)
+			binary.BigEndian.PutUint32(offset, uint32(fileInfo.Size()))
+
+			fileResumeData := hotline.NewFileResumeData([]hotline.ForkInfoList{
+				*hotline.NewForkInfoList(offset),
+			})
+
+			b, _ := fileResumeData.BinaryMarshal()
+
+			ft.TransferSize = offset
+
+			replyT.Fields = append(replyT.Fields, hotline.NewField(hotline.FieldFileResumeData, b))
 		}
-
-		offset := make([]byte, 4)
-		binary.BigEndian.PutUint32(offset, uint32(fileInfo.Size()))
-
-		fileResumeData := hotline.NewFileResumeData([]hotline.ForkInfoList{
-			*hotline.NewForkInfoList(offset),
-		})
-
-		b, _ := fileResumeData.BinaryMarshal()
-
-		ft.TransferSize = offset
-
-		replyT.Fields = append(replyT.Fields, hotline.NewField(hotline.FieldFileResumeData, b))
 	}
 
 	res = append(res, replyT)
@@ -1847,6 +1919,7 @@ func HandleSetClientUserInfo(cc *hotline.ClientConn, t *hotline.Transaction) (re
 				cc.Logger.Error("Failed to ban IP for banned nickname", "ip", ip, "err", err)
 			}
 			cc.Disconnect()
+			// Connection is being torn down; no reply is sent to the client.
 			return res
 		}
 	}
@@ -2104,7 +2177,8 @@ func HandleJoinChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 			Name:  string(c.UserName),
 		})
 		if err != nil {
-			return res
+			cc.Logger.Error("join chat: read member info", "err", err)
+			return cc.NewErrReply(t, ErrMsgJoinChat)
 		}
 		replyFields = append(replyFields, hotline.NewField(hotline.FieldUsernameWithInfo, b))
 	}
@@ -2185,12 +2259,14 @@ func HandleMakeAlias(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 
 	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName, cc.TextDecoder())
 	if err != nil {
-		return res
+		cc.Logger.Error("make alias: read source path", "err", err)
+		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 
 	fullNewFilePath, err := hotline.ReadPath(cc.FileRoot(), fileNewPath, fileName, cc.TextDecoder())
 	if err != nil {
-		return res
+		cc.Logger.Error("make alias: read destination path", "err", err)
+		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 
 	if err := cc.Server.FS.Symlink(fullFilePath, fullNewFilePath); err != nil {

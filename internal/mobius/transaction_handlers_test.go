@@ -848,6 +848,44 @@ func TestHandleGetFileInfo(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "returns an error reply when the file path cannot be parsed",
+			args: args{
+				cc: &hotline.ClientConn{
+					ID:      [2]byte{0, 1},
+					Account: &hotline.Account{},
+					Logger:  NewTestLogger(),
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						FS:          &hotline.OSFileStore{},
+						Config: hotline.Config{
+							FileRoot: func() string {
+								path, _ := os.Getwd()
+								return filepath.Join(path, "/test/config/Files")
+							}(),
+						},
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranGetFileInfo, [2]byte{},
+					hotline.NewField(hotline.FieldFileName, []byte("testfile.txt")),
+					// Malformed path: claims 1 item but supplies fewer than the
+					// 3 bytes a path item requires, so ReadPath fails to parse it.
+					hotline.NewField(hotline.FieldFilePath, []byte{0x00, 0x01, 0x00, 0x00}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID:  [2]byte{0, 1},
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte(ErrMsgFileNotFound)),
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -855,8 +893,10 @@ func TestHandleGetFileInfo(t *testing.T) {
 
 			// Clear the file timestamp fields to work around problems running the tests in multiple timezones
 			// TODO: revisit how to test this by mocking the stat calls
-			gotRes[0].Fields[4].Data = make([]byte, 8)
-			gotRes[0].Fields[5].Data = make([]byte, 8)
+			if len(gotRes) > 0 && gotRes[0].ErrorCode == [4]byte{} {
+				gotRes[0].Fields[4].Data = make([]byte, 8)
+				gotRes[0].Fields[5].Data = make([]byte, 8)
+			}
 
 			if !TranAssertEqual(t, tt.wantRes, gotRes) {
 				t.Errorf("HandleGetFileInfo() gotRes = %v, want %v", gotRes, tt.wantRes)
@@ -994,7 +1034,8 @@ func TestHandleNewFolder(t *testing.T) {
 							return bits
 						}(),
 					},
-					ID: [2]byte{0, 1},
+					ID:     [2]byte{0, 1},
+					Logger: NewTestLogger(),
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
@@ -1017,7 +1058,16 @@ func TestHandleNewFolder(t *testing.T) {
 					}),
 				),
 			},
-			wantRes: []hotline.Transaction{},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID:  [2]byte{0, 1},
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte(ErrMsgCreateFolder)),
+					},
+				},
+			},
 		},
 		{
 			name: "FieldFileName does not allow directory traversal",
@@ -1206,6 +1256,54 @@ func TestHandleUploadFile(t *testing.T) {
 			gotRes := HandleUploadFile(tt.args.cc, &tt.args.t)
 			TranAssertEqual(t, tt.wantRes, gotRes)
 		})
+	}
+}
+
+// When a client requests to resume an upload but no partial (.incomplete) file
+// exists, the handler should fall back to a normal upload reply (reference number,
+// no resume-data field) rather than discarding the reply and returning nothing.
+func TestHandleUploadFile_resumeFallbackWhenNoPartialFile(t *testing.T) {
+	cc := &hotline.ClientConn{
+		Logger: NewTestLogger(),
+		Server: &hotline.Server{
+			TextDecoder:     charmap.Macintosh.NewDecoder(),
+			TextEncoder:     charmap.Macintosh.NewEncoder(),
+			FS:              &hotline.OSFileStore{},
+			FileTransferMgr: hotline.NewMemFileTransferMgr(),
+			Config: hotline.Config{
+				FileRoot: func() string { path, _ := os.Getwd(); return path + "/test/config/Files" }(),
+			},
+		},
+		ClientFileTransferMgr: hotline.NewClientFileTransferMgr(),
+		Account: &hotline.Account{
+			Access: func() hotline.AccessBitmap {
+				var bits hotline.AccessBitmap
+				bits.Set(hotline.AccessUploadFile)
+				bits.Set(hotline.AccessUploadAnywhere)
+				return bits
+			}(),
+		},
+	}
+	tr := hotline.NewTransaction(
+		hotline.TranUploadFile, [2]byte{0, 1},
+		hotline.NewField(hotline.FieldFileName, []byte("doesNotExistYet")),
+		hotline.NewField(hotline.FieldFilePath, []byte{0x00, 0x01, 0x00, 0x00, 0x03, 0x2e, 0x2e, 0x2f}),
+		hotline.NewField(hotline.FieldFileTransferOptions, []byte{0x00, 0x02}), // request resume
+	)
+
+	gotRes := HandleUploadFile(cc, &tr)
+
+	if len(gotRes) != 1 {
+		t.Fatalf("expected 1 reply transaction, got %d", len(gotRes))
+	}
+	if gotRes[0].ErrorCode != [4]byte{} {
+		t.Errorf("expected a non-error reply, got error code %v", gotRes[0].ErrorCode)
+	}
+	if gotRes[0].GetField(hotline.FieldRefNum).Data == nil {
+		t.Errorf("expected a reference number field in the reply")
+	}
+	if gotRes[0].GetField(hotline.FieldFileResumeData).Data != nil {
+		t.Errorf("expected no resume data field when there is no partial file to resume")
 	}
 }
 
@@ -2507,7 +2605,15 @@ func TestHandleUpdateUser(t *testing.T) {
 					}),
 				),
 			},
-			wantRes: nil,
+			wantRes: []hotline.Transaction{
+				{
+					IsReply:   0x01,
+					ErrorCode: [4]byte{0, 0, 0, 1},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldError, []byte(ErrMsgDeleteAccount)),
+					},
+				},
+			},
 		},
 		{
 			name: "when action is modify existing user with password",
@@ -4110,6 +4216,34 @@ func TestHandleSetClientUserInfo(t *testing.T) {
 			TranAssertEqual(t, tt.wantRes, gotRes)
 		})
 	}
+}
+
+// When the news path is empty, the handler should return an error reply rather
+// than silently discarding the request.
+func TestHandleDelNewsItem_emptyPathReturnsError(t *testing.T) {
+	cc := &hotline.ClientConn{
+		ID:     [2]byte{0, 1},
+		Logger: NewTestLogger(),
+		Server: &hotline.Server{
+			TextDecoder: charmap.Macintosh.NewDecoder(),
+			TextEncoder: charmap.Macintosh.NewEncoder(),
+		},
+	}
+	tr := hotline.NewTransaction(hotline.TranDelNewsItem, [2]byte{})
+
+	gotRes := HandleDelNewsItem(cc, &tr)
+
+	wantRes := []hotline.Transaction{
+		{
+			ClientID:  [2]byte{0, 1},
+			IsReply:   0x01,
+			ErrorCode: [4]byte{0, 0, 0, 1},
+			Fields: []hotline.Field{
+				hotline.NewField(hotline.FieldError, []byte(ErrMsgDeleteNewsItem)),
+			},
+		},
+	}
+	TranAssertEqual(t, wantRes, gotRes)
 }
 
 func TestHandleDelNewsItem(t *testing.T) {
