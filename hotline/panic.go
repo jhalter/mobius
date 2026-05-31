@@ -1,15 +1,16 @@
 package hotline
 
 import (
-	"fmt"
 	"log/slog"
 	"runtime/debug"
 )
 
-// dontPanic logs panics instead of crashing
+// dontPanic recovers from a panic and logs it (with a stack trace) instead of
+// letting it crash the goroutine. The trace is recorded via the structured
+// logger only; it is intentionally not written to stdout, so a client that can
+// repeatedly trigger a panic cannot flood stdout.
 func dontPanic(logger *slog.Logger) {
 	if r := recover(); r != nil {
-		fmt.Println("stacktrace from panic: \n" + string(debug.Stack()))
 		logger.Error("PANIC", "err", r, "trace", string(debug.Stack()))
 	}
 }

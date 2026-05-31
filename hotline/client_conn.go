@@ -114,6 +114,10 @@ func (cc *ClientConn) SendAll(t [2]byte, fields ...Field) {
 }
 
 func (cc *ClientConn) handleTransaction(transaction Transaction) {
+	// Contain panics to the individual transaction so a single malformed request
+	// cannot tear down the whole client connection.
+	defer dontPanic(cc.Logger)
+
 	if handler, ok := cc.Server.handlers[transaction.Type]; ok {
 		if transaction.Type != TranKeepAlive {
 			cc.Logger.Info(tranTypeNames[transaction.Type])

@@ -35,6 +35,29 @@ func TestFlatFileInformationFork_UnmarshalBinary(t *testing.T) {
 			},
 			wantErr: assert.NoError,
 		},
+		{
+			name:    "when the buffer is shorter than the fixed header returns an error instead of panicking",
+			args:    args{b: make([]byte, 10)},
+			wantErr: assert.Error,
+		},
+		{
+			name: "when the declared name size overruns the buffer returns an error",
+			args: args{b: func() []byte {
+				b := make([]byte, 72)
+				binary.BigEndian.PutUint16(b[70:72], 50) // claims a 50-byte name that isn't present
+				return b
+			}()},
+			wantErr: assert.Error,
+		},
+		{
+			name: "when the declared comment size overruns the buffer returns an error",
+			args: args{b: func() []byte {
+				b := make([]byte, 74)            // 72 header + 2 comment-size bytes, no name
+				binary.BigEndian.PutUint16(b[72:74], 50) // claims a 50-byte comment that isn't present
+				return b
+			}()},
+			wantErr: assert.Error,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

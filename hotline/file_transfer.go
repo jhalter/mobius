@@ -246,7 +246,7 @@ func (fh *FileHeader) Read(p []byte) (int, error) {
 
 func DownloadHandler(w io.Writer, fullPath string, fileTransfer *FileTransfer, fs FileStore, rLogger *slog.Logger, preserveForks bool) error {
 	var dataOffset int64
-	if fileTransfer.FileResumeData != nil {
+	if fileTransfer.FileResumeData != nil && len(fileTransfer.FileResumeData.ForkInfoList) > 0 {
 		dataOffset = int64(binary.BigEndian.Uint32(fileTransfer.FileResumeData.ForkInfoList[0].DataSize[:]))
 	}
 
@@ -458,7 +458,9 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 			if err := frd.UnmarshalBinary(resumeDataBytes); err != nil {
 				return err
 			}
-			dataOffset = int64(binary.BigEndian.Uint32(frd.ForkInfoList[0].DataSize[:]))
+			if len(frd.ForkInfoList) > 0 {
+				dataOffset = int64(binary.BigEndian.Uint32(frd.ForkInfoList[0].DataSize[:]))
+			}
 		case DlFldrActionNextFile:
 			// client asked to skip this file
 			return nil

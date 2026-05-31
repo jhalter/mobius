@@ -76,15 +76,31 @@ func (frd *FileResumeData) BinaryMarshal() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// resumeDataHeaderLen is the fixed-size header (Format, Version, RSVD, ForkCount)
+// that precedes the variable-length fork info list.
+const resumeDataHeaderLen = 42
+
+// forkInfoLen is the size of a single ForkInfoList entry.
+const forkInfoLen = 16
+
 func (frd *FileResumeData) UnmarshalBinary(b []byte) error {
+	if len(b) < resumeDataHeaderLen {
+		return fmt.Errorf("file resume data too short: %d bytes, need at least %d", len(b), resumeDataHeaderLen)
+	}
+
 	frd.Format = [4]byte{b[0], b[1], b[2], b[3]}
 	frd.Version = [2]byte{b[4], b[5]}
 	frd.ForkCount = [2]byte{b[40], b[41]}
 
-	for i := 0; i < int(frd.ForkCount[1]); i++ {
+	forkCount := int(frd.ForkCount[1])
+	if need := resumeDataHeaderLen + forkCount*forkInfoLen; len(b) < need {
+		return fmt.Errorf("file resume data truncated: %d bytes, need %d for %d forks", len(b), need, forkCount)
+	}
+
+	for i := 0; i < forkCount; i++ {
 		var fil ForkInfoList
-		start := 42 + i*16
-		end := start + 16
+		start := resumeDataHeaderLen + i*forkInfoLen
+		end := start + forkInfoLen
 
 		r := bytes.NewReader(b[start:end])
 		if err := binary.Read(r, binary.BigEndian, &fil); err != nil {

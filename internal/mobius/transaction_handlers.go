@@ -97,6 +97,8 @@ const (
 	ErrMsgFileResumeData       = "Invalid file resume data."
 	ErrMsgAccountNotFound      = "Account not found."
 	ErrMsgUserNotFound         = "User not found."
+	ErrMsgInvalidUserID        = "Invalid user ID."
+	ErrMsgInvalidChatID        = "Invalid chat ID."
 	ErrMsgCreateAlias          = "Error creating alias"
 	ErrMsgUpdateAccount        = "Error updating account."
 	ErrMsgDeleteAccount        = "Error deleting account."
@@ -195,9 +197,13 @@ func HandleChatSend(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 	// All clients *except* Frogblast omit this field for public chat, but Frogblast sends a value of 00 00 00 00.
 	chatID := t.GetField(hotline.FieldChatID).Data
 	if chatID != nil && !bytes.Equal([]byte{0, 0, 0, 0}, chatID) {
+		privChatID, ok := hotline.ChatIDFromBytes(chatID)
+		if !ok {
+			return cc.NewErrReply(t, ErrMsgInvalidChatID)
+		}
 
 		// send the message to all connected clients of the private chat
-		for _, c := range cc.Server.ChatMgr.Members([4]byte(chatID)) {
+		for _, c := range cc.Server.ChatMgr.Members(privChatID) {
 			res = append(res, hotline.NewTransaction(
 				hotline.TranChatMsg,
 				c.ID,
@@ -240,9 +246,14 @@ func HandleSendInstantMsg(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 	msg := t.GetField(hotline.FieldData)
 	userID := t.GetField(hotline.FieldUserID)
 
+	targetID, ok := hotline.ClientIDFromBytes(userID.Data)
+	if !ok {
+		return cc.NewErrReply(t, ErrMsgInvalidUserID)
+	}
+
 	reply := hotline.NewTransaction(
 		hotline.TranServerMsg,
-		[2]byte(userID.Data),
+		targetID,
 		hotline.NewField(hotline.FieldData, msg.Data),
 		hotline.NewField(hotline.FieldUserName, cc.UserName),
 		hotline.NewField(hotline.FieldUserID, cc.ID[:]),
@@ -255,7 +266,7 @@ func HandleSendInstantMsg(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 		reply.Fields = append(reply.Fields, hotline.NewField(hotline.FieldQuotingMsg, t.GetField(hotline.FieldQuotingMsg).Data))
 	}
 
-	otherClient := cc.Server.ClientMgr.Get([2]byte(userID.Data))
+	otherClient := cc.Server.ClientMgr.Get(targetID)
 	if otherClient == nil {
 		// Target user is no longer connected. The protocol defines no reply for
 		// this transaction, so there is nothing to send back.
@@ -787,6 +798,13 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	for _, field := range t.Fields {
 		var subFields []hotline.Field
 
+		// The first two bytes are the sub-field count; reject a malformed block
+		// that is too short to contain it rather than slicing out of range.
+		if len(field.Data) < 2 {
+			cc.Logger.Error("update user: malformed sub-field block", "len", len(field.Data))
+			return cc.NewErrReply(t, ErrMsgUpdateAccount)
+		}
+
 		// Create a new scanner for parsing incoming bytes into transaction tokens
 		scanner := bufio.NewScanner(bytes.NewReader(field.Data[2:]))
 		scanner.Split(hotline.FieldScanner)
@@ -1047,9 +1065,12 @@ func HandleGetClientInfoText(cc *hotline.ClientConn, t *hotline.Transaction) (re
 		return cc.NewErrReply(t, ErrMsgNotAllowedGetClientInfo)
 	}
 
-	clientID := t.GetField(hotline.FieldUserID).Data
+	clientID, ok := hotline.ClientIDFromBytes(t.GetField(hotline.FieldUserID).Data)
+	if !ok {
+		return cc.NewErrReply(t, ErrMsgInvalidUserID)
+	}
 
-	clientConn := cc.Server.ClientMgr.Get(hotline.ClientID(clientID))
+	clientConn := cc.Server.ClientMgr.Get(clientID)
 	if clientConn == nil {
 		return cc.NewErrReply(t, ErrMsgUserNotFound)
 	}
@@ -1228,8 +1249,14 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 		return cc.NewErrReply(t, ErrMsgNotAllowedDisconnectUsers)
 	}
 
-	clientID := [2]byte(t.GetField(hotline.FieldUserID).Data)
+	clientID, ok := hotline.ClientIDFromBytes(t.GetField(hotline.FieldUserID).Data)
+	if !ok {
+		return cc.NewErrReply(t, ErrMsgInvalidUserID)
+	}
 	clientConn := cc.Server.ClientMgr.Get(clientID)
+	if clientConn == nil {
+		return cc.NewErrReply(t, ErrMsgUserNotFound)
+	}
 
 	if clientConn.Authorize(hotline.AccessCannotBeDiscon) {
 		return cc.NewErrReply(t, clientConn.Account.Login+" is not allowed to be disconnected.")
@@ -1238,8 +1265,8 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 	// If FieldOptions is set, then the client IP is banned in addition to disconnected.
 	// 00 01 = temporary ban
 	// 00 02 = permanent ban
-	if t.GetField(hotline.FieldOptions).Data != nil {
-		switch t.GetField(hotline.FieldOptions).Data[1] {
+	if options := t.GetField(hotline.FieldOptions).Data; len(options) > 1 {
+		switch options[1] {
 		case 1:
 			// send message: "You are temporarily banned on this server"
 			cc.Logger.Info("Disconnect & temporarily ban " + string(clientConn.UserName))
@@ -1645,7 +1672,9 @@ func HandleDownloadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 			return cc.NewErrReply(t, ErrMsgFileResumeData)
 		}
 		// TODO: handle rsrc fork offset
-		dataOffset = int64(binary.BigEndian.Uint32(frd.ForkInfoList[0].DataSize[:]))
+		if len(frd.ForkInfoList) > 0 {
+			dataOffset = int64(binary.BigEndian.Uint32(frd.ForkInfoList[0].DataSize[:]))
+		}
 	}
 
 	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName, cc.TextDecoder())
@@ -2037,13 +2066,20 @@ func HandleInviteNewChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []
 	}
 
 	// Client to Invite
-	targetID := t.GetField(hotline.FieldUserID).Data
+	targetID, ok := hotline.ClientIDFromBytes(t.GetField(hotline.FieldUserID).Data)
+	if !ok {
+		return cc.NewErrReply(t, ErrMsgInvalidUserID)
+	}
+
+	// Check if target user has "Refuse private chat" flag
+	targetClient := cc.Server.ClientMgr.Get(targetID)
+	if targetClient == nil {
+		return cc.NewErrReply(t, ErrMsgUserNotFound)
+	}
 
 	// Create a new chat with self as initial member.
 	newChatID := cc.Server.ChatMgr.New(cc)
 
-	// Check if target user has "Refuse private chat" flag
-	targetClient := cc.Server.ClientMgr.Get([2]byte(targetID))
 	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(targetClient.Flags[:])))
 	if flagBitmap.Bit(hotline.UserFlagRefusePChat) == 1 {
 		res = append(res,
@@ -2060,7 +2096,7 @@ func HandleInviteNewChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []
 		res = append(res,
 			hotline.NewTransaction(
 				hotline.TranInviteToChat,
-				[2]byte(targetID),
+				targetID,
 				hotline.NewField(hotline.FieldChatID, newChatID[:]),
 				hotline.NewField(hotline.FieldUserName, cc.UserName),
 				hotline.NewField(hotline.FieldUserID, cc.ID[:]),
@@ -2093,13 +2129,16 @@ func HandleInviteToChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 	}
 
 	// Client to Invite
-	targetID := t.GetField(hotline.FieldUserID).Data
+	targetID, ok := hotline.ClientIDFromBytes(t.GetField(hotline.FieldUserID).Data)
+	if !ok {
+		return cc.NewErrReply(t, ErrMsgInvalidUserID)
+	}
 	chatID := t.GetField(hotline.FieldChatID).Data
 
 	return []hotline.Transaction{
 		hotline.NewTransaction(
 			hotline.TranInviteToChat,
-			[2]byte(targetID),
+			targetID,
 			hotline.NewField(hotline.FieldChatID, chatID),
 			hotline.NewField(hotline.FieldUserName, cc.UserName),
 			hotline.NewField(hotline.FieldUserID, cc.ID[:]),
@@ -2122,7 +2161,11 @@ func HandleInviteToChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 //
 // Reply is not expected.
 func HandleRejectChatInvite(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
-	chatID := [4]byte(t.GetField(hotline.FieldChatID).Data)
+	chatID, ok := hotline.ChatIDFromBytes(t.GetField(hotline.FieldChatID).Data)
+	if !ok {
+		cc.Logger.Error("reject chat invite: invalid chat ID")
+		return res
+	}
 
 	for _, c := range cc.Server.ChatMgr.Members(chatID) {
 		res = append(res,
@@ -2147,15 +2190,18 @@ func HandleRejectChatInvite(cc *hotline.ClientConn, t *hotline.Transaction) (res
 //   - 115 Chat subject         Current chat room subject
 //   - 300 User name with info  Repeated - User information for each chat member
 func HandleJoinChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
-	chatID := t.GetField(hotline.FieldChatID).Data
+	chatID, ok := hotline.ChatIDFromBytes(t.GetField(hotline.FieldChatID).Data)
+	if !ok {
+		return cc.NewErrReply(t, ErrMsgInvalidChatID)
+	}
 
 	// Send TranNotifyChatChangeUser to current members of the chat to inform of new user
-	for _, c := range cc.Server.ChatMgr.Members([4]byte(chatID)) {
+	for _, c := range cc.Server.ChatMgr.Members(chatID) {
 		res = append(res,
 			hotline.NewTransaction(
 				hotline.TranNotifyChatChangeUser,
 				c.ID,
-				hotline.NewField(hotline.FieldChatID, chatID),
+				hotline.NewField(hotline.FieldChatID, chatID[:]),
 				hotline.NewField(hotline.FieldUserName, cc.UserName),
 				hotline.NewField(hotline.FieldUserID, cc.ID[:]),
 				hotline.NewField(hotline.FieldUserIconID, cc.Icon),
@@ -2164,12 +2210,12 @@ func HandleJoinChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 		)
 	}
 
-	cc.Server.ChatMgr.Join(hotline.ChatID(chatID), cc)
+	cc.Server.ChatMgr.Join(chatID, cc)
 
-	subject := cc.Server.ChatMgr.GetSubject(hotline.ChatID(chatID))
+	subject := cc.Server.ChatMgr.GetSubject(chatID)
 
 	replyFields := []hotline.Field{hotline.NewField(hotline.FieldChatSubject, []byte(subject))}
-	for _, c := range cc.Server.ChatMgr.Members([4]byte(chatID)) {
+	for _, c := range cc.Server.ChatMgr.Members(chatID) {
 		b, err := io.ReadAll(&hotline.User{
 			ID:    c.ID,
 			Icon:  c.Icon,
@@ -2193,17 +2239,21 @@ func HandleJoinChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 //
 // Reply is not expected.
 func HandleLeaveChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
-	chatID := t.GetField(hotline.FieldChatID).Data
+	chatID, ok := hotline.ChatIDFromBytes(t.GetField(hotline.FieldChatID).Data)
+	if !ok {
+		cc.Logger.Error("leave chat: invalid chat ID")
+		return res
+	}
 
-	cc.Server.ChatMgr.Leave([4]byte(chatID), cc.ID)
+	cc.Server.ChatMgr.Leave(chatID, cc.ID)
 
 	// Notify members of the private chat that the user has left
-	for _, c := range cc.Server.ChatMgr.Members(hotline.ChatID(chatID)) {
+	for _, c := range cc.Server.ChatMgr.Members(chatID) {
 		res = append(res,
 			hotline.NewTransaction(
 				hotline.TranNotifyChatDeleteUser,
 				c.ID,
-				hotline.NewField(hotline.FieldChatID, chatID),
+				hotline.NewField(hotline.FieldChatID, chatID[:]),
 				hotline.NewField(hotline.FieldUserID, cc.ID[:]),
 			),
 		)
@@ -2220,17 +2270,21 @@ func HandleLeaveChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 //
 // Reply is not expected.
 func HandleSetChatSubject(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
-	chatID := t.GetField(hotline.FieldChatID).Data
+	chatID, ok := hotline.ChatIDFromBytes(t.GetField(hotline.FieldChatID).Data)
+	if !ok {
+		cc.Logger.Error("set chat subject: invalid chat ID")
+		return res
+	}
 
-	cc.Server.ChatMgr.SetSubject([4]byte(chatID), string(t.GetField(hotline.FieldChatSubject).Data))
+	cc.Server.ChatMgr.SetSubject(chatID, string(t.GetField(hotline.FieldChatSubject).Data))
 
 	// Notify chat members of new subject.
-	for _, c := range cc.Server.ChatMgr.Members([4]byte(chatID)) {
+	for _, c := range cc.Server.ChatMgr.Members(chatID) {
 		res = append(res,
 			hotline.NewTransaction(
 				hotline.TranNotifyChatSubject,
 				c.ID,
-				hotline.NewField(hotline.FieldChatID, chatID),
+				hotline.NewField(hotline.FieldChatID, chatID[:]),
 				hotline.NewField(hotline.FieldChatSubject, t.GetField(hotline.FieldChatSubject).Data),
 			),
 		)

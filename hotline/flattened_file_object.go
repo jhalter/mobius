@@ -3,9 +3,14 @@ package hotline
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"slices"
 )
+
+// flatFileInfoForkMinLen is the fixed-size portion of a FlatFileInformationFork
+// that precedes the variable-length name (and optional comment).
+const flatFileInfoForkMinLen = 72
 
 type flattenedFileObject struct {
 	FlatFileHeader                FlatFileHeader
@@ -156,40 +161,22 @@ func (ffif *FlatFileInformationFork) Read(p []byte) (int, error) {
 
 // Write implements the io.Writer interface for FlatFileInformationFork
 func (ffif *FlatFileInformationFork) Write(p []byte) (int, error) {
-	nameSize := p[70:72]
-	bs := binary.BigEndian.Uint16(nameSize)
-	total := 72 + bs
-
-	ffif.Platform = [4]byte(p[0:4])
-	ffif.TypeSignature = [4]byte(p[4:8])
-	ffif.CreatorSignature = [4]byte(p[8:12])
-	ffif.Flags = [4]byte(p[12:16])
-	ffif.PlatformFlags = [4]byte(p[16:20])
-	ffif.RSVD = [32]byte(p[20:52])
-	ffif.CreateDate = [8]byte(p[52:60])
-	ffif.ModifyDate = [8]byte(p[60:68])
-	ffif.NameScript = [2]byte(p[68:70])
-	ffif.NameSize = [2]byte(p[70:72])
-	ffif.Name = p[72:total]
-
-	if len(p) > int(total) {
-		ffif.CommentSize = [2]byte(p[total : total+2])
-		commentLen := binary.BigEndian.Uint16(ffif.CommentSize[:])
-		commentStartPos := int(total) + 2
-		commentEndPos := int(total) + 2 + int(commentLen)
-
-		ffif.Comment = p[commentStartPos:commentEndPos]
-
-		//total = uint16(commentEndPos)
+	if err := ffif.UnmarshalBinary(p); err != nil {
+		return 0, err
 	}
-
 	return len(p), nil
 }
 
 func (ffif *FlatFileInformationFork) UnmarshalBinary(b []byte) error {
-	nameSize := b[70:72]
-	bs := binary.BigEndian.Uint16(nameSize)
-	nameEnd := 72 + bs
+	if len(b) < flatFileInfoForkMinLen {
+		return fmt.Errorf("flat file information fork too short: %d bytes, need at least %d", len(b), flatFileInfoForkMinLen)
+	}
+
+	bs := binary.BigEndian.Uint16(b[70:72])
+	nameEnd := flatFileInfoForkMinLen + int(bs)
+	if len(b) < nameEnd {
+		return fmt.Errorf("flat file information fork name overruns buffer: need %d bytes, have %d", nameEnd, len(b))
+	}
 
 	ffif.Platform = [4]byte(b[0:4])
 	ffif.TypeSignature = [4]byte(b[4:8])
@@ -203,12 +190,18 @@ func (ffif *FlatFileInformationFork) UnmarshalBinary(b []byte) error {
 	ffif.NameSize = [2]byte(b[70:72])
 	ffif.Name = b[72:nameEnd]
 
-	if len(b) > int(nameEnd) {
+	if len(b) > nameEnd {
+		if len(b) < nameEnd+2 {
+			return fmt.Errorf("flat file information fork comment size overruns buffer")
+		}
 		ffif.CommentSize = [2]byte(b[nameEnd : nameEnd+2])
 		commentLen := binary.BigEndian.Uint16(ffif.CommentSize[:])
 
-		commentStartPos := int(nameEnd) + 2
-		commentEndPos := int(nameEnd) + 2 + int(commentLen)
+		commentStartPos := nameEnd + 2
+		commentEndPos := nameEnd + 2 + int(commentLen)
+		if len(b) < commentEndPos {
+			return fmt.Errorf("flat file information fork comment overruns buffer: need %d bytes, have %d", commentEndPos, len(b))
+		}
 
 		ffif.Comment = b[commentStartPos:commentEndPos]
 	}
