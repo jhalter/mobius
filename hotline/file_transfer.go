@@ -209,7 +209,9 @@ func (fu *folderUpload) FormattedPath() string {
 		}
 	}
 
-	return path.Join(pathSegments...)
+	// Anchor at "/" so any ".." segments are collapsed and cannot escape the upload
+	// root (mirrors ReadPath). Strip the leading separator to keep the path relative.
+	return strings.TrimPrefix(path.Join("/", path.Join(pathSegments...)), "/")
 }
 
 type FileHeader struct {
@@ -561,9 +563,12 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 			return err
 		}
 
+		// Resolve the item path once. FormattedPath is sanitized to stay within fullPath.
+		itemPath := path.Join(fullPath, fu.FormattedPath())
+
 		if fu.IsFolder == [2]byte{0, 1} {
-			if _, err := os.Stat(path.Join(fullPath, fu.FormattedPath())); os.IsNotExist(err) {
-				if err := os.Mkdir(path.Join(fullPath, fu.FormattedPath()), 0777); err != nil {
+			if _, err := os.Stat(itemPath); os.IsNotExist(err) {
+				if err := os.Mkdir(itemPath, 0777); err != nil {
 					return err
 				}
 			}
@@ -576,7 +581,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 			nextAction := DlFldrActionSendFile
 
 			// Check if we have the full file already.  If so, send dlFldrAction_NextFile to client to skip.
-			_, err := os.Stat(path.Join(fullPath, fu.FormattedPath()))
+			_, err := os.Stat(itemPath)
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
@@ -585,7 +590,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 			}
 
 			//  Check if we have a partial file already.  If so, send dlFldrAction_ResumeFile to client to resume upload.
-			incompleteFile, err := os.Stat(path.Join(fullPath, fu.FormattedPath()+IncompleteFileSuffix))
+			incompleteFile, err := os.Stat(itemPath + IncompleteFileSuffix)
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
@@ -604,7 +609,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 				offset := make([]byte, 4)
 				binary.BigEndian.PutUint32(offset, uint32(incompleteFile.Size()))
 
-				file, err := os.OpenFile(fullPath+"/"+fu.FormattedPath()+IncompleteFileSuffix, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				file, err := os.OpenFile(itemPath+IncompleteFileSuffix, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 				if err != nil {
 					return err
 				}
@@ -628,7 +633,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 					rLogger.Error("Error receiving file", "err", err)
 				}
 
-				err = os.Rename(fullPath+"/"+fu.FormattedPath()+".incomplete", fullPath+"/"+fu.FormattedPath())
+				err = os.Rename(itemPath+IncompleteFileSuffix, itemPath)
 				if err != nil {
 					return err
 				}
@@ -638,7 +643,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 					return err
 				}
 
-				filePath := path.Join(fullPath, fu.FormattedPath())
+				filePath := itemPath
 
 				hlFile, err := NewFile(fileStore, filePath, 0)
 				if err != nil {

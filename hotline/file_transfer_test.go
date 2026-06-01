@@ -255,6 +255,68 @@ func Test_folderUpload_FormattedPath(t *testing.T) {
 			},
 			want: "test@$%&",
 		},
+		{
+			// Traversal attempt: leading ".." segments must be collapsed and cannot escape the upload root.
+			name:          "traversal with parent dir segments",
+			pathItemCount: [2]byte{0x00, 0x04},
+			fileNamePath: []byte{
+				0x00, 0x00, // path separator
+				0x02,       // segment length
+				0x2e, 0x2e, // ".."
+				0x00, 0x00, // path separator
+				0x02,       // segment length
+				0x2e, 0x2e, // ".."
+				0x00, 0x00, // path separator
+				0x03,             // segment length
+				0x65, 0x74, 0x63, // "etc"
+				0x00, 0x00, // path separator
+				0x06,                               // segment length
+				0x70, 0x61, 0x73, 0x73, 0x77, 0x64, // "passwd"
+			},
+			want: "etc/passwd",
+		},
+		{
+			// Interior ".." segments resolve away without escaping.
+			name:          "traversal with interior parent dir segments",
+			pathItemCount: [2]byte{0x00, 0x04},
+			fileNamePath: []byte{
+				0x00, 0x00, // path separator
+				0x03,             // segment length
+				0x66, 0x6f, 0x6f, // "foo"
+				0x00, 0x00, // path separator
+				0x02,       // segment length
+				0x2e, 0x2e, // ".."
+				0x00, 0x00, // path separator
+				0x02,       // segment length
+				0x2e, 0x2e, // ".."
+				0x00, 0x00, // path separator
+				0x03,             // segment length
+				0x62, 0x61, 0x72, // "bar"
+			},
+			want: "bar",
+		},
+		{
+			// A lone ".." segment collapses to the upload root (empty relative path).
+			name:          "single parent dir segment",
+			pathItemCount: [2]byte{0x00, 0x01},
+			fileNamePath: []byte{
+				0x00, 0x00, // path separator
+				0x02,       // segment length
+				0x2e, 0x2e, // ".."
+			},
+			want: "",
+		},
+		{
+			// A single segment whose raw bytes embed separators and "..".
+			name:          "segment containing embedded separators",
+			pathItemCount: [2]byte{0x00, 0x01},
+			fileNamePath: []byte{
+				0x00, 0x00, // path separator
+				0x09,                                                 // segment length
+				0x2e, 0x2e, 0x2f, 0x2e, 0x2e, 0x2f, 0x65, 0x74, 0x63, // "../../etc" (9 bytes)
+			},
+			want: "etc",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
