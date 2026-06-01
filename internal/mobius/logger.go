@@ -22,14 +22,21 @@ var logLevels = map[string]slog.Level{
 }
 
 func NewLogger(logLevel, logFile *string) *slog.Logger {
+	// Always log to stdout. Only add the rotating file writer when a log file path
+	// is configured; an empty Filename makes lumberjack write to a temp file.
+	var out io.Writer = os.Stdout
+	if *logFile != "" {
+		out = io.MultiWriter(os.Stdout, &lumberjack.Logger{
+			Filename:   *logFile,
+			MaxSize:    logMaxSize,
+			MaxBackups: logMaxBackups,
+			MaxAge:     logMaxAge,
+		})
+	}
+
 	return slog.New(
 		slog.NewTextHandler(
-			io.MultiWriter(os.Stdout, &lumberjack.Logger{
-				Filename:   *logFile,
-				MaxSize:    logMaxSize,
-				MaxBackups: logMaxBackups,
-				MaxAge:     logMaxAge,
-			}),
+			out,
 			&slog.HandlerOptions{
 				Level: logLevels[*logLevel],
 				ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {

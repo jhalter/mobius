@@ -477,7 +477,7 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 
 		// Send file size to client
 		if _, err := rwc.Write(hlFile.Ffo.TransferSize(dataOffset)); err != nil {
-			rLogger.Error(err.Error())
+			rLogger.Error("Error sending file size", "err", err)
 			return fmt.Errorf("error sending file size: %w", err)
 		}
 
@@ -625,7 +625,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 				}
 
 				if err := receiveFile(rwc, file, io.Discard, io.Discard, fileTransfer.bytesSentCounter); err != nil {
-					rLogger.Error(err.Error())
+					rLogger.Error("Error receiving file", "err", err)
 				}
 
 				err = os.Rename(fullPath+"/"+fu.FormattedPath()+".incomplete", fullPath+"/"+fu.FormattedPath())

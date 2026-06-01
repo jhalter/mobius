@@ -71,7 +71,7 @@ func main() {
 				slogger.Error("Error copying config dir", "err", err)
 				os.Exit(1)
 			}
-			slogger.Info("Config dir initialized at " + *configDir)
+			slogger.Info("Config dir initialized", "config", *configDir)
 		} else {
 			slogger.Info("Existing config dir found.  Skipping initialization.")
 		}
@@ -131,7 +131,7 @@ func main() {
 
 		srv.Redis = redisClient
 		srv.BanList = mobius.NewRedisBanMgr(redisClient, slogger)
-		slogger.Info("Using Redis for ban management", "addr", *redisAddr)
+		slogger.Debug("Using Redis for ban management", "addr", *redisAddr)
 	} else {
 		srv.BanList, err = mobius.NewBanFile(path.Join(*configDir, "Banlist.yaml"))
 		if err != nil {
@@ -215,7 +215,11 @@ func main() {
 		}
 	}()
 
-	slogger.Info("Hotline server started", "version", version, "config", *configDir)
+	boundInterface := *netInterface
+	if boundInterface == "" {
+		boundInterface = "0.0.0.0"
+	}
+	slogger.Info("Hotline server started", "version", version, "config", *configDir, "interface", boundInterface, "port", *basePort, "fileTransferPort", *basePort+1)
 	if tlsConfig != nil {
 		slogger.Info("TLS enabled", "port", *tlsPort, "fileTransferPort", *tlsPort+1)
 	}

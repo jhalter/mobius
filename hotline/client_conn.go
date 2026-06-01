@@ -176,7 +176,7 @@ func (cc *ClientConn) Disconnect() {
 	}
 
 	if err := cc.Connection.Close(); err != nil {
-		cc.Server.Logger.Debug("error closing client connection", "RemoteAddr", cc.RemoteAddr)
+		cc.Server.Logger.Debug("error closing client connection", "remoteAddr", cc.RemoteAddr)
 	}
 }
 

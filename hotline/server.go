@@ -309,16 +309,16 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 
 				// Check if the rate limit is exceeded and close the connection if so.
 				if !rl.Allow() {
-					s.Logger.Info("Rate limit exceeded", "RemoteAddr", conn.RemoteAddr())
+					s.Logger.Info("Rate limit exceeded", "remoteAddr", conn.RemoteAddr())
 					_ = conn.Close()
 					return
 				}
 
 				if err := s.handleNewConnection(connCtx, conn, conn.RemoteAddr().String()); err != nil {
 					if err == io.EOF {
-						s.Logger.Info("Client disconnected", "RemoteAddr", conn.RemoteAddr())
+						s.Logger.Info("Client disconnected", "remoteAddr", conn.RemoteAddr())
 					} else {
-						s.Logger.Error("Error serving request", "RemoteAddr", conn.RemoteAddr(), "err", err)
+						s.Logger.Error("Error serving request", "remoteAddr", conn.RemoteAddr(), "err", err)
 					}
 				}
 			}()
@@ -380,7 +380,7 @@ func (s *Server) registerWithAllTrackers() {
 		tr.Password = parseTrackerPassword(t)
 
 		if err := s.TrackerRegistrar.Register(t, tr); err != nil {
-			s.Logger.Error(fmt.Sprintf("Unable to register with tracker %v", t), "error", err)
+			s.Logger.Error("Unable to register with tracker", "tracker", t, "err", err)
 		}
 	}
 }

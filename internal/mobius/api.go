@@ -85,7 +85,7 @@ func NewAPIServer(hlServer *hotline.Server, reloadFunc func(), logger *slog.Logg
 		if err := hlServer.Redis.Del(context.Background(), hotline.RedisKeyOnline).Err(); err != nil {
 			srv.logger.Warn("Failed to clear online users in Redis", "err", err)
 		} else {
-			srv.logger.Info("Cleared online users in Redis on startup")
+			srv.logger.Debug("Cleared online users in Redis on startup")
 		}
 	}
 

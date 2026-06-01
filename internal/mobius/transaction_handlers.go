@@ -685,7 +685,7 @@ func HandleSetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 
 	err := cc.Server.AccountManager.Update(*account, account.Login)
 	if err != nil {
-		cc.Logger.Error("Error updating account", "Err", err)
+		cc.Logger.Error("Error updating account", "err", err)
 		return cc.NewErrReply(t, ErrMsgUpdateAccount)
 	}
 
@@ -760,7 +760,7 @@ func HandleListUsers(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotl
 	for _, acc := range cc.Server.AccountManager.List() {
 		b, err := io.ReadAll(&acc)
 		if err != nil {
-			cc.Logger.Error("Error reading account", "Account", acc.Login, "Err", err)
+			cc.Logger.Error("Error reading account", "account", acc.Login, "err", err)
 			continue
 		}
 
@@ -831,7 +831,7 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 			cc.Logger.Info("DeleteUser", "login", login)
 
 			if err := cc.Server.AccountManager.Delete(login); err != nil {
-				cc.Logger.Error("Error deleting account", "Err", err)
+				cc.Logger.Error("Error deleting account", "err", err)
 				return cc.NewErrReply(t, ErrMsgDeleteAccount)
 			}
 
@@ -1005,7 +1005,7 @@ func HandleDeleteUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	login := t.GetField(hotline.FieldUserLogin).DecodeObfuscatedString()
 
 	if err := cc.Server.AccountManager.Delete(login); err != nil {
-		cc.Logger.Error("Error deleting account", "Err", err)
+		cc.Logger.Error("Error deleting account", "err", err)
 		return cc.NewErrReply(t, ErrMsgDeleteAccount)
 	}
 
@@ -1269,7 +1269,7 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 		switch options[1] {
 		case 1:
 			// send message: "You are temporarily banned on this server"
-			cc.Logger.Info("Disconnect & temporarily ban " + string(clientConn.UserName))
+			cc.Logger.Info("Disconnect & temporarily ban user", "username", string(clientConn.UserName))
 
 			res = append(res, hotline.NewTransaction(
 				hotline.TranServerMsg,
@@ -1288,7 +1288,7 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 			}
 		case 2:
 			// send message: "You are permanently banned on this server"
-			cc.Logger.Info("Disconnect & ban " + string(clientConn.UserName))
+			cc.Logger.Info("Disconnect & ban user", "username", string(clientConn.UserName))
 
 			res = append(res, hotline.NewTransaction(
 				hotline.TranServerMsg,
