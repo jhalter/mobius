@@ -49,8 +49,6 @@ type Server struct {
 
 	FS FileStore // Storage backend to use for File storage
 
-	outbox chan Transaction
-
 	Agreement io.ReadSeeker
 	Banner    []byte
 
@@ -124,7 +122,6 @@ type ServerConfig struct {
 func NewServer(options ...Option) (*Server, error) {
 	server := Server{
 		handlers:         make(map[TranType]HandlerFunc),
-		outbox:           make(chan Transaction),
 		rateLimiters:     make(map[string]*rate.Limiter),
 		FS:               &OSFileStore{},
 		ChatMgr:          NewMemChatManager(),
@@ -164,7 +161,6 @@ func (s *Server) CurrentStats() StatValues {
 func (s *Server) ListenAndServe(ctx context.Context) error {
 	go s.registerWithTrackers(ctx)
 	go s.keepaliveHandler(ctx)
-	go s.processOutbox()
 
 	var wg sync.WaitGroup
 
@@ -245,29 +241,11 @@ func (s *Server) ServeFileTransfersWithTLS(ctx context.Context, ln net.Listener)
 	return s.ServeFileTransfers(ctx, tls.NewListener(ln, s.TLSConfig))
 }
 
-func (s *Server) sendTransaction(t Transaction) error {
-	client := s.ClientMgr.Get(t.ClientID)
-
-	if client == nil {
-		return nil
-	}
-
-	_, err := io.Copy(client.Connection, &t)
-	if err != nil {
-		return fmt.Errorf("failed to send transaction to client %v: %v", t.ClientID, err)
-	}
-
-	return nil
-}
-
-func (s *Server) processOutbox() {
-	for {
-		t := <-s.outbox
-		go func() {
-			if err := s.sendTransaction(t); err != nil {
-				s.Logger.Error("error sending transaction", "err", err)
-			}
-		}()
+// Send routes t to the send queue of the client identified by t.ClientID.  Transactions for
+// clients that are no longer connected are dropped.
+func (s *Server) Send(t Transaction) {
+	if c := s.ClientMgr.Get(t.ClientID); c != nil {
+		c.Send(t)
 	}
 }
 
@@ -532,7 +510,10 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	}
 
 	c := s.NewClientConn(rwc, remoteAddr)
-	// Add the client to the list of connected clients
+
+	// Start the client's writer goroutine: the single writer to the connection, which preserves
+	// transaction ordering and prevents interleaved writes.
+	go c.writeLoop()
 
 	// TODO: refactor this into a connection manager interface, maybe?
 	if s.Redis != nil {
@@ -590,14 +571,14 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		c.Flags.Set(UserFlagAdmin, 1)
 	}
 
-	s.outbox <- c.NewReply(&clientLogin,
+	c.Send(c.NewReply(&clientLogin,
 		NewField(FieldVersion, []byte{0x00, 0xbe}),
 		NewField(FieldCommunityBannerID, []byte{0, 0}),
 		NewField(FieldServerName, []byte(s.Config.Name)),
-	)
+	))
 
 	// Send user access privs so client UI knows how to behave
-	c.Server.outbox <- NewTransaction(TranUserAccess, c.ID, NewField(FieldUserAccess, c.Account.Access[:]))
+	c.Send(NewTransaction(TranUserAccess, c.ID, NewField(FieldUserAccess, c.Account.Access[:])))
 
 	// Accounts with AccessNoAgreement do not receive the server agreement on login.  The behavior is different between
 	// client versions.  For 1.2.3 client, we do not send TranShowAgreement.  For other client versions, we send
@@ -605,13 +586,13 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	if c.Authorize(AccessNoAgreement) {
 		// If client version is nil, then the client uses the 1.2.3 login behavior
 		if c.Version != nil {
-			c.Server.outbox <- NewTransaction(TranShowAgreement, c.ID, NewField(FieldNoServerAgreement, []byte{1}))
+			c.Send(NewTransaction(TranShowAgreement, c.ID, NewField(FieldNoServerAgreement, []byte{1})))
 		}
 	} else {
 		_, _ = c.Server.Agreement.Seek(0, 0)
 		data, _ := io.ReadAll(c.Server.Agreement)
 
-		c.Server.outbox <- NewTransaction(TranShowAgreement, c.ID, NewField(FieldData, data))
+		c.Send(NewTransaction(TranShowAgreement, c.ID, NewField(FieldData, data)))
 	}
 
 	// If the client has provided a username as part of the login, we can infer that it is using the 1.2.3 login
@@ -641,7 +622,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 				NewField(FieldUserFlags, c.Flags[:]),
 			),
 		) {
-			c.Server.outbox <- t
+			c.Server.Send(t)
 		}
 	}
 
@@ -776,7 +757,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 
 func (s *Server) SendAll(t TranType, fields ...Field) {
 	for _, c := range s.ClientMgr.List() {
-		s.outbox <- NewTransaction(t, c.ID, fields...)
+		c.Send(NewTransaction(t, c.ID, fields...))
 	}
 }
 

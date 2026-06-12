@@ -628,10 +628,9 @@ func TestShutdownHandler(t *testing.T) {
 		srv, _, _, _ := newTestAPIServer(t, "")
 
 		// Shutdown calls srv.hlServer.Shutdown in a goroutine, which calls
-		// SendAll on the server. We need outbox to be non-nil to avoid a panic.
-		// Since Shutdown runs in a goroutine, we just verify the HTTP response.
-		// The goroutine may panic but that's acceptable in test since we're only
-		// testing the HTTP layer.
+		// SendAll on the server to enqueue a disconnect message for each
+		// connected client. Since Shutdown runs in a goroutine, we just verify
+		// the HTTP response here.
 		srv.hlServer.Logger = slog.Default()
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/shutdown", strings.NewReader("Server is going down"))

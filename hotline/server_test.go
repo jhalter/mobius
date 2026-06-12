@@ -764,66 +764,58 @@ func TestServer_CurrentStats(t *testing.T) {
 	assert.Equal(t, 0, result.UploadsInProgress)
 }
 
-func TestServer_sendTransaction(t *testing.T) {
-	t.Run("sends transaction to client connection", func(t *testing.T) {
-		wBuf := &bytes.Buffer{}
+func TestServer_Send(t *testing.T) {
+	t.Run("enqueues transaction for the target client", func(t *testing.T) {
+		client := &ClientConn{
+			Connection: &nopCloserRWC{Buffer: &bytes.Buffer{}},
+		}
 		mockMgr := &MockClientMgr{}
-		mockMgr.On("Get", ClientID{0, 1}).Return(&ClientConn{
-			Connection: &nopCloserRWC{Buffer: wBuf},
-		})
+		mockMgr.On("Get", ClientID{0, 1}).Return(client)
 
 		srv := &Server{ClientMgr: mockMgr}
 
 		tran := NewTransaction(TranChatMsg, ClientID{0, 1}, NewField(FieldData, []byte("hello")))
-		err := srv.sendTransaction(tran)
+		srv.Send(tran)
 
-		assert.NoError(t, err)
-		assert.Greater(t, wBuf.Len(), 0)
+		assert.Len(t, client.sendCh, 1)
+		queued := <-client.sendCh
+		assert.Equal(t, TranChatMsg, queued.Type)
 		mockMgr.AssertExpectations(t)
 	})
 
-	t.Run("returns nil when client not found", func(t *testing.T) {
+	t.Run("drops transaction when client not found", func(t *testing.T) {
 		mockMgr := &MockClientMgr{}
 		mockMgr.On("Get", ClientID{0, 99}).Return((*ClientConn)(nil))
 
 		srv := &Server{ClientMgr: mockMgr}
 
-		tran := NewTransaction(TranChatMsg, ClientID{0, 99})
-		err := srv.sendTransaction(tran)
+		srv.Send(NewTransaction(TranChatMsg, ClientID{0, 99}))
 
-		assert.NoError(t, err)
 		mockMgr.AssertExpectations(t)
 	})
 }
 
 func TestServer_SendAll(t *testing.T) {
-	mockMgr := &MockClientMgr{}
-	mockMgr.On("List").Return([]*ClientConn{
+	peers := []*ClientConn{
 		{ID: ClientID{0, 1}},
 		{ID: ClientID{0, 2}},
 		{ID: ClientID{0, 3}},
-	})
-
-	outbox := make(chan Transaction, 10)
-	srv := &Server{
-		ClientMgr: mockMgr,
-		outbox:    outbox,
 	}
+	mockMgr := &MockClientMgr{}
+	mockMgr.On("List").Return(peers)
+
+	srv := &Server{ClientMgr: mockMgr}
 
 	srv.SendAll(TranChatMsg, NewField(FieldData, []byte("broadcast")))
 
-	assert.Len(t, outbox, 3)
+	// Verify each transaction was queued for its own client
+	for _, peer := range peers {
+		assert.Len(t, peer.sendCh, 1)
 
-	// Verify each transaction targets a different client
-	clientIDs := make(map[ClientID]bool)
-	for range 3 {
-		tran := <-outbox
-		clientIDs[tran.ClientID] = true
+		tran := <-peer.sendCh
+		assert.Equal(t, peer.ID, tran.ClientID)
 		assert.Equal(t, TranChatMsg, tran.Type)
 	}
-	assert.True(t, clientIDs[ClientID{0, 1}])
-	assert.True(t, clientIDs[ClientID{0, 2}])
-	assert.True(t, clientIDs[ClientID{0, 3}])
 
 	mockMgr.AssertExpectations(t)
 }

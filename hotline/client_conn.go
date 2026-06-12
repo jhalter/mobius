@@ -21,6 +21,10 @@ var clientConnSortFunc = func(a, b *ClientConn) int {
 	)
 }
 
+// sendQueueDepth is the number of transactions that can be queued for delivery to a client before
+// the client is considered too slow and is disconnected.
+const sendQueueDepth = 64
+
 // ClientConn represents a client connected to a Server
 type ClientConn struct {
 	Connection io.ReadWriteCloser
@@ -43,6 +47,74 @@ type ClientConn struct {
 	Logger *slog.Logger
 
 	mu sync.RWMutex
+
+	sendCh     chan Transaction
+	sendInit   sync.Once
+	sendMu     sync.Mutex // guards sendClosed and close(sendCh)
+	sendClosed bool
+}
+
+func (cc *ClientConn) initSendQueue() {
+	cc.sendInit.Do(func() { cc.sendCh = make(chan Transaction, sendQueueDepth) })
+}
+
+// Send enqueues t for delivery to this client by its writer goroutine, preserving enqueue order.
+// It never blocks: if the queue is full, the client is considered too slow and its connection is
+// closed, which unblocks the client's read loop and triggers the usual Disconnect cleanup.
+func (cc *ClientConn) Send(t Transaction) {
+	cc.initSendQueue()
+
+	cc.sendMu.Lock()
+	defer cc.sendMu.Unlock()
+
+	if cc.sendClosed {
+		return
+	}
+
+	select {
+	case cc.sendCh <- t:
+	default:
+		cc.sendClosed = true
+		close(cc.sendCh)
+
+		if cc.Logger != nil {
+			cc.Logger.Warn("Send queue full; disconnecting slow client")
+		}
+		if cc.Connection != nil {
+			_ = cc.Connection.Close()
+		}
+	}
+}
+
+// closeSendQueue idempotently closes the send queue, stopping the client's writer goroutine after
+// it drains any remaining queued transactions.
+func (cc *ClientConn) closeSendQueue() {
+	cc.initSendQueue()
+
+	cc.sendMu.Lock()
+	defer cc.sendMu.Unlock()
+
+	if !cc.sendClosed {
+		cc.sendClosed = true
+		close(cc.sendCh)
+	}
+}
+
+// writeLoop is the single writer to cc.Connection.  Serializing all writes through one goroutine
+// prevents concurrent sends from interleaving bytes within the connection's transaction framing.
+// It runs until the send queue is closed or a write fails.
+func (cc *ClientConn) writeLoop() {
+	cc.initSendQueue()
+
+	for t := range cc.sendCh {
+		if _, err := io.Copy(cc.Connection, &t); err != nil {
+			if cc.Logger != nil {
+				cc.Logger.Debug("error writing transaction to client", "err", err)
+			}
+			_ = cc.Connection.Close()
+			return
+		}
+	}
 }
 
 func (cc *ClientConn) TextDecoder() *encoding.Decoder { return cc.Server.TextDecoder }
@@ -109,7 +181,7 @@ func (cftm *ClientFileTransferMgr) Delete(ftType FileTransferType, id FileTransf
 
 func (cc *ClientConn) SendAll(t [2]byte, fields ...Field) {
 	for _, c := range cc.Server.ClientMgr.List() {
-		cc.Server.outbox <- NewTransaction(t, c.ID, fields...)
+		c.Send(NewTransaction(t, c.ID, fields...))
 	}
 }
 
@@ -124,7 +196,7 @@ func (cc *ClientConn) handleTransaction(transaction Transaction) {
 		}
 
 		for _, t := range handler(cc, &transaction) {
-			cc.Server.outbox <- t
+			cc.Server.Send(t)
 		}
 	}
 
@@ -169,11 +241,14 @@ func (cc *ClientConn) Authorize(access int) bool {
 
 // Disconnect notifies other clients that a client has disconnected and closes the connection.
 func (cc *ClientConn) Disconnect() {
+	// Remove the client from the manager first so no new transactions are routed to it.
 	cc.Server.ClientMgr.Delete(cc.ID)
 
 	for _, t := range cc.NotifyOthers(NewTransaction(TranNotifyDeleteUser, [2]byte{}, NewField(FieldUserID, cc.ID[:]))) {
-		cc.Server.outbox <- t
+		cc.Server.Send(t)
 	}
+
+	cc.closeSendQueue()
 
 	if err := cc.Connection.Close(); err != nil {
 		cc.Server.Logger.Debug("error closing client connection", "remoteAddr", cc.RemoteAddr)
