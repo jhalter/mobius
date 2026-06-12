@@ -168,7 +168,7 @@ func TestThreadedNewsYAML_PostArticle(t *testing.T) {
 		assert.Equal(t, "Content here", art.Data)
 
 		// Verify persistence by reloading.
-		require.NoError(t, tn.Load())
+		require.NoError(t, tn.Reload())
 		art = tn.GetArticle([]string{"Fresh"}, 1)
 		require.NotNil(t, art)
 		assert.Equal(t, "First Post", art.Title)
@@ -252,7 +252,7 @@ func TestThreadedNewsYAML_DeleteArticle(t *testing.T) {
 	assert.Nil(t, art)
 
 	// Verify persistence.
-	require.NoError(t, tn.Load())
+	require.NoError(t, tn.Reload())
 	art = tn.GetArticle([]string{"General"}, 1)
 	assert.Nil(t, art)
 }
@@ -283,7 +283,7 @@ func TestThreadedNewsYAML_CreateGrouping(t *testing.T) {
 		assert.Equal(t, hotline.NewsBundle, item.Type)
 
 		// Verify persistence.
-		require.NoError(t, tn.Load())
+		require.NoError(t, tn.Reload())
 		item = tn.NewsItem([]string{"NewBundle"})
 		assert.Equal(t, "NewBundle", item.Name)
 	})
@@ -320,7 +320,7 @@ func TestThreadedNewsYAML_DeleteNewsItem(t *testing.T) {
 		}
 
 		// Verify persistence.
-		require.NoError(t, tn.Load())
+		require.NoError(t, tn.Reload())
 		cats = tn.GetCategories(nil)
 		for _, c := range cats {
 			assert.NotEqual(t, "General", c.Name)

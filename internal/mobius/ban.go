@@ -29,7 +29,7 @@ func NewBanFile(path string) (*BanFile, error) {
 		bannedNicks: make(map[string]bool),
 	}
 
-	err := bf.Load()
+	err := bf.Reload()
 	if err != nil {
 		return nil, fmt.Errorf("load ban file: %w", err)
 	}
@@ -43,7 +43,7 @@ type BanFileData struct {
 	BannedNicks map[string]bool       `yaml:"bannedNicks"`
 }
 
-func (bf *BanFile) Load() error {
+func (bf *BanFile) Reload() error {
 	bf.Lock()
 	defer bf.Unlock()
 

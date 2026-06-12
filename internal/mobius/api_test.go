@@ -35,15 +35,15 @@ type mockBanMgr struct {
 	unbanNicknameArg    string
 
 	// Allow injecting errors
-	addErr             error
-	banUsernameErr     error
-	banNicknameErr     error
-	unbanIPErr         error
-	unbanUsernameErr   error
-	unbanNicknameErr   error
-	listIPsErr         error
-	listUsernamesErr   error
-	listNicknamesErr   error
+	addErr           error
+	banUsernameErr   error
+	banNicknameErr   error
+	unbanIPErr       error
+	unbanUsernameErr error
+	unbanNicknameErr error
+	listIPsErr       error
+	listUsernamesErr error
+	listNicknamesErr error
 }
 
 func (m *mockBanMgr) Add(ip string, _ *time.Time) error {

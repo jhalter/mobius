@@ -128,19 +128,19 @@ func TestRedisBanMgr_TemporalBans(t *testing.T) {
 		permanentIP := "192.168.1.105"
 		err := banMgr.Add(permanentIP, nil)
 		assert.NoError(t, err)
-		
+
 		// Add temporary ban
 		temporaryIP := "192.168.1.106"
 		expiration := time.Now().Add(1 * time.Hour)
 		err = banMgr.Add(temporaryIP, &expiration)
 		assert.NoError(t, err)
-		
+
 		// List should include both
 		ips, err := banMgr.ListBannedIPs()
 		assert.NoError(t, err)
 		assert.Contains(t, ips, permanentIP)
 		assert.Contains(t, ips, temporaryIP)
-		
+
 		// Cleanup
 		err = banMgr.UnbanIP(permanentIP)
 		assert.NoError(t, err)
@@ -198,23 +198,23 @@ func TestRedisBanMgr_UserAndNicknameBans(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Initially not banned
 			assert.False(t, tt.isBannedFunc(tt.value))
-			
+
 			// Ban the item
 			err := tt.banFunc(tt.value)
 			assert.NoError(t, err)
-			
+
 			// Should be banned
 			assert.True(t, tt.isBannedFunc(tt.value))
-			
+
 			// Should appear in list
 			items, err := tt.listFunc()
 			assert.NoError(t, err)
 			assert.Contains(t, items, tt.value)
-			
+
 			// Unban the item
 			err = tt.unbanFunc(tt.value)
 			assert.NoError(t, err)
-			
+
 			// Should not be banned
 			assert.False(t, tt.isBannedFunc(tt.value))
 		})

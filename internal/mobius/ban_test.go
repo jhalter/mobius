@@ -102,7 +102,7 @@ func TestAdd(t *testing.T) {
 
 			// Load the file to check its contents.
 			loadedBanFile := &BanFile{filePath: tmpFilePath}
-			err = loadedBanFile.Load()
+			err = loadedBanFile.Reload()
 			assert.NoError(t, err, "Load() error")
 			assert.Equal(t, tt.expect, loadedBanFile.banList, "Ban list does not match")
 		})
@@ -178,7 +178,7 @@ func TestBanFile_UsernameBanning(t *testing.T) {
 
 	// Persist and reload.
 	bf2 := &BanFile{filePath: bf.filePath}
-	require.NoError(t, bf2.Load())
+	require.NoError(t, bf2.Reload())
 	assert.True(t, bf2.IsUsernameBanned("baduser"))
 
 	// Unban.
@@ -187,7 +187,7 @@ func TestBanFile_UsernameBanning(t *testing.T) {
 
 	// Verify unban persists.
 	bf3 := &BanFile{filePath: bf.filePath}
-	require.NoError(t, bf3.Load())
+	require.NoError(t, bf3.Reload())
 	assert.False(t, bf3.IsUsernameBanned("baduser"))
 }
 
@@ -201,7 +201,7 @@ func TestBanFile_NicknameBanning(t *testing.T) {
 
 	// Persist and reload.
 	bf2 := &BanFile{filePath: bf.filePath}
-	require.NoError(t, bf2.Load())
+	require.NoError(t, bf2.Reload())
 	assert.True(t, bf2.IsNicknameBanned("troll"))
 
 	// Unban.
@@ -210,7 +210,7 @@ func TestBanFile_NicknameBanning(t *testing.T) {
 
 	// Verify unban persists.
 	bf3 := &BanFile{filePath: bf.filePath}
-	require.NoError(t, bf3.Load())
+	require.NoError(t, bf3.Reload())
 	assert.False(t, bf3.IsNicknameBanned("troll"))
 }
 
@@ -227,7 +227,7 @@ func TestBanFile_UnbanIP(t *testing.T) {
 
 	// Verify unban persists.
 	bf2 := &BanFile{filePath: bf.filePath}
-	require.NoError(t, bf2.Load())
+	require.NoError(t, bf2.Reload())
 	banned, _ = bf2.IsBanned("10.0.0.1")
 	assert.False(t, banned)
 }
@@ -267,7 +267,7 @@ func TestBanFile_PermanentBanViaAdd(t *testing.T) {
 
 	// Verify persistence.
 	bf2 := &BanFile{filePath: bf.filePath}
-	require.NoError(t, bf2.Load())
+	require.NoError(t, bf2.Reload())
 	banned, until = bf2.IsBanned("172.16.0.1")
 	assert.True(t, banned)
 	assert.Nil(t, until)
@@ -328,7 +328,7 @@ func TestBanFile_NewFormatPersistence(t *testing.T) {
 
 	// Reload into a fresh BanFile.
 	bf2 := &BanFile{filePath: bf.filePath}
-	require.NoError(t, bf2.Load())
+	require.NoError(t, bf2.Reload())
 
 	// Verify IPs.
 	banned, until := bf2.IsBanned("10.0.0.1")

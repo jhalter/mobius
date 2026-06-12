@@ -24,7 +24,7 @@ type ThreadedNewsYAML struct {
 func NewThreadedNewsYAML(filePath string) (*ThreadedNewsYAML, error) {
 	tn := &ThreadedNewsYAML{filePath: filePath}
 
-	err := tn.Load()
+	err := tn.Reload()
 
 	return tn, err
 }
@@ -259,7 +259,7 @@ func (n *ThreadedNewsYAML) ListArticles(newsPath []string) (hotline.NewsArtListD
 	return cat.GetNewsArtListData()
 }
 
-func (n *ThreadedNewsYAML) Load() error {
+func (n *ThreadedNewsYAML) Reload() error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 

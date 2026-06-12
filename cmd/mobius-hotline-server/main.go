@@ -109,11 +109,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv.MessageBoard, err = mobius.NewFlatNews(path.Join(*configDir, "MessageBoard.txt"))
+	// reloaders collects the storage backends whose state is reloaded on SIGHUP or via the
+	// reload API endpoint.
+	var reloaders []namedReloader
+
+	messageBoard, err := mobius.NewFlatNews(path.Join(*configDir, "MessageBoard.txt"))
 	if err != nil {
 		slogger.Error("Error loading message board", "err", err)
 		os.Exit(1)
 	}
+	srv.MessageBoard = messageBoard
+	reloaders = append(reloaders, namedReloader{"message board", messageBoard})
 
 	// Initialize ban list - use Redis if configured, otherwise use file-based storage
 	if *redisAddr != "" {
@@ -133,18 +139,23 @@ func main() {
 		srv.BanList = mobius.NewRedisBanMgr(redisClient, slogger)
 		slogger.Debug("Using Redis for ban management", "addr", *redisAddr)
 	} else {
-		srv.BanList, err = mobius.NewBanFile(path.Join(*configDir, "Banlist.yaml"))
+		banFile, err := mobius.NewBanFile(path.Join(*configDir, "Banlist.yaml"))
 		if err != nil {
 			slogger.Error("Error loading ban list", "err", err)
 			os.Exit(1)
 		}
+		srv.BanList = banFile
+		// The Redis-backed ban list needs no reload, so only the file-backed one registers.
+		reloaders = append(reloaders, namedReloader{"ban list", banFile})
 	}
 
-	srv.ThreadedNewsMgr, err = mobius.NewThreadedNewsYAML(path.Join(*configDir, "ThreadedNews.yaml"))
+	threadedNews, err := mobius.NewThreadedNewsYAML(path.Join(*configDir, "ThreadedNews.yaml"))
 	if err != nil {
 		slogger.Error("Error loading news", "err", err)
 		os.Exit(1)
 	}
+	srv.ThreadedNewsMgr = threadedNews
+	reloaders = append(reloaders, namedReloader{"threaded news", threadedNews})
 
 	srv.AccountManager, err = mobius.NewYAMLAccountManager(path.Join(*configDir, "Users/"))
 	if err != nil {
@@ -152,47 +163,34 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv.Agreement, err = mobius.NewAgreement(*configDir, "\r")
+	agreement, err := mobius.NewAgreement(*configDir, "\r")
 	if err != nil {
 		slogger.Error("Error loading agreement", "err", err)
 		os.Exit(1)
 	}
+	srv.Agreement = agreement
+	reloaders = append(reloaders, namedReloader{"agreement", agreement})
 
-	bannerPath := path.Join(*configDir, config.BannerFile)
-	banner, err := os.ReadFile(bannerPath)
-	if err != nil {
+	// On reload failure, the previous banner is kept because SetBanner is only called on success.
+	reloadBanner := mobius.ReloaderFunc(func() error {
+		banner, err := os.ReadFile(path.Join(*configDir, config.BannerFile))
+		if err != nil {
+			return err
+		}
+		srv.SetBanner(banner)
+		return nil
+	})
+	if err := reloadBanner.Reload(); err != nil {
 		slogger.Error("Error loading banner", "err", err)
 		os.Exit(1)
 	}
-	srv.SetBanner(banner)
+	reloaders = append(reloaders, namedReloader{"banner", reloadBanner})
 
 	reloadFunc := func() {
-		if err := srv.MessageBoard.(*mobius.FlatNews).Reload(); err != nil {
-			slogger.Error("Error reloading news", "err", err)
-		}
-
-		// Only reload ban list if using file-based storage (Redis doesn't need reload)
-		if banFile, ok := srv.BanList.(*mobius.BanFile); ok {
-			if err := banFile.Load(); err != nil {
-				slogger.Error("Error reloading ban list", "err", err)
+		for _, item := range reloaders {
+			if err := item.reloader.Reload(); err != nil {
+				slogger.Error("Error reloading "+item.name, "err", err)
 			}
-		}
-
-		if err := srv.ThreadedNewsMgr.(*mobius.ThreadedNewsYAML).Load(); err != nil {
-			slogger.Error("Error reloading threaded news list", "err", err)
-		}
-
-		if err := srv.Agreement.(*mobius.Agreement).Reload(); err != nil {
-			slogger.Error("Error reloading agreement", "err", err)
-		}
-
-		// Let's try to reload the banner.  On failure, keep serving the previous banner.
-		bannerPath := path.Join(*configDir, config.BannerFile)
-		banner, err := os.ReadFile(bannerPath)
-		if err != nil {
-			slogger.Error("Error reloading banner", "err", err)
-		} else {
-			srv.SetBanner(banner)
 		}
 	}
 
@@ -246,6 +244,12 @@ func main() {
 	}
 
 	slogger.Info("Server shut down")
+}
+
+// namedReloader pairs a Reloader with a human-readable name for reload error logging.
+type namedReloader struct {
+	name     string
+	reloader mobius.Reloader
 }
 
 // findConfigPath searches for an existing config directory from the predefined search order.
