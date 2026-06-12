@@ -30,23 +30,26 @@ type ClientConn struct {
 	Connection io.ReadWriteCloser
 	RemoteAddr string
 	ID         ClientID
-	Icon       []byte // TODO: make fixed size of 2
 	Version    []byte // TODO: make fixed size of 2
 
-	FlagsMU sync.Mutex // TODO: move into UserFlags struct
-	Flags   UserFlags
+	Account *Account
+	Server  *Server // TODO: consider adding methods to interact with server
 
+	// The following fields hold mutable session state guarded by mu.  They are read and written
+	// by multiple goroutines (the client's own transaction loop, other clients' handlers, and the
+	// server keepalive loop), so production code must use the accessor methods below.  Direct
+	// field access is only safe before the connection is shared, e.g. in tests.
+	Flags     UserFlags
 	UserName  []byte
-	Account   *Account
+	Icon      []byte // TODO: make fixed size of 2
 	IdleTime  int
-	Server    *Server // TODO: consider adding methods to interact with server
 	AutoReply []byte
 
 	ClientFileTransferMgr ClientFileTransferMgr
 
 	Logger *slog.Logger
 
-	mu sync.RWMutex
+	mu sync.RWMutex // guards the mutable session state fields above
 
 	sendCh     chan Transaction
 	sendInit   sync.Once
@@ -119,6 +122,109 @@ func (cc *ClientConn) writeLoop() {
 
 func (cc *ClientConn) TextDecoder() *encoding.Decoder { return cc.Server.TextDecoder }
 func (cc *ClientConn) TextEncoder() *encoding.Encoder { return cc.Server.TextEncoder }
+
+// SetFlag sets the user flag at position flag to v.
+func (cc *ClientConn) SetFlag(flag int, v uint) {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+
+	cc.Flags.Set(flag, v)
+}
+
+// IsFlagSet reports whether the user flag at position flag is set.
+func (cc *ClientConn) IsFlagSet(flag int) bool {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+
+	return cc.Flags.IsSet(flag)
+}
+
+// FlagBytes returns a copy of the user flags bitmap, suitable for use as a transaction field.
+func (cc *ClientConn) FlagBytes() []byte {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+
+	flags := cc.Flags
+	return flags[:]
+}
+
+// SetUserName sets the client's display name.
+func (cc *ClientConn) SetUserName(name []byte) {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+
+	cc.UserName = name
+}
+
+// GetUserName returns the client's display name.  Callers must not modify the returned slice.
+func (cc *ClientConn) GetUserName() []byte {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+
+	return cc.UserName
+}
+
+// SetIcon sets the client's icon ID bytes.
+func (cc *ClientConn) SetIcon(icon []byte) {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+
+	cc.Icon = icon
+}
+
+// GetIcon returns the client's icon ID bytes.  Callers must not modify the returned slice.
+func (cc *ClientConn) GetIcon() []byte {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+
+	return cc.Icon
+}
+
+// SetAutoReply sets the client's away auto-reply message.
+func (cc *ClientConn) SetAutoReply(msg []byte) {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+
+	cc.AutoReply = msg
+}
+
+// GetAutoReply returns the client's away auto-reply message.  Callers must not modify the
+// returned slice.
+func (cc *ClientConn) GetAutoReply() []byte {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+
+	return cc.AutoReply
+}
+
+// incrementIdleTime adds interval seconds to the client's idle time.  It returns true if this
+// crossed the idle threshold and marked the client as away, in which case the caller should
+// notify other clients of the change.
+func (cc *ClientConn) incrementIdleTime(interval int) bool {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+
+	cc.IdleTime += interval
+	if cc.IdleTime > userIdleSeconds && !cc.Flags.IsSet(UserFlagAway) {
+		cc.Flags.Set(UserFlagAway, 1)
+		return true
+	}
+	return false
+}
+
+// clearIdleAndAway resets the client's idle timer.  It returns true if the client was marked as
+// away and is no longer, in which case the caller should notify other clients of the change.
+func (cc *ClientConn) clearIdleAndAway() bool {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+
+	cc.IdleTime = 0
+	if cc.Flags.IsSet(UserFlagAway) {
+		cc.Flags.Set(UserFlagAway, 0)
+		return true
+	}
+	return false
+}
 
 func (cc *ClientConn) FileRoot() string {
 	if cc.Account.FileRoot != "" {
@@ -201,23 +307,15 @@ func (cc *ClientConn) handleTransaction(transaction Transaction) {
 	}
 
 	if transaction.Type != TranKeepAlive {
-		cc.mu.Lock()
-		defer cc.mu.Unlock()
-
-		// reset the user idle timer
-		cc.IdleTime = 0
-
-		// if user was previously idle, mark as not idle and notify other connected clients that
-		// the user is no longer away
-		if cc.Flags.IsSet(UserFlagAway) {
-			cc.Flags.Set(UserFlagAway, 0)
-
+		// Reset the user idle timer.  If the user was previously marked as away, notify other
+		// connected clients that the user is no longer away.
+		if cc.clearIdleAndAway() {
 			cc.SendAll(
 				TranNotifyChangeUser,
 				NewField(FieldUserID, cc.ID[:]),
-				NewField(FieldUserFlags, cc.Flags[:]),
-				NewField(FieldUserName, cc.UserName),
-				NewField(FieldUserIconID, cc.Icon),
+				NewField(FieldUserFlags, cc.FlagBytes()),
+				NewField(FieldUserName, cc.GetUserName()),
+				NewField(FieldUserIconID, cc.GetIcon()),
 			)
 		}
 	}
@@ -328,7 +426,7 @@ func formatDownloadList(fts []FileTransfer) (s string) {
 func (cc *ClientConn) String() string {
 	template := fmt.Sprintf(
 		userInfoTemplate,
-		cc.UserName,
+		cc.GetUserName(),
 		cc.Account.Name,
 		cc.Account.Login,
 		cc.RemoteAddr,

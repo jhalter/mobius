@@ -60,9 +60,9 @@ func HandleSetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 			res = append(res, newT)
 
 			if c.Authorize(hotline.AccessDisconUser) {
-				c.Flags.Set(hotline.UserFlagAdmin, 1)
+				c.SetFlag(hotline.UserFlagAdmin, 1)
 			} else {
-				c.Flags.Set(hotline.UserFlagAdmin, 0)
+				c.SetFlag(hotline.UserFlagAdmin, 0)
 			}
 
 			c.Account.Access = account.Access
@@ -70,9 +70,9 @@ func HandleSetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 			cc.SendAll(
 				hotline.TranNotifyChangeUser,
 				hotline.NewField(hotline.FieldUserID, c.ID[:]),
-				hotline.NewField(hotline.FieldUserFlags, c.Flags[:]),
-				hotline.NewField(hotline.FieldUserName, c.UserName),
-				hotline.NewField(hotline.FieldUserIconID, c.Icon),
+				hotline.NewField(hotline.FieldUserFlags, c.FlagBytes()),
+				hotline.NewField(hotline.FieldUserName, c.GetUserName()),
+				hotline.NewField(hotline.FieldUserIconID, c.GetIcon()),
 			)
 		}
 	}

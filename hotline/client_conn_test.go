@@ -660,3 +660,60 @@ func TestClientConn_SendDisconnectRace(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestClientConn_incrementIdleTime(t *testing.T) {
+	cc := &ClientConn{}
+
+	// Increment until just below the idle threshold: not yet away.
+	for i := 0; i < userIdleSeconds/idleCheckInterval; i++ {
+		assert.False(t, cc.incrementIdleTime(idleCheckInterval))
+	}
+	assert.False(t, cc.IsFlagSet(UserFlagAway))
+
+	// The increment that crosses the threshold marks the client away exactly once.
+	assert.True(t, cc.incrementIdleTime(idleCheckInterval))
+	assert.True(t, cc.IsFlagSet(UserFlagAway))
+	assert.False(t, cc.incrementIdleTime(idleCheckInterval), "already-away client should not be marked away again")
+}
+
+func TestClientConn_clearIdleAndAway(t *testing.T) {
+	cc := &ClientConn{IdleTime: 500}
+
+	// Not away: idle timer resets, no notification needed.
+	assert.False(t, cc.clearIdleAndAway())
+	assert.Equal(t, 0, cc.IdleTime)
+
+	// Away: flag clears and the caller is told to notify.
+	cc.SetFlag(UserFlagAway, 1)
+	assert.True(t, cc.clearIdleAndAway())
+	assert.False(t, cc.IsFlagSet(UserFlagAway))
+	assert.False(t, cc.clearIdleAndAway(), "second clear should report no change")
+}
+
+// TestClientConn_sessionStateRace exercises concurrent access to the mutable session state through
+// the accessor methods.  Run with -race.
+func TestClientConn_sessionStateRace(t *testing.T) {
+	cc := &ClientConn{}
+
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range 100 {
+				cc.SetUserName(fmt.Appendf(nil, "user-%d", i))
+				_ = cc.GetUserName()
+				cc.SetIcon([]byte{0, byte(i)})
+				_ = cc.GetIcon()
+				cc.SetAutoReply([]byte("brb"))
+				_ = cc.GetAutoReply()
+				cc.SetFlag(UserFlagRefusePM, uint(i%2))
+				_ = cc.IsFlagSet(UserFlagRefusePM)
+				_ = cc.FlagBytes()
+				_ = cc.incrementIdleTime(idleCheckInterval)
+				_ = cc.clearIdleAndAway()
+			}
+		}()
+	}
+	wg.Wait()
+}

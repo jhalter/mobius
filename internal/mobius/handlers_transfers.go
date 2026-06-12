@@ -277,7 +277,7 @@ func HandleUploadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 //   - 108 Transfer size     Size of data to be downloaded
 func HandleDownloadBanner(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	ft := cc.NewFileTransfer(hotline.BannerDownload, "", []byte{}, []byte{}, make([]byte, 4))
-	binary.BigEndian.PutUint32(ft.TransferSize, uint32(len(cc.Server.Banner)))
+	binary.BigEndian.PutUint32(ft.TransferSize, uint32(len(cc.Server.Banner())))
 
 	return append(res, cc.NewReply(t,
 		hotline.NewField(hotline.FieldRefNum, ft.RefNum[:]),

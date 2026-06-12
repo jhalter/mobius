@@ -2,10 +2,8 @@ package mobius
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"io"
-	"math/big"
 
 	"github.com/jhalter/mobius/hotline"
 )
@@ -28,14 +26,14 @@ func HandleChatSend(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 	// Truncate long usernames
 	// %13.13s: This means a string that is right-aligned in a field of 13 characters.
 	// If the string is longer than 13 characters, it will be truncated to 13 characters.
-	formattedMsg := fmt.Sprintf("\r%13.13s:  %s", cc.UserName, t.GetField(hotline.FieldData).Data)
+	formattedMsg := fmt.Sprintf("\r%13.13s:  %s", cc.GetUserName(), t.GetField(hotline.FieldData).Data)
 
 	// By holding the option key, Hotline chat allows users to send /me formatted messages like:
 	// *** Halcyon does stuff
 	// This is indicated by the presence of the optional field FieldChatOptions set to a value of 1.
 	// Most clients do not send this option for normal chat messages.
 	if t.GetField(hotline.FieldChatOptions).Data != nil && bytes.Equal(t.GetField(hotline.FieldChatOptions).Data, []byte{0, 1}) {
-		formattedMsg = fmt.Sprintf("\r*** %s %s", cc.UserName, t.GetField(hotline.FieldData).Data)
+		formattedMsg = fmt.Sprintf("\r*** %s %s", cc.GetUserName(), t.GetField(hotline.FieldData).Data)
 	}
 
 	// Truncate the message to the limit.  This does not handle the edge case of a string ending on multibyte character.
@@ -103,7 +101,7 @@ func HandleSendInstantMsg(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 		hotline.TranServerMsg,
 		targetID,
 		hotline.NewField(hotline.FieldData, msg.Data),
-		hotline.NewField(hotline.FieldUserName, cc.UserName),
+		hotline.NewField(hotline.FieldUserName, cc.GetUserName()),
 		hotline.NewField(hotline.FieldUserID, cc.ID[:]),
 		hotline.NewField(hotline.FieldOptions, []byte{0, 1}),
 	)
@@ -122,13 +120,13 @@ func HandleSendInstantMsg(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 	}
 
 	// Check if target user has "Refuse private messages" flag
-	if otherClient.Flags.IsSet(hotline.UserFlagRefusePM) {
+	if otherClient.IsFlagSet(hotline.UserFlagRefusePM) {
 		res = append(res,
 			hotline.NewTransaction(
 				hotline.TranServerMsg,
 				cc.ID,
-				hotline.NewField(hotline.FieldData, []byte(fmt.Sprintf(ErrMsgDoesNotAcceptTemplate, string(otherClient.UserName), "private messages"))),
-				hotline.NewField(hotline.FieldUserName, otherClient.UserName),
+				hotline.NewField(hotline.FieldData, []byte(fmt.Sprintf(ErrMsgDoesNotAcceptTemplate, string(otherClient.GetUserName()), "private messages"))),
+				hotline.NewField(hotline.FieldUserName, otherClient.GetUserName()),
 				hotline.NewField(hotline.FieldUserID, otherClient.ID[:]),
 				hotline.NewField(hotline.FieldOptions, []byte{0, 2}),
 			),
@@ -138,13 +136,13 @@ func HandleSendInstantMsg(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 	}
 
 	// Respond with auto reply if other client has it enabled
-	if len(otherClient.AutoReply) > 0 {
+	if len(otherClient.GetAutoReply()) > 0 {
 		res = append(res,
 			hotline.NewTransaction(
 				hotline.TranServerMsg,
 				cc.ID,
-				hotline.NewField(hotline.FieldData, otherClient.AutoReply),
-				hotline.NewField(hotline.FieldUserName, otherClient.UserName),
+				hotline.NewField(hotline.FieldData, otherClient.GetAutoReply()),
+				hotline.NewField(hotline.FieldUserName, otherClient.GetUserName()),
 				hotline.NewField(hotline.FieldUserID, otherClient.ID[:]),
 				hotline.NewField(hotline.FieldOptions, []byte{0, 1}),
 			),
@@ -185,14 +183,13 @@ func HandleInviteNewChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []
 	// Create a new chat with self as initial member.
 	newChatID := cc.Server.ChatMgr.New(cc)
 
-	flagBitmap := big.NewInt(int64(binary.BigEndian.Uint16(targetClient.Flags[:])))
-	if flagBitmap.Bit(hotline.UserFlagRefusePChat) == 1 {
+	if targetClient.IsFlagSet(hotline.UserFlagRefusePChat) {
 		res = append(res,
 			hotline.NewTransaction(
 				hotline.TranServerMsg,
 				cc.ID,
-				hotline.NewField(hotline.FieldData, []byte(fmt.Sprintf(ErrMsgDoesNotAcceptTemplate, string(targetClient.UserName), "private chats"))),
-				hotline.NewField(hotline.FieldUserName, targetClient.UserName),
+				hotline.NewField(hotline.FieldData, []byte(fmt.Sprintf(ErrMsgDoesNotAcceptTemplate, string(targetClient.GetUserName()), "private chats"))),
+				hotline.NewField(hotline.FieldUserName, targetClient.GetUserName()),
 				hotline.NewField(hotline.FieldUserID, targetClient.ID[:]),
 				hotline.NewField(hotline.FieldOptions, []byte{0, 2}),
 			),
@@ -203,7 +200,7 @@ func HandleInviteNewChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []
 				hotline.TranInviteToChat,
 				targetID,
 				hotline.NewField(hotline.FieldChatID, newChatID[:]),
-				hotline.NewField(hotline.FieldUserName, cc.UserName),
+				hotline.NewField(hotline.FieldUserName, cc.GetUserName()),
 				hotline.NewField(hotline.FieldUserID, cc.ID[:]),
 			),
 		)
@@ -213,10 +210,10 @@ func HandleInviteNewChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []
 		res,
 		cc.NewReply(t,
 			hotline.NewField(hotline.FieldChatID, newChatID[:]),
-			hotline.NewField(hotline.FieldUserName, cc.UserName),
+			hotline.NewField(hotline.FieldUserName, cc.GetUserName()),
 			hotline.NewField(hotline.FieldUserID, cc.ID[:]),
-			hotline.NewField(hotline.FieldUserIconID, cc.Icon),
-			hotline.NewField(hotline.FieldUserFlags, cc.Flags[:]),
+			hotline.NewField(hotline.FieldUserIconID, cc.GetIcon()),
+			hotline.NewField(hotline.FieldUserFlags, cc.FlagBytes()),
 		),
 	)
 }
@@ -245,16 +242,16 @@ func HandleInviteToChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 			hotline.TranInviteToChat,
 			targetID,
 			hotline.NewField(hotline.FieldChatID, chatID),
-			hotline.NewField(hotline.FieldUserName, cc.UserName),
+			hotline.NewField(hotline.FieldUserName, cc.GetUserName()),
 			hotline.NewField(hotline.FieldUserID, cc.ID[:]),
 		),
 		cc.NewReply(
 			t,
 			hotline.NewField(hotline.FieldChatID, chatID),
-			hotline.NewField(hotline.FieldUserName, cc.UserName),
+			hotline.NewField(hotline.FieldUserName, cc.GetUserName()),
 			hotline.NewField(hotline.FieldUserID, cc.ID[:]),
-			hotline.NewField(hotline.FieldUserIconID, cc.Icon),
-			hotline.NewField(hotline.FieldUserFlags, cc.Flags[:]),
+			hotline.NewField(hotline.FieldUserIconID, cc.GetIcon()),
+			hotline.NewField(hotline.FieldUserFlags, cc.FlagBytes()),
 		),
 	}
 }
@@ -278,7 +275,7 @@ func HandleRejectChatInvite(cc *hotline.ClientConn, t *hotline.Transaction) (res
 				hotline.TranChatMsg,
 				c.ID,
 				hotline.NewField(hotline.FieldChatID, chatID[:]),
-				hotline.NewField(hotline.FieldData, append(cc.UserName, []byte(" declined invitation to chat")...)),
+				hotline.NewField(hotline.FieldData, fmt.Appendf(nil, "%s declined invitation to chat", cc.GetUserName())),
 			),
 		)
 	}
@@ -307,10 +304,10 @@ func HandleJoinChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 				hotline.TranNotifyChatChangeUser,
 				c.ID,
 				hotline.NewField(hotline.FieldChatID, chatID[:]),
-				hotline.NewField(hotline.FieldUserName, cc.UserName),
+				hotline.NewField(hotline.FieldUserName, cc.GetUserName()),
 				hotline.NewField(hotline.FieldUserID, cc.ID[:]),
-				hotline.NewField(hotline.FieldUserIconID, cc.Icon),
-				hotline.NewField(hotline.FieldUserFlags, cc.Flags[:]),
+				hotline.NewField(hotline.FieldUserIconID, cc.GetIcon()),
+				hotline.NewField(hotline.FieldUserFlags, cc.FlagBytes()),
 			),
 		)
 	}
@@ -323,9 +320,9 @@ func HandleJoinChat(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 	for _, c := range cc.Server.ChatMgr.Members(chatID) {
 		b, err := io.ReadAll(&hotline.User{
 			ID:    c.ID,
-			Icon:  c.Icon,
-			Flags: c.Flags[:],
-			Name:  string(c.UserName),
+			Icon:  c.GetIcon(),
+			Flags: c.FlagBytes(),
+			Name:  string(c.GetUserName()),
 		})
 		if err != nil {
 			cc.Logger.Error("join chat: read member info", "err", err)

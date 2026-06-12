@@ -33,7 +33,7 @@ func HandleTranOldPostNews(cc *hotline.ClientConn, t *hotline.Transaction) (res 
 		newsTemplate = cc.Server.Config.NewsDelimiter
 	}
 
-	newsPost := fmt.Sprintf(newsTemplate+"\r", cc.UserName, time.Now().Format(newsDateTemplate), t.GetField(hotline.FieldData).Data)
+	newsPost := fmt.Sprintf(newsTemplate+"\r", cc.GetUserName(), time.Now().Format(newsDateTemplate), t.GetField(hotline.FieldData).Data)
 	newsPost = strings.ReplaceAll(newsPost, "\n", "\r")
 
 	_, err := cc.Server.MessageBoard.Write([]byte(newsPost))
@@ -341,7 +341,7 @@ func HandlePostNewsArt(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		uint32(parentArticleID),
 		hotline.NewsArtData{
 			Title:    string(t.GetField(hotline.FieldNewsArtTitle).Data),
-			Poster:   string(cc.UserName),
+			Poster:   string(cc.GetUserName()),
 			Date:     hotline.NewTime(time.Now()),
 			DataFlav: hotline.NewsFlavor,
 			Data:     string(t.GetField(hotline.FieldNewsArtData).Data),

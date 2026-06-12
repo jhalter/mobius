@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/time/rate"
 )
 
 type mockReadWriter struct {
@@ -1035,4 +1037,44 @@ func TestServer_Shutdown_stopsListenAndServe(t *testing.T) {
 	case <-time.After(5 * time.Second): // Shutdown sleeps 3 seconds to flush client queues
 		t.Fatal("ListenAndServe did not return after Shutdown")
 	}
+}
+
+func TestServer_Banner(t *testing.T) {
+	srv := &Server{}
+	assert.Nil(t, srv.Banner())
+
+	srv.SetBanner([]byte("banner-data"))
+	assert.Equal(t, []byte("banner-data"), srv.Banner())
+
+	// Concurrent reads and writes; run with -race.
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range 100 {
+				srv.SetBanner([]byte{byte(i)})
+				_ = srv.Banner()
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestServer_sweepRateLimiters(t *testing.T) {
+	srv := &Server{rateLimiters: make(map[string]*rateLimiterEntry)}
+
+	srv.rateLimiters["10.0.0.1"] = &rateLimiterEntry{
+		limiter:  rate.NewLimiter(perIPRateLimit, 1),
+		lastSeen: time.Now().Add(-rateLimiterTTL - time.Minute), // stale
+	}
+	srv.rateLimiters["10.0.0.2"] = &rateLimiterEntry{
+		limiter:  rate.NewLimiter(perIPRateLimit, 1),
+		lastSeen: time.Now(), // fresh
+	}
+
+	srv.sweepRateLimiters()
+
+	assert.NotContains(t, srv.rateLimiters, "10.0.0.1", "stale rate limiter should be evicted")
+	assert.Contains(t, srv.rateLimiters, "10.0.0.2", "fresh rate limiter should be retained")
 }

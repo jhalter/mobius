@@ -159,11 +159,12 @@ func main() {
 	}
 
 	bannerPath := path.Join(*configDir, config.BannerFile)
-	srv.Banner, err = os.ReadFile(bannerPath)
+	banner, err := os.ReadFile(bannerPath)
 	if err != nil {
 		slogger.Error("Error loading banner", "err", err)
 		os.Exit(1)
 	}
+	srv.SetBanner(banner)
 
 	reloadFunc := func() {
 		if err := srv.MessageBoard.(*mobius.FlatNews).Reload(); err != nil {
@@ -185,11 +186,13 @@ func main() {
 			slogger.Error("Error reloading agreement", "err", err)
 		}
 
-		// Let's try to reload the banner
+		// Let's try to reload the banner.  On failure, keep serving the previous banner.
 		bannerPath := path.Join(*configDir, config.BannerFile)
-		srv.Banner, err = os.ReadFile(bannerPath)
+		banner, err := os.ReadFile(bannerPath)
 		if err != nil {
 			slogger.Error("Error reloading banner", "err", err)
+		} else {
+			srv.SetBanner(banner)
 		}
 	}
 

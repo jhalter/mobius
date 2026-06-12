@@ -318,12 +318,14 @@ func TestHandleDownloadFile(t *testing.T) {
 
 func TestHandleDownloadBanner(t *testing.T) {
 	t.Run("returns banner transfer info", func(t *testing.T) {
+		srv := &hotline.Server{
+			FileTransferMgr: hotline.NewMemFileTransferMgr(),
+		}
+		srv.SetBanner([]byte("test-banner-data"))
+
 		cc := &hotline.ClientConn{
 			ClientFileTransferMgr: hotline.NewClientFileTransferMgr(),
-			Server: &hotline.Server{
-				Banner:          []byte("test-banner-data"),
-				FileTransferMgr: hotline.NewMemFileTransferMgr(),
-			},
+			Server:                srv,
 		}
 		tran := hotline.NewTransaction(hotline.TranDownloadBanner, [2]byte{0, 1})
 

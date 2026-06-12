@@ -59,7 +59,7 @@ func HandleGetClientInfoText(cc *hotline.ClientConn, t *hotline.Transaction) (re
 
 	return append(res, cc.NewReply(t,
 		hotline.NewField(hotline.FieldData, []byte(clientConn.String())),
-		hotline.NewField(hotline.FieldUserName, clientConn.UserName),
+		hotline.NewField(hotline.FieldUserName, clientConn.GetUserName()),
 	))
 }
 
@@ -74,9 +74,9 @@ func HandleGetUserNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res 
 	for _, c := range cc.Server.ClientMgr.List() {
 		b, err := io.ReadAll(&hotline.User{
 			ID:    c.ID,
-			Icon:  c.Icon,
-			Flags: c.Flags[:],
-			Name:  string(c.UserName),
+			Icon:  c.GetIcon(),
+			Flags: c.FlagBytes(),
+			Name:  string(c.GetUserName()),
 		})
 		if err != nil {
 			cc.Logger.Error("get user name list: read user info", "err", err)
@@ -101,9 +101,9 @@ func HandleGetUserNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res 
 func HandleTranAgreed(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if t.GetField(hotline.FieldUserName).Data != nil {
 		if cc.Authorize(hotline.AccessAnyName) {
-			cc.UserName = t.GetField(hotline.FieldUserName).Data
+			cc.SetUserName(t.GetField(hotline.FieldUserName).Data)
 		} else {
-			cc.UserName = []byte(cc.Account.Name)
+			cc.SetUserName([]byte(cc.Account.Name))
 		}
 	}
 
@@ -114,15 +114,15 @@ func HandleTranAgreed(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 		// Remove old entry (login::ip)
 		cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+"::"+ip)
 		// Add new entry with login, nickname, ip
-		cc.Server.Redis.SAdd(context.Background(), hotline.RedisKeyOnline, login+":"+string(cc.UserName)+":"+ip)
+		cc.Server.Redis.SAdd(context.Background(), hotline.RedisKeyOnline, login+":"+string(cc.GetUserName())+":"+ip)
 	}
 
 	// Ban check for nickname
-	if cc.Server.BanList != nil && cc.Server.BanList.IsNicknameBanned(string(cc.UserName)) {
+	if cc.Server.BanList != nil && cc.Server.BanList.IsNicknameBanned(string(cc.GetUserName())) {
 		if cc.Server.Redis != nil {
 			// Remove all possible online entries for this login and IP
 			cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+"::"+ip)
-			cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+":"+string(cc.UserName)+":"+ip)
+			cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+":"+string(cc.GetUserName())+":"+ip)
 		}
 		if err := cc.Server.BanList.Add(ip, nil); err != nil {
 			cc.Logger.Error("Failed to ban IP for banned nickname", "ip", ip, "err", err)
@@ -132,35 +132,32 @@ func HandleTranAgreed(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 		return res
 	}
 
-	cc.Icon = t.GetField(hotline.FieldUserIconID).Data
+	cc.SetIcon(t.GetField(hotline.FieldUserIconID).Data)
 
-	cc.Logger = cc.Logger.With("Name", string(cc.UserName))
+	cc.Logger = cc.Logger.With("Name", string(cc.GetUserName()))
 	cc.Logger.Info("Login successful")
 
 	options := t.GetField(hotline.FieldOptions).Data
 	optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
 
 	// Check refuse private PM option
-
-	cc.FlagsMU.Lock()
-	defer cc.FlagsMU.Unlock()
-	cc.Flags.Set(hotline.UserFlagRefusePM, optBitmap.Bit(hotline.UserOptRefusePM))
+	cc.SetFlag(hotline.UserFlagRefusePM, optBitmap.Bit(hotline.UserOptRefusePM))
 
 	// Check refuse private chat option
-	cc.Flags.Set(hotline.UserFlagRefusePChat, optBitmap.Bit(hotline.UserOptRefuseChat))
+	cc.SetFlag(hotline.UserFlagRefusePChat, optBitmap.Bit(hotline.UserOptRefuseChat))
 
 	// Check auto response
 	if optBitmap.Bit(hotline.UserOptAutoResponse) == 1 {
-		cc.AutoReply = t.GetField(hotline.FieldAutomaticResponse).Data
+		cc.SetAutoReply(t.GetField(hotline.FieldAutomaticResponse).Data)
 	}
 
 	trans := cc.NotifyOthers(
 		hotline.NewTransaction(
 			hotline.TranNotifyChangeUser, [2]byte{0, 0},
-			hotline.NewField(hotline.FieldUserName, cc.UserName),
+			hotline.NewField(hotline.FieldUserName, cc.GetUserName()),
 			hotline.NewField(hotline.FieldUserID, cc.ID[:]),
-			hotline.NewField(hotline.FieldUserIconID, cc.Icon),
-			hotline.NewField(hotline.FieldUserFlags, cc.Flags[:]),
+			hotline.NewField(hotline.FieldUserIconID, cc.GetIcon()),
+			hotline.NewField(hotline.FieldUserFlags, cc.FlagBytes()),
 		),
 	)
 	res = append(res, trans...)
@@ -210,7 +207,7 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 		switch options[1] {
 		case 1:
 			// send message: "You are temporarily banned on this server"
-			cc.Logger.Info("Disconnect & temporarily ban user", "username", string(clientConn.UserName))
+			cc.Logger.Info("Disconnect & temporarily ban user", "username", string(clientConn.GetUserName()))
 
 			res = append(res, hotline.NewTransaction(
 				hotline.TranServerMsg,
@@ -229,7 +226,7 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 			}
 		case 2:
 			// send message: "You are permanently banned on this server"
-			cc.Logger.Info("Disconnect & ban user", "username", string(clientConn.UserName))
+			cc.Logger.Info("Disconnect & ban user", "username", string(clientConn.GetUserName()))
 
 			res = append(res, hotline.NewTransaction(
 				hotline.TranServerMsg,
@@ -266,14 +263,14 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 // Reply is not expected.
 func HandleSetClientUserInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if len(t.GetField(hotline.FieldUserIconID).Data) == 4 {
-		cc.Icon = t.GetField(hotline.FieldUserIconID).Data[2:]
+		cc.SetIcon(t.GetField(hotline.FieldUserIconID).Data[2:])
 	} else {
-		cc.Icon = t.GetField(hotline.FieldUserIconID).Data
+		cc.SetIcon(t.GetField(hotline.FieldUserIconID).Data)
 	}
 	if cc.Authorize(hotline.AccessAnyName) {
-		oldNickname := string(cc.UserName)
+		oldNickname := string(cc.GetUserName())
 		newNickname := string(t.GetField(hotline.FieldUserName).Data)
-		cc.UserName = t.GetField(hotline.FieldUserName).Data
+		cc.SetUserName(t.GetField(hotline.FieldUserName).Data)
 
 		login := cc.Account.Login
 		ip := cc.IP()
@@ -312,14 +309,14 @@ func HandleSetClientUserInfo(cc *hotline.ClientConn, t *hotline.Transaction) (re
 	if options != nil {
 		optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
 
-		cc.Flags.Set(hotline.UserFlagRefusePM, optBitmap.Bit(hotline.UserOptRefusePM))
-		cc.Flags.Set(hotline.UserFlagRefusePChat, optBitmap.Bit(hotline.UserOptRefuseChat))
+		cc.SetFlag(hotline.UserFlagRefusePM, optBitmap.Bit(hotline.UserOptRefusePM))
+		cc.SetFlag(hotline.UserFlagRefusePChat, optBitmap.Bit(hotline.UserOptRefuseChat))
 
 		// Check auto response
 		if optBitmap.Bit(hotline.UserOptAutoResponse) == 1 {
-			cc.AutoReply = t.GetField(hotline.FieldAutomaticResponse).Data
+			cc.SetAutoReply(t.GetField(hotline.FieldAutomaticResponse).Data)
 		} else {
-			cc.AutoReply = []byte{}
+			cc.SetAutoReply([]byte{})
 		}
 	}
 
@@ -328,9 +325,9 @@ func HandleSetClientUserInfo(cc *hotline.ClientConn, t *hotline.Transaction) (re
 			hotline.TranNotifyChangeUser,
 			c.ID,
 			hotline.NewField(hotline.FieldUserID, cc.ID[:]),
-			hotline.NewField(hotline.FieldUserIconID, cc.Icon),
-			hotline.NewField(hotline.FieldUserFlags, cc.Flags[:]),
-			hotline.NewField(hotline.FieldUserName, cc.UserName),
+			hotline.NewField(hotline.FieldUserIconID, cc.GetIcon()),
+			hotline.NewField(hotline.FieldUserFlags, cc.FlagBytes()),
+			hotline.NewField(hotline.FieldUserName, cc.GetUserName()),
 		))
 	}
 
