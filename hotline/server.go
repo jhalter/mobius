@@ -7,12 +7,11 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"net"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -71,6 +70,14 @@ type Server struct {
 
 	TLSConfig *tls.Config
 	TLSPort   int
+
+	shutdownInit sync.Once     // lazily creates shutdownCh so Shutdown works on test-constructed Servers
+	shutdownOnce sync.Once     // guards close(shutdownCh)
+	shutdownCh   chan struct{} // closed by Shutdown to stop ListenAndServe
+}
+
+func (s *Server) initShutdownCh() {
+	s.shutdownInit.Do(func() { s.shutdownCh = make(chan struct{}) })
 }
 
 type Option = func(s *Server)
@@ -158,63 +165,77 @@ func (s *Server) CurrentStats() StatValues {
 	return s.Stats.Values()
 }
 
+// ListenAndServe starts the Hotline and file transfer listeners and blocks until the context is
+// canceled, Shutdown is called, or a serve loop fails.  Canceling the context closes all
+// listeners, which unblocks their accept loops.
 func (s *Server) ListenAndServe(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Cancel the context when Shutdown is called.
+	s.initShutdownCh()
+	go func() {
+		select {
+		case <-s.shutdownCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
 	go s.registerWithTrackers(ctx)
 	go s.keepaliveHandler(ctx)
 
-	var wg sync.WaitGroup
+	errCh := make(chan error, 4)
 
-	wg.Add(1)
-	go func() {
-		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", s.NetInterface, s.Port))
+	listen := func(port int, serve func(context.Context, net.Listener) error) error {
+		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", s.NetInterface, port))
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
-		log.Fatal(s.Serve(ctx, ln))
-	}()
-
-	wg.Add(1)
-	go func() {
-		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", s.NetInterface, s.Port+1))
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		log.Fatal(s.ServeFileTransfers(ctx, ln))
-	}()
-
-	if s.TLSConfig != nil {
-		wg.Add(1)
+		// Close the listener when the context is canceled to unblock Accept.
 		go func() {
-			ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", s.NetInterface, s.TLSPort))
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			log.Fatal(s.ServeWithTLS(ctx, ln))
+			<-ctx.Done()
+			_ = ln.Close()
 		}()
 
-		wg.Add(1)
-		go func() {
-			ln, err := net.Listen("tcp", fmt.Sprintf("%s:%v", s.NetInterface, s.TLSPort+1))
-			if err != nil {
-				log.Fatal(err)
-			}
+		go func() { errCh <- serve(ctx, ln) }()
 
-			log.Fatal(s.ServeFileTransfersWithTLS(ctx, ln))
-		}()
+		return nil
 	}
 
-	wg.Wait()
+	if err := listen(s.Port, s.Serve); err != nil {
+		return err
+	}
+	if err := listen(s.Port+1, s.ServeFileTransfers); err != nil {
+		return err
+	}
 
-	return nil
+	if s.TLSConfig != nil {
+		if err := listen(s.TLSPort, s.ServeWithTLS); err != nil {
+			return err
+		}
+		if err := listen(s.TLSPort+1, s.ServeFileTransfersWithTLS); err != nil {
+			return err
+		}
+	}
+
+	// Block until the first serve loop returns.  The deferred cancel closes the remaining
+	// listeners and stops their serve loops.
+	err := <-errCh
+	if ctx.Err() != nil {
+		s.Logger.Info("Server shutting down")
+	}
+	return err
 }
 
 func (s *Server) ServeFileTransfers(ctx context.Context, ln net.Listener) error {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			return err
 		}
 
@@ -255,52 +276,54 @@ const perIPRateLimit = rate.Limit(0.5)
 
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	for {
-		select {
-		case <-ctx.Done():
-			s.Logger.Info("Server shutting down")
-			return ctx.Err()
-		default:
-			conn, err := ln.Accept()
-			if err != nil {
-				s.Logger.Error("Error accepting connection", "err", err)
-				continue
+		conn, err := ln.Accept()
+		if err != nil {
+			// Context cancellation closes the listener, unblocking Accept.
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if errors.Is(err, net.ErrClosed) {
+				return err
 			}
 
-			go func() {
-				ipAddr, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
-
-				connCtx := context.WithValue(ctx, contextKeyReq, requestCtx{
-					remoteAddr: conn.RemoteAddr().String(),
-				})
-
-				s.Logger.Info("Connection established", "ip", ipAddr)
-				defer func() { _ = conn.Close() }()
-
-				// Check if we have an existing rate limit for the IP and create one if we do not.
-				s.rateLimitersMu.Lock()
-				rl, ok := s.rateLimiters[ipAddr]
-				if !ok {
-					rl = rate.NewLimiter(perIPRateLimit, 1)
-					s.rateLimiters[ipAddr] = rl
-				}
-				s.rateLimitersMu.Unlock()
-
-				// Check if the rate limit is exceeded and close the connection if so.
-				if !rl.Allow() {
-					s.Logger.Info("Rate limit exceeded", "remoteAddr", conn.RemoteAddr())
-					_ = conn.Close()
-					return
-				}
-
-				if err := s.handleNewConnection(connCtx, conn, conn.RemoteAddr().String()); err != nil {
-					if err == io.EOF {
-						s.Logger.Info("Client disconnected", "remoteAddr", conn.RemoteAddr())
-					} else {
-						s.Logger.Error("Error serving request", "remoteAddr", conn.RemoteAddr(), "err", err)
-					}
-				}
-			}()
+			s.Logger.Error("Error accepting connection", "err", err)
+			continue
 		}
+
+		go func() {
+			ipAddr, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
+
+			connCtx := context.WithValue(ctx, contextKeyReq, requestCtx{
+				remoteAddr: conn.RemoteAddr().String(),
+			})
+
+			s.Logger.Info("Connection established", "ip", ipAddr)
+			defer func() { _ = conn.Close() }()
+
+			// Check if we have an existing rate limit for the IP and create one if we do not.
+			s.rateLimitersMu.Lock()
+			rl, ok := s.rateLimiters[ipAddr]
+			if !ok {
+				rl = rate.NewLimiter(perIPRateLimit, 1)
+				s.rateLimiters[ipAddr] = rl
+			}
+			s.rateLimitersMu.Unlock()
+
+			// Check if the rate limit is exceeded and close the connection if so.
+			if !rl.Allow() {
+				s.Logger.Info("Rate limit exceeded", "remoteAddr", conn.RemoteAddr())
+				_ = conn.Close()
+				return
+			}
+
+			if err := s.handleNewConnection(connCtx, conn, conn.RemoteAddr().String()); err != nil {
+				if err == io.EOF {
+					s.Logger.Info("Client disconnected", "remoteAddr", conn.RemoteAddr())
+				} else {
+					s.Logger.Error("Error serving request", "remoteAddr", conn.RemoteAddr(), "err", err)
+				}
+			}
+		}()
 	}
 }
 
@@ -761,11 +784,14 @@ func (s *Server) SendAll(t TranType, fields ...Field) {
 	}
 }
 
+// Shutdown sends msg to all connected clients and stops ListenAndServe.
 func (s *Server) Shutdown(msg []byte) {
 	s.Logger.Info("Shutdown signal received")
 	s.SendAll(TranDisconnectMsg, NewField(FieldData, msg))
 
+	// Give the client writer goroutines a moment to flush the disconnect message.
 	time.Sleep(3 * time.Second)
 
-	os.Exit(0)
+	s.initShutdownCh()
+	s.shutdownOnce.Do(func() { close(s.shutdownCh) })
 }

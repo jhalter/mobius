@@ -4,10 +4,10 @@ import (
 	"context"
 	"crypto/tls"
 	"embed"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"path"
@@ -207,9 +207,9 @@ func main() {
 
 				reloadFunc()
 			default:
+				// Canceling the context stops ListenAndServe, which unblocks main for a clean exit.
 				signal.Stop(sigChan)
 				cancel()
-				os.Exit(0)
 			}
 
 		}
@@ -235,8 +235,14 @@ func main() {
 		defer s.Shutdown()
 	}
 
-	// Serve Hotline requests until program exit
-	log.Fatal(srv.ListenAndServe(ctx))
+	// Serve Hotline requests until shutdown is requested via signal, the shutdown API, or a
+	// server error.
+	if err := srv.ListenAndServe(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		slogger.Error("Server error", "err", err)
+		os.Exit(1)
+	}
+
+	slogger.Info("Server shut down")
 }
 
 // findConfigPath searches for an existing config directory from the predefined search order.
