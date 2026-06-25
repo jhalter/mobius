@@ -8,10 +8,15 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/jhalter/mobius/hotline"
 )
+
+// OnlineLister returns the list of currently online users. It is implemented by
+// RedisPresenceTracker; when nil, the APIServer falls back to the in-memory ClientMgr.
+type OnlineLister interface {
+	Online(ctx context.Context) ([]OnlineUser, error)
+}
 
 type logResponseWriter struct {
 	http.ResponseWriter
@@ -37,6 +42,7 @@ func (lrw *logResponseWriter) Write(b []byte) (int, error) {
 // It supports user management, banning operations, and server administration.
 type APIServer struct {
 	hlServer *hotline.Server
+	online   OnlineLister
 	logger   *slog.Logger
 	mux      *http.ServeMux
 	apiKey   string
@@ -63,9 +69,10 @@ func (srv *APIServer) logMiddleware(next http.Handler) http.Handler {
 
 // NewAPIServer creates a new APIServer instance with the specified configuration.
 // It sets up all API routes and middleware.
-func NewAPIServer(hlServer *hotline.Server, reloadFunc func(), logger *slog.Logger, apiKey string) *APIServer {
+func NewAPIServer(hlServer *hotline.Server, online OnlineLister, reloadFunc func(), logger *slog.Logger, apiKey string) *APIServer {
 	srv := APIServer{
 		hlServer: hlServer,
+		online:   online,
 		logger:   logger,
 		mux:      http.NewServeMux(),
 		apiKey:   apiKey,
@@ -81,14 +88,6 @@ func NewAPIServer(hlServer *hotline.Server, reloadFunc func(), logger *slog.Logg
 	srv.mux.Handle("/api/v1/shutdown", srv.logMiddleware(srv.authMiddleware(http.HandlerFunc(srv.ShutdownHandler))))
 	srv.mux.Handle("/api/v1/stats", srv.logMiddleware(srv.authMiddleware(http.HandlerFunc(srv.RenderStats))))
 
-	if hlServer.Redis != nil {
-		if err := hlServer.Redis.Del(context.Background(), hotline.RedisKeyOnline).Err(); err != nil {
-			srv.logger.Warn("Failed to clear online users in Redis", "err", err)
-		} else {
-			srv.logger.Debug("Cleared online users in Redis on startup")
-		}
-	}
-
 	return &srv
 }
 
@@ -97,18 +96,15 @@ func NewAPIServer(hlServer *hotline.Server, reloadFunc func(), logger *slog.Logg
 func (srv *APIServer) OnlineHandler(w http.ResponseWriter, r *http.Request) {
 	var users []map[string]string
 
-	if srv.hlServer.Redis != nil {
-		members, err := srv.hlServer.Redis.SMembers(r.Context(), hotline.RedisKeyOnline).Result()
+	if srv.online != nil {
+		online, err := srv.online.Online(r.Context())
 		if err == nil {
-			for _, m := range members {
-				parts := strings.SplitN(m, ":", 3)
-				if len(parts) == 3 {
-					users = append(users, map[string]string{
-						"login":    parts[0],
-						"nickname": parts[1],
-						"ip":       parts[2],
-					})
-				}
+			for _, u := range online {
+				users = append(users, map[string]string{
+					"login":    u.Login,
+					"nickname": u.Nickname,
+					"ip":       u.IP,
+				})
 			}
 		}
 	} else {

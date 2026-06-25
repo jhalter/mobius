@@ -9,13 +9,12 @@ import (
 // BanDuration is the length of time for temporary bans.
 const BanDuration = 30 * time.Minute
 
-// Redis key constants for ban management and online user tracking
+// Redis key constants for ban management
 const (
 	RedisKeyBannedIPs       = "mobius:banned:ips"
 	RedisKeyBannedUsers     = "mobius:banned:users"
 	RedisKeyBannedNicknames = "mobius:banned:nicknames"
 	RedisKeyTempBannedIPs   = "mobius:temp_banned:ips:"
-	RedisKeyOnline          = "mobius:online"
 )
 
 type BanMgr interface {

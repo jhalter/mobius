@@ -932,3 +932,103 @@ func TestHandleUserBroadcast(t *testing.T) {
 		})
 	}
 }
+
+// presenceCall records a single PresenceTracker invocation for assertions.
+type presenceCall struct {
+	method      string
+	login       string
+	oldNickname string
+	newNickname string
+	nickname    string
+	ip          string
+}
+
+type fakePresenceTracker struct {
+	calls []presenceCall
+}
+
+func (f *fakePresenceTracker) UserConnected(login, ip string) {
+	f.calls = append(f.calls, presenceCall{method: "UserConnected", login: login, ip: ip})
+}
+
+func (f *fakePresenceTracker) UserRenamed(login, oldNickname, newNickname, ip string) {
+	f.calls = append(f.calls, presenceCall{method: "UserRenamed", login: login, oldNickname: oldNickname, newNickname: newNickname, ip: ip})
+}
+
+func (f *fakePresenceTracker) UserDisconnected(login, nickname, ip string) {
+	f.calls = append(f.calls, presenceCall{method: "UserDisconnected", login: login, nickname: nickname, ip: ip})
+}
+
+func newPresenceTestServer(presence hotline.PresenceTracker) *hotline.Server {
+	m := hotline.MockClientMgr{}
+	m.On("List").Return([]*hotline.ClientConn{})
+	return &hotline.Server{
+		TextDecoder: charmap.Macintosh.NewDecoder(),
+		TextEncoder: charmap.Macintosh.NewEncoder(),
+		Config:      hotline.Config{BannerFile: "Banner.jpg"},
+		ClientMgr:   &m,
+		Presence:    presence,
+	}
+}
+
+func TestHandleTranAgreed_NotifiesPresenceTracker(t *testing.T) {
+	presence := &fakePresenceTracker{}
+	cc := &hotline.ClientConn{
+		Account: &hotline.Account{
+			Login: "alice",
+			Access: func() hotline.AccessBitmap {
+				var bits hotline.AccessBitmap
+				bits.Set(hotline.AccessAnyName)
+				return bits
+			}(),
+		},
+		ID:         [2]byte{0, 1},
+		Version:    []byte{0, 1},
+		RemoteAddr: "192.168.1.1:12345",
+		Logger:     NewTestLogger(),
+		Server:     newPresenceTestServer(presence),
+	}
+
+	tr := hotline.NewTransaction(
+		hotline.TranAgreed, [2]byte{},
+		hotline.NewField(hotline.FieldUserName, []byte("Alice")),
+		hotline.NewField(hotline.FieldUserIconID, []byte{0, 1}),
+		hotline.NewField(hotline.FieldOptions, []byte{0, 0}),
+	)
+
+	HandleTranAgreed(cc, &tr)
+
+	assert.Equal(t, []presenceCall{
+		{method: "UserRenamed", login: "alice", oldNickname: "", newNickname: "Alice", ip: "192.168.1.1"},
+	}, presence.calls)
+}
+
+func TestHandleSetClientUserInfo_NotifiesPresenceTracker(t *testing.T) {
+	presence := &fakePresenceTracker{}
+	cc := &hotline.ClientConn{
+		Account: &hotline.Account{
+			Login: "alice",
+			Access: func() hotline.AccessBitmap {
+				var bits hotline.AccessBitmap
+				bits.Set(hotline.AccessAnyName)
+				return bits
+			}(),
+		},
+		ID:         [2]byte{0, 1},
+		UserName:   []byte("Alice"),
+		RemoteAddr: "192.168.1.1:12345",
+		Logger:     NewTestLogger(),
+		Server:     newPresenceTestServer(presence),
+	}
+
+	tr := hotline.NewTransaction(
+		hotline.TranSetClientUserInfo, [2]byte{},
+		hotline.NewField(hotline.FieldUserName, []byte("Alice2")),
+	)
+
+	HandleSetClientUserInfo(cc, &tr)
+
+	assert.Equal(t, []presenceCall{
+		{method: "UserRenamed", login: "alice", oldNickname: "Alice", newNickname: "Alice2", ip: "192.168.1.1"},
+	}, presence.calls)
+}

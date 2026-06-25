@@ -16,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/time/rate"
@@ -62,7 +61,9 @@ type Server struct {
 
 	MessageBoard io.ReadWriteSeeker
 
-	Redis *redis.Client
+	// Presence optionally records user session lifecycle events for an external online-user
+	// list. When nil, online presence is derived from ClientMgr.
+	Presence PresenceTracker
 
 	// TrackerRegistrar handles tracker registration (injectable for testing)
 	TrackerRegistrar TrackerRegistrar
@@ -130,6 +131,13 @@ func WithInterface(netInterface string) func(s *Server) {
 func WithTrackerRegistrar(registrar TrackerRegistrar) func(s *Server) {
 	return func(s *Server) {
 		s.TrackerRegistrar = registrar
+	}
+}
+
+// WithPresenceTracker optionally sets a PresenceTracker to record user session lifecycle events.
+func WithPresenceTracker(p PresenceTracker) func(s *Server) {
+	return func(s *Server) {
+		s.Presence = p
 	}
 }
 
@@ -577,18 +585,14 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	// transaction ordering and prevents interleaved writes.
 	go c.writeLoop()
 
-	// TODO: refactor this into a connection manager interface, maybe?
-	if s.Redis != nil {
-		s.Redis.SAdd(context.Background(), RedisKeyOnline, login+"::"+ipAddr)
+	if s.Presence != nil {
+		s.Presence.UserConnected(login, ipAddr)
 	}
 
 	// Remove the client from the list of connected clients when they disconnect
 	defer func() {
-		if s.Redis != nil {
-			s.Redis.SRem(context.Background(), RedisKeyOnline, login+"::"+ipAddr)
-			if userName := c.GetUserName(); len(userName) != 0 {
-				s.Redis.SRem(context.Background(), RedisKeyOnline, login+":"+string(userName)+":"+ipAddr)
-			}
+		if s.Presence != nil {
+			s.Presence.UserDisconnected(login, string(c.GetUserName()), ipAddr)
 		}
 		c.Disconnect()
 	}()
@@ -665,12 +669,8 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		c.Logger = c.Logger.With("name", string(userName))
 		c.Logger.Info("Login successful")
 
-		// Update the Redis set with the new information
-		if s.Redis != nil {
-			// Remove old entry (login::ip)
-			s.Redis.SRem(context.Background(), RedisKeyOnline, login+"::"+ipAddr)
-			// Add new entry with login, nickname, ip
-			s.Redis.SAdd(context.Background(), RedisKeyOnline, login+":"+string(userName)+":"+ipAddr)
+		if s.Presence != nil {
+			s.Presence.UserRenamed(login, "", string(userName), ipAddr)
 		}
 
 		// Notify other clients on the server that the new user has logged in.  For 1.5+ clients we don't have this

@@ -1,7 +1,6 @@
 package mobius
 
 import (
-	"context"
 	"encoding/binary"
 	"io"
 	"math/big"
@@ -110,19 +109,14 @@ func HandleTranAgreed(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	login := cc.Account.Login
 	ip := cc.IP()
 
-	if cc.Server.Redis != nil {
-		// Remove old entry (login::ip)
-		cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+"::"+ip)
-		// Add new entry with login, nickname, ip
-		cc.Server.Redis.SAdd(context.Background(), hotline.RedisKeyOnline, login+":"+string(cc.GetUserName())+":"+ip)
+	if cc.Server.Presence != nil {
+		cc.Server.Presence.UserRenamed(login, "", string(cc.GetUserName()), ip)
 	}
 
 	// Ban check for nickname
 	if cc.Server.BanList != nil && cc.Server.BanList.IsNicknameBanned(string(cc.GetUserName())) {
-		if cc.Server.Redis != nil {
-			// Remove all possible online entries for this login and IP
-			cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+"::"+ip)
-			cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+":"+string(cc.GetUserName())+":"+ip)
+		if cc.Server.Presence != nil {
+			cc.Server.Presence.UserDisconnected(login, string(cc.GetUserName()), ip)
 		}
 		if err := cc.Server.BanList.Add(ip, nil); err != nil {
 			cc.Logger.Error("Failed to ban IP for banned nickname", "ip", ip, "err", err)
@@ -275,25 +269,14 @@ func HandleSetClientUserInfo(cc *hotline.ClientConn, t *hotline.Transaction) (re
 		login := cc.Account.Login
 		ip := cc.IP()
 
-		if cc.Server.Redis != nil {
-			// Remove old entry (login:oldnickname:ip) and (login::ip)
-			cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+"::"+ip)
-			if oldNickname != "" {
-				cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+":"+oldNickname+":"+ip)
-			}
-			// Add new entry
-			cc.Server.Redis.SAdd(context.Background(), hotline.RedisKeyOnline, login+":"+newNickname+":"+ip)
+		if cc.Server.Presence != nil {
+			cc.Server.Presence.UserRenamed(login, oldNickname, newNickname, ip)
 		}
 
 		// Ban check for nickname
 		if cc.Server.BanList != nil && cc.Server.BanList.IsNicknameBanned(newNickname) {
-			if cc.Server.Redis != nil {
-				// Remove all possible online entries for this login and IP
-				cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+"::"+ip)
-				cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+":"+newNickname+":"+ip)
-				if oldNickname != "" {
-					cc.Server.Redis.SRem(context.Background(), hotline.RedisKeyOnline, login+":"+oldNickname+":"+ip)
-				}
+			if cc.Server.Presence != nil {
+				cc.Server.Presence.UserDisconnected(login, newNickname, ip)
 			}
 			if err := cc.Server.BanList.Add(ip, nil); err != nil {
 				cc.Logger.Error("Failed to ban IP for banned nickname", "ip", ip, "err", err)

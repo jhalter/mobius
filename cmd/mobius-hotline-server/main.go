@@ -122,6 +122,7 @@ func main() {
 	reloaders = append(reloaders, namedReloader{"message board", messageBoard})
 
 	// Initialize ban list - use Redis if configured, otherwise use file-based storage
+	var onlineLister mobius.OnlineLister
 	if *redisAddr != "" {
 		redisClient := redis.NewClient(&redis.Options{
 			Addr:     *redisAddr,
@@ -135,7 +136,14 @@ func main() {
 			os.Exit(1)
 		}
 
-		srv.Redis = redisClient
+		presence := mobius.NewRedisPresenceTracker(redisClient, slogger)
+		// Discard stale online state from a previous run.
+		if err := presence.Clear(ctx); err != nil {
+			slogger.Warn("Failed to clear online users in Redis", "err", err)
+		}
+		srv.Presence = presence
+		onlineLister = presence
+
 		srv.BanList = mobius.NewRedisBanMgr(redisClient, slogger)
 		slogger.Debug("Using Redis for ban management", "addr", *redisAddr)
 	} else {
@@ -195,7 +203,7 @@ func main() {
 	}
 
 	if *apiAddr != "" {
-		sh := mobius.NewAPIServer(srv, reloadFunc, slogger, *apiKey)
+		sh := mobius.NewAPIServer(srv, onlineLister, reloadFunc, slogger, *apiKey)
 		go sh.Serve(*apiAddr)
 	}
 
