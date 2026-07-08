@@ -170,6 +170,16 @@ Usage of mobius-hotline-server:
 
 To run as a systemd service, refer to this sample unit file: [mobius-hotline-server.service](https://github.com/jhalter/mobius/blob/master/cmd/mobius-hotline-server/mobius-hotline-server.service)
 
+## File Storage
+
+By default the file library is stored on the server's local disk. The `-file-store` flag selects an alternate backend:
+
+- `os` (default) — local filesystem
+- `memory` — in-memory, non-persistent (for testing)
+- `r2` — [Cloudflare R2](docs/r2-file-store.md) object storage
+
+See [docs/r2-file-store.md](docs/r2-file-store.md) for R2 setup instructions.
+
 ## HTTP API
 
 The Mobius server includes an optional HTTP API for server administration and user management.

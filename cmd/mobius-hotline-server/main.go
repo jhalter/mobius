@@ -11,8 +11,12 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"syscall"
 
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/jhalter/mobius/hotline"
 	"github.com/jhalter/mobius/internal/mobius"
 	"github.com/oleksandr/bonjour"
@@ -49,7 +53,7 @@ func main() {
 	tlsCert := flag.String("tls-cert", "", "Path to TLS certificate file")
 	tlsKey := flag.String("tls-key", "", "Path to TLS key file")
 	tlsPort := flag.Int("tls-port", 5600, "Base TLS port. TLS file transfer port is base + 1.")
-	fileStoreBackend := flag.String("file-store", "os", "File library storage backend: os (default) or memory")
+	fileStoreBackend := flag.String("file-store", "os", "File library storage backend: os (default), memory, or r2 (Cloudflare R2, configured via R2_* env vars)")
 
 	flag.Parse()
 
@@ -113,6 +117,14 @@ func main() {
 	case "memory":
 		opts = append(opts, hotline.WithFileStore(hotline.NewMemFileStore()))
 		slogger.Warn("Using in-memory file store; uploaded files are not persisted")
+	case "r2":
+		r2Store, err := newR2FileStore(ctx)
+		if err != nil {
+			slogger.Error("Error configuring Cloudflare R2 file store", "err", err)
+			os.Exit(1)
+		}
+		opts = append(opts, hotline.WithFileStore(r2Store))
+		slogger.Info("Using Cloudflare R2 file store", "bucket", os.Getenv("R2_BUCKET"))
 	default:
 		slogger.Error("Unknown file-store backend", "backend", *fileStoreBackend)
 		os.Exit(1)
@@ -323,6 +335,51 @@ func copyDirRecursive(src, dst string) error {
 	}
 
 	return nil
+}
+
+// newR2FileStore builds a Cloudflare R2-backed file store from R2_* environment variables.
+//
+// Required: R2_BUCKET and credentials (R2_ACCESS_KEY_ID + R2_SECRET_ACCESS_KEY), plus the endpoint,
+// given either as R2_ACCOUNT_ID (from which the standard R2 endpoint is derived) or as an explicit
+// R2_ENDPOINT. Optional: R2_PREFIX (a key prefix within the bucket) and R2_STAGING_DIR (local temp
+// dir for in-progress .incomplete uploads; defaults to <os.TempDir>/mobius-uploads).
+func newR2FileStore(ctx context.Context) (hotline.FileStore, error) {
+	bucket := os.Getenv("R2_BUCKET")
+	accessKey := os.Getenv("R2_ACCESS_KEY_ID")
+	secretKey := os.Getenv("R2_SECRET_ACCESS_KEY")
+	if bucket == "" || accessKey == "" || secretKey == "" {
+		return nil, errors.New("R2_BUCKET, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY must be set")
+	}
+
+	endpoint := os.Getenv("R2_ENDPOINT")
+	if endpoint == "" {
+		accountID := os.Getenv("R2_ACCOUNT_ID")
+		if accountID == "" {
+			return nil, errors.New("either R2_ENDPOINT or R2_ACCOUNT_ID must be set")
+		}
+		endpoint = fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID)
+	}
+
+	stagingDir := os.Getenv("R2_STAGING_DIR")
+	if stagingDir == "" {
+		stagingDir = filepath.Join(os.TempDir(), "mobius-uploads")
+	}
+
+	cfg, err := awsconfig.LoadDefaultConfig(ctx,
+		awsconfig.WithRegion("auto"),
+		awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(accessKey, secretKey, ""),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("load AWS config: %w", err)
+	}
+
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = &endpoint
+	})
+
+	return hotline.NewR2FileStore(client, bucket, os.Getenv("R2_PREFIX"), stagingDir), nil
 }
 
 // copyFile copies a single file from embedded filesystem to local filesystem.
