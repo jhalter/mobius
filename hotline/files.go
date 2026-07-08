@@ -37,8 +37,8 @@ func fileTypeFromInfo(info fs.FileInfo) (ft fileType, err error) {
 
 const maxFileSize = 4294967296
 
-func GetFileNameList(path string, ignoreList []string, encoder *encoding.Encoder, logger *slog.Logger) (fields []Field, err error) {
-	files, err := os.ReadDir(path)
+func GetFileNameList(fileStore FileStore, path string, ignoreList []string, encoder *encoding.Encoder, logger *slog.Logger) (fields []Field, err error) {
+	files, err := fileStore.ReadDir(path)
 	if err != nil {
 		return fields, fmt.Errorf("error reading path: %s: %w", path, err)
 	}
@@ -59,12 +59,12 @@ func GetFileNameList(path string, ignoreList []string, encoder *encoding.Encoder
 
 		// Check if path is a symlink.  If so, follow it.
 		if fileInfo.Mode()&os.ModeSymlink != 0 {
-			resolvedPath, err := os.Readlink(filepath.Join(path, file.Name()))
+			resolvedPath, err := fileStore.ReadLink(filepath.Join(path, file.Name()))
 			if err != nil {
 				return fields, fmt.Errorf("error following symlink: %s: %w", resolvedPath, err)
 			}
 
-			rFile, err := os.Stat(resolvedPath)
+			rFile, err := fileStore.Stat(resolvedPath)
 			if errors.Is(err, os.ErrNotExist) {
 				continue
 			}
@@ -73,7 +73,7 @@ func GetFileNameList(path string, ignoreList []string, encoder *encoding.Encoder
 			}
 
 			if rFile.IsDir() {
-				dir, err := os.ReadDir(filepath.Join(path, file.Name()))
+				dir, err := fileStore.ReadDir(filepath.Join(path, file.Name()))
 				if err != nil {
 					return fields, err
 				}
@@ -94,7 +94,7 @@ func GetFileNameList(path string, ignoreList []string, encoder *encoding.Encoder
 				copy(fnwi.Creator[:], FileTypeFromFilename(rFile.Name()).CreatorCode)
 			}
 		} else if file.IsDir() {
-			dir, err := os.ReadDir(filepath.Join(path, file.Name()))
+			dir, err := fileStore.ReadDir(filepath.Join(path, file.Name()))
 			if err != nil {
 				return fields, fmt.Errorf("readDir: %w", err)
 			}
@@ -115,7 +115,7 @@ func GetFileNameList(path string, ignoreList []string, encoder *encoding.Encoder
 				continue
 			}
 
-			hlFile, err := NewFile(&OSFileStore{}, path+"/"+file.Name(), 0)
+			hlFile, err := NewFile(fileStore, path+"/"+file.Name(), 0)
 			if err != nil {
 				return nil, fmt.Errorf("NewFile: %w", err)
 			}
@@ -148,9 +148,9 @@ func GetFileNameList(path string, ignoreList []string, encoder *encoding.Encoder
 	return fields, nil
 }
 
-func CalcTotalSize(filePath string) ([]byte, error) {
+func CalcTotalSize(fileStore FileStore, filePath string) ([]byte, error) {
 	var totalSize uint32
-	err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
+	err := fileStore.Walk(filePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -174,11 +174,11 @@ func CalcTotalSize(filePath string) ([]byte, error) {
 }
 
 // CalcItemCount recurses through a file path and counts the number of non-hidden files.
-func CalcItemCount(filePath string) ([]byte, error) {
+func CalcItemCount(fileStore FileStore, filePath string) ([]byte, error) {
 	var itemCount uint16
 
 	// Walk the directory and count items
-	err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
+	err := fileStore.Walk(filePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

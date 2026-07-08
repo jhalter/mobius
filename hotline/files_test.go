@@ -76,7 +76,7 @@ func TestCalcTotalSize(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := CalcTotalSize(tt.args.filePath)
+			got, err := CalcTotalSize(&OSFileStore{}, tt.args.filePath)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CalcTotalSize() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -160,7 +160,7 @@ func TestCalcItemCount(t *testing.T) {
 			}
 
 			// Calculate item count
-			result, err := CalcItemCount(tempDir)
+			result, err := CalcItemCount(&OSFileStore{}, tempDir)
 			if err != nil {
 				t.Fatalf("CalcItemCount returned an error: %v", err)
 			}
@@ -201,7 +201,7 @@ func TestGetFileNameList_Encoding(t *testing.T) {
 	}
 
 	t.Run("macintosh encoder converts UTF-8 to Mac Roman", func(t *testing.T) {
-		fields, err := GetFileNameList(tempDir, nil, charmap.Macintosh.NewEncoder(), slog.Default())
+		fields, err := GetFileNameList(&OSFileStore{}, tempDir, nil, charmap.Macintosh.NewEncoder(), slog.Default())
 		assert.NoError(t, err)
 		assert.Len(t, fields, 1)
 
@@ -211,7 +211,7 @@ func TestGetFileNameList_Encoding(t *testing.T) {
 	})
 
 	t.Run("nop encoder passes UTF-8 through unchanged", func(t *testing.T) {
-		fields, err := GetFileNameList(tempDir, nil, encoding.Nop.NewEncoder(), slog.Default())
+		fields, err := GetFileNameList(&OSFileStore{}, tempDir, nil, encoding.Nop.NewEncoder(), slog.Default())
 		assert.NoError(t, err)
 		assert.Len(t, fields, 1)
 

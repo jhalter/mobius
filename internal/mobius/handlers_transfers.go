@@ -117,12 +117,12 @@ func HandleDownloadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 
-	transferSize, err := hotline.CalcTotalSize(fullFilePath)
+	transferSize, err := hotline.CalcTotalSize(cc.Server.FS, fullFilePath)
 	if err != nil {
 		cc.Logger.Error("download folder: calc total size", "err", err)
 		return cc.NewErrReply(t, ErrMsgDownloadFolder)
 	}
-	itemCount, err := hotline.CalcItemCount(fullFilePath)
+	itemCount, err := hotline.CalcItemCount(cc.Server.FS, fullFilePath)
 	if err != nil {
 		cc.Logger.Error("download folder: calc item count", "err", err)
 		return cc.NewErrReply(t, ErrMsgDownloadFolder)

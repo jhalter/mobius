@@ -13,7 +13,6 @@ import (
 	"math"
 	"os"
 	"path"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -289,21 +288,18 @@ func DownloadHandler(w io.Writer, fullPath string, fileTransfer *FileTransfer, f
 		}
 	}
 
-	rFile, _ := hlFile.rsrcForkFile()
-	//if err != nil {
-	//	// return fmt.Errorf("open resource fork file: %v", err)
-	//}
-
-	_, _ = io.Copy(w, io.TeeReader(rFile, fileTransfer.bytesSentCounter))
-	//if err != nil {
-	//	// return fmt.Errorf("send resource fork data: %v", err)
-	//}
+	// The resource fork may legitimately not exist. rsrcForkFile returns a nil reader in that
+	// case; guard against it so backends that return an untyped-nil reader (rather than an
+	// os.File whose Read tolerates a nil receiver) don't panic.
+	if rFile, _ := hlFile.rsrcForkFile(); rFile != nil {
+		_, _ = io.Copy(w, io.TeeReader(rFile, fileTransfer.bytesSentCounter))
+	}
 
 	return nil
 }
 
 func UploadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfer, fileStore FileStore, rLogger *slog.Logger, preserveForks bool) error {
-	var file *os.File
+	var file io.WriteCloser
 
 	// A file upload has two possible cases:
 	// 1) Upload a new file
@@ -312,7 +308,7 @@ func UploadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfe
 
 	// Check for existing file.  If found, do not proceed.  This is an invalid scenario, as the file upload transaction
 	// handler should have returned an error to the client indicating there was an existing file present.
-	_, err := os.Stat(fullPath)
+	_, err := fileStore.Stat(fullPath)
 	if err == nil {
 		return fmt.Errorf("existing file found: %s", fullPath)
 	}
@@ -322,7 +318,7 @@ func UploadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfe
 	}
 
 	// If not found, open or create a new .incomplete file
-	file, err = os.OpenFile(fullPath+IncompleteFileSuffix, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	file, err = fileStore.OpenFile(fullPath+IncompleteFileSuffix, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("open temp file for uploade: %w", err)
 	}
@@ -406,7 +402,7 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 	}
 
 	i := 0
-	err := filepath.Walk(fullPath+"/", func(path string, info os.FileInfo, err error) error {
+	err := fileStore.Walk(fullPath+"/", func(path string, info os.FileInfo, err error) error {
 		//s.Stats.DownloadCounter += 1
 		i += 1
 
@@ -567,8 +563,8 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 		itemPath := path.Join(fullPath, fu.FormattedPath())
 
 		if fu.IsFolder == [2]byte{0, 1} {
-			if _, err := os.Stat(itemPath); os.IsNotExist(err) {
-				if err := os.Mkdir(itemPath, 0777); err != nil {
+			if _, err := fileStore.Stat(itemPath); os.IsNotExist(err) {
+				if err := fileStore.Mkdir(itemPath, 0777); err != nil {
 					return err
 				}
 			}
@@ -581,7 +577,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 			nextAction := DlFldrActionSendFile
 
 			// Check if we have the full file already.  If so, send dlFldrAction_NextFile to client to skip.
-			_, err := os.Stat(itemPath)
+			_, err := fileStore.Stat(itemPath)
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
@@ -590,7 +586,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 			}
 
 			//  Check if we have a partial file already.  If so, send dlFldrAction_ResumeFile to client to resume upload.
-			incompleteFile, err := os.Stat(itemPath + IncompleteFileSuffix)
+			incompleteFile, err := fileStore.Stat(itemPath + IncompleteFileSuffix)
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
@@ -609,7 +605,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 				offset := make([]byte, 4)
 				binary.BigEndian.PutUint32(offset, uint32(incompleteFile.Size()))
 
-				file, err := os.OpenFile(itemPath+IncompleteFileSuffix, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				file, err := fileStore.OpenFile(itemPath+IncompleteFileSuffix, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 				if err != nil {
 					return err
 				}
@@ -633,7 +629,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 					rLogger.Error("Error receiving file", "err", err)
 				}
 
-				err = os.Rename(itemPath+IncompleteFileSuffix, itemPath)
+				err = fileStore.Rename(itemPath+IncompleteFileSuffix, itemPath)
 				if err != nil {
 					return err
 				}
@@ -680,7 +676,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 				}
 
 				// Rename the temporary upload file to the final file name.
-				if err := os.Rename(filePath+".incomplete", filePath); err != nil {
+				if err := fileStore.Rename(filePath+".incomplete", filePath); err != nil {
 					return err
 				}
 			}

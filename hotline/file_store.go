@@ -1,98 +1,162 @@
 package hotline
 
 import (
+	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/stretchr/testify/mock"
 )
 
+// FileStore is the storage backend for the file library (the FileRoot that clients browse,
+// upload, and download). It is deliberately expressed in terms of io/fs interface types rather
+// than *os.File so that non-filesystem backends (e.g. an object store such as S3/R2) can
+// implement it. OSFileStore is the default, filesystem-backed implementation.
+//
+// Symlink/ReadLink exist only to support Hotline aliases and have no analog on object stores;
+// such backends may return errors.ErrUnsupported, and callers degrade gracefully.
 type FileStore interface {
-	Create(name string) (*os.File, error)
-	Mkdir(name string, perm os.FileMode) error
-	Open(name string) (*os.File, error)
-	OpenFile(name string, flag int, perm fs.FileMode) (*os.File, error)
+	// Reads
+	Open(name string) (io.ReadCloser, error)
+	Stat(name string) (fs.FileInfo, error)
+	ReadFile(name string) ([]byte, error)
+	ReadDir(name string) ([]fs.DirEntry, error)
+	ReadLink(name string) (string, error)
+	Walk(root string, fn filepath.WalkFunc) error
+
+	// Writes
+	Create(name string) (io.WriteCloser, error)
+	OpenFile(name string, flag int, perm fs.FileMode) (io.WriteCloser, error)
+	WriteFile(name string, data []byte, perm fs.FileMode) error
+	Mkdir(name string, perm fs.FileMode) error
+
+	// Mutations
+	Rename(oldpath string, newpath string) error
 	Remove(name string) error
 	RemoveAll(path string) error
-	Rename(oldpath string, newpath string) error
-	Stat(name string) (fs.FileInfo, error)
 	Symlink(oldname, newname string) error
-	WriteFile(name string, data []byte, perm fs.FileMode) error
-	ReadFile(name string) ([]byte, error)
 }
 
+// OSFileStore is a FileStore backed by the local filesystem via the os and filepath packages.
 type OSFileStore struct{}
 
-func (fs *OSFileStore) Mkdir(name string, perm os.FileMode) error {
+var _ FileStore = (*OSFileStore)(nil)
+
+func (*OSFileStore) Mkdir(name string, perm fs.FileMode) error {
 	return os.Mkdir(name, perm)
 }
 
-func (fs *OSFileStore) Stat(name string) (os.FileInfo, error) {
+func (*OSFileStore) Stat(name string) (fs.FileInfo, error) {
 	return os.Stat(name)
 }
 
-func (fs *OSFileStore) Open(name string) (*os.File, error) {
-	return os.Open(name)
+func (*OSFileStore) Open(name string) (io.ReadCloser, error) {
+	f, err := os.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
 }
 
-func (fs *OSFileStore) Symlink(oldname, newname string) error {
+func (*OSFileStore) ReadDir(name string) ([]fs.DirEntry, error) {
+	return os.ReadDir(name)
+}
+
+func (*OSFileStore) ReadLink(name string) (string, error) {
+	return os.Readlink(name)
+}
+
+func (*OSFileStore) Walk(root string, fn filepath.WalkFunc) error {
+	return filepath.Walk(root, fn)
+}
+
+func (*OSFileStore) Symlink(oldname, newname string) error {
 	return os.Symlink(oldname, newname)
 }
 
-func (fs *OSFileStore) RemoveAll(name string) error {
+func (*OSFileStore) RemoveAll(name string) error {
 	return os.RemoveAll(name)
 }
 
-func (fs *OSFileStore) Remove(name string) error {
+func (*OSFileStore) Remove(name string) error {
 	return os.Remove(name)
 }
 
-func (fs *OSFileStore) Create(name string) (*os.File, error) {
-	return os.Create(name)
+func (*OSFileStore) Create(name string) (io.WriteCloser, error) {
+	f, err := os.Create(name)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
 }
 
-func (fs *OSFileStore) WriteFile(name string, data []byte, perm fs.FileMode) error {
+func (*OSFileStore) WriteFile(name string, data []byte, perm fs.FileMode) error {
 	return os.WriteFile(name, data, perm)
 }
 
-func (fs *OSFileStore) Rename(oldpath string, newpath string) error {
+func (*OSFileStore) Rename(oldpath string, newpath string) error {
 	return os.Rename(oldpath, newpath)
 }
 
-func (fs *OSFileStore) ReadFile(name string) ([]byte, error) {
+func (*OSFileStore) ReadFile(name string) ([]byte, error) {
 	return os.ReadFile(name)
 }
 
-func (fs *OSFileStore) OpenFile(name string, flag int, perm fs.FileMode) (*os.File, error) {
-	return os.OpenFile(name, flag, perm)
+func (*OSFileStore) OpenFile(name string, flag int, perm fs.FileMode) (io.WriteCloser, error) {
+	f, err := os.OpenFile(name, flag, perm)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
 }
 
 type MockFileStore struct {
 	mock.Mock
 }
 
-func (mfs *MockFileStore) Mkdir(name string, perm os.FileMode) error {
+var _ FileStore = (*MockFileStore)(nil)
+
+func (mfs *MockFileStore) Mkdir(name string, perm fs.FileMode) error {
 	args := mfs.Called(name, perm)
 	return args.Error(0)
 }
 
-func (mfs *MockFileStore) Stat(name string) (os.FileInfo, error) {
+func (mfs *MockFileStore) Stat(name string) (fs.FileInfo, error) {
 	args := mfs.Called(name)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(os.FileInfo), args.Error(1)
+	return args.Get(0).(fs.FileInfo), args.Error(1)
 }
 
-func (mfs *MockFileStore) Open(name string) (*os.File, error) {
+func (mfs *MockFileStore) Open(name string) (io.ReadCloser, error) {
 	args := mfs.Called(name)
-	return args.Get(0).(*os.File), args.Error(1)
+	f, _ := args.Get(0).(io.ReadCloser)
+	return f, args.Error(1)
 }
 
-func (mfs *MockFileStore) OpenFile(name string, flag int, perm fs.FileMode) (*os.File, error) {
+func (mfs *MockFileStore) ReadDir(name string) ([]fs.DirEntry, error) {
+	args := mfs.Called(name)
+	entries, _ := args.Get(0).([]fs.DirEntry)
+	return entries, args.Error(1)
+}
+
+func (mfs *MockFileStore) ReadLink(name string) (string, error) {
+	args := mfs.Called(name)
+	return args.String(0), args.Error(1)
+}
+
+func (mfs *MockFileStore) Walk(root string, fn filepath.WalkFunc) error {
+	args := mfs.Called(root, fn)
+	return args.Error(0)
+}
+
+func (mfs *MockFileStore) OpenFile(name string, flag int, perm fs.FileMode) (io.WriteCloser, error) {
 	args := mfs.Called(name, flag, perm)
-	return args.Get(0).(*os.File), args.Error(1)
+	f, _ := args.Get(0).(io.WriteCloser)
+	return f, args.Error(1)
 }
 
 func (mfs *MockFileStore) Symlink(oldname, newname string) error {
@@ -110,9 +174,10 @@ func (mfs *MockFileStore) Remove(name string) error {
 	return args.Error(0)
 }
 
-func (mfs *MockFileStore) Create(name string) (*os.File, error) {
+func (mfs *MockFileStore) Create(name string) (io.WriteCloser, error) {
 	args := mfs.Called(name)
-	return args.Get(0).(*os.File), args.Error(1)
+	f, _ := args.Get(0).(io.WriteCloser)
+	return f, args.Error(1)
 }
 
 func (mfs *MockFileStore) WriteFile(name string, data []byte, perm fs.FileMode) error {

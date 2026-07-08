@@ -748,7 +748,7 @@ func TestHandleGetFileNameList(t *testing.T) {
 							return filepath.Join(path, "/test/config/Files/getFileNameListTestDir")
 						}(),
 					},
-					Server: &hotline.Server{TextDecoder: charmap.Macintosh.NewDecoder(), TextEncoder: charmap.Macintosh.NewEncoder()},
+					Server: &hotline.Server{FS: &hotline.OSFileStore{}, TextDecoder: charmap.Macintosh.NewDecoder(), TextEncoder: charmap.Macintosh.NewEncoder()},
 				},
 				t: hotline.NewTransaction(
 					hotline.TranGetFileNameList, [2]byte{0, 1},

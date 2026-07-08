@@ -141,6 +141,13 @@ func WithPresenceTracker(p PresenceTracker) func(s *Server) {
 	}
 }
 
+// WithFileStore sets the storage backend for the file library. Defaults to OSFileStore.
+func WithFileStore(fs FileStore) func(s *Server) {
+	return func(s *Server) {
+		s.FS = fs
+	}
+}
+
 // WithTLS optionally enables TLS support on the specified port.
 func WithTLS(tlsConfig *tls.Config, port int) func(s *Server) {
 	return func(s *Server) {

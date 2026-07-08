@@ -103,7 +103,7 @@ func (f *File) infoForkName() string {
 }
 
 func (f *File) rsrcForkWriter() (io.WriteCloser, error) {
-	file, err := os.OpenFile(f.rsrcPath, os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := f.fs.OpenFile(f.rsrcPath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +112,7 @@ func (f *File) rsrcForkWriter() (io.WriteCloser, error) {
 }
 
 func (f *File) InfoForkWriter() (io.WriteCloser, error) {
-	file, err := os.OpenFile(f.infoPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	file, err := f.fs.OpenFile(f.infoPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func (f *File) InfoForkWriter() (io.WriteCloser, error) {
 }
 
 func (f *File) incFileWriter() (io.WriteCloser, error) {
-	file, err := os.OpenFile(f.incompletePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	file, err := f.fs.OpenFile(f.incompletePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func (f *File) dataForkReader() (io.Reader, error) {
 	return f.fs.Open(f.incompletePath)
 }
 
-func (f *File) rsrcForkFile() (*os.File, error) {
+func (f *File) rsrcForkFile() (io.ReadCloser, error) {
 	return f.fs.Open(f.rsrcPath)
 }
 

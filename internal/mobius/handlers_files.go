@@ -144,7 +144,7 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 			if !cc.Authorize(hotline.AccessRenameFolder) {
 				return cc.NewErrReply(t, ErrMsgNotAllowedRenameFolders)
 			}
-			err = os.Rename(fullFilePath, fullNewFilePath)
+			err = cc.Server.FS.Rename(fullFilePath, fullNewFilePath)
 			if os.IsNotExist(err) {
 				return cc.NewErrReply(t, fmt.Sprintf(ErrMsgCannotRenameFolderNotFound, string(fileName)))
 			}
@@ -382,7 +382,7 @@ func HandleGetFileNameList(cc *hotline.ClientConn, t *hotline.Transaction) (res 
 		return cc.NewErrReply(t, ErrMsgNotAllowedViewDropBoxes)
 	}
 
-	fileNames, err := hotline.GetFileNameList(fullPath, cc.Server.Config.IgnoreFiles, cc.TextEncoder(), cc.Logger)
+	fileNames, err := hotline.GetFileNameList(cc.Server.FS, fullPath, cc.Server.Config.IgnoreFiles, cc.TextEncoder(), cc.Logger)
 	if err != nil {
 		cc.Logger.Error("error getting file name list", "err", err)
 		return cc.NewErrReply(t, "Cannot get file list.")

@@ -535,6 +535,7 @@ func TestHandleDownloadFolder_withAccess(t *testing.T) {
 			}(),
 		},
 		Server: &hotline.Server{
+			FS:              &hotline.OSFileStore{},
 			TextDecoder:     charmap.Macintosh.NewDecoder(),
 			TextEncoder:     charmap.Macintosh.NewEncoder(),
 			FileTransferMgr: hotline.NewMemFileTransferMgr(),
