@@ -49,6 +49,7 @@ func main() {
 	tlsCert := flag.String("tls-cert", "", "Path to TLS certificate file")
 	tlsKey := flag.String("tls-key", "", "Path to TLS key file")
 	tlsPort := flag.Int("tls-port", 5600, "Base TLS port. TLS file transfer port is base + 1.")
+	fileStoreBackend := flag.String("file-store", "os", "File library storage backend: os (default) or memory")
 
 	flag.Parse()
 
@@ -101,6 +102,20 @@ func main() {
 	}
 	if tlsConfig != nil {
 		opts = append(opts, hotline.WithTLS(tlsConfig, *tlsPort))
+	}
+
+	// Select the file library storage backend. This is the seam a future object-store backend
+	// (e.g. Cloudflare R2 / S3) slots into, mirroring the Redis-vs-file selection below: build
+	// the concrete FileStore and pass it via hotline.WithFileStore.
+	switch *fileStoreBackend {
+	case "os", "":
+		// Default OSFileStore is set by NewServer; nothing to do.
+	case "memory":
+		opts = append(opts, hotline.WithFileStore(hotline.NewMemFileStore()))
+		slogger.Warn("Using in-memory file store; uploaded files are not persisted")
+	default:
+		slogger.Error("Unknown file-store backend", "backend", *fileStoreBackend)
+		os.Exit(1)
 	}
 
 	srv, err := hotline.NewServer(opts...)
