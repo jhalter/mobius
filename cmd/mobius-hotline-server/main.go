@@ -139,30 +139,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	// The config is passed by value, so this must come after the backend selection above, which
-	// resolves config.FileRoot for the chosen backend.
-	opts = append(opts, hotline.WithConfig(*config))
-
-	srv, err := hotline.NewServer(opts...)
-	if err != nil {
-		slogger.Error("Error starting server", "err", err)
-		os.Exit(1)
-	}
-
 	// reloaders collects the storage backends whose state is reloaded on SIGHUP or via the
 	// reload API endpoint.
 	var reloaders []namedReloader
 
-	messageBoard, err := mobius.NewFlatNews(path.Join(*configDir, "MessageBoard.txt"))
-	if err != nil {
-		slogger.Error("Error loading message board", "err", err)
-		os.Exit(1)
-	}
-	srv.MessageBoard = messageBoard
-	reloaders = append(reloaders, namedReloader{"message board", messageBoard})
-
-	// Initialize ban list - use Redis if configured, otherwise use file-based storage
+	// Select the ban list and presence backends: Redis if configured, otherwise file-based. This
+	// runs before NewServer so the presence tracker can be supplied via WithPresenceTracker.
 	var onlineLister mobius.OnlineLister
+	var banList hotline.BanMgr
 	if *redisAddr != "" {
 		redisClient := redis.NewClient(&redis.Options{
 			Addr:     *redisAddr,
@@ -181,10 +165,10 @@ func main() {
 		if err := presence.Clear(ctx); err != nil {
 			slogger.Warn("Failed to clear online users in Redis", "err", err)
 		}
-		srv.Presence = presence
+		opts = append(opts, hotline.WithPresenceTracker(presence))
 		onlineLister = presence
 
-		srv.BanList = mobius.NewRedisBanMgr(redisClient, slogger)
+		banList = mobius.NewRedisBanMgr(redisClient, slogger)
 		slogger.Debug("Using Redis for ban management", "addr", *redisAddr)
 	} else {
 		banFile, err := mobius.NewBanFile(path.Join(*configDir, "Banlist.yaml"))
@@ -192,10 +176,29 @@ func main() {
 			slogger.Error("Error loading ban list", "err", err)
 			os.Exit(1)
 		}
-		srv.BanList = banFile
+		banList = banFile
 		// The Redis-backed ban list needs no reload, so only the file-backed one registers.
 		reloaders = append(reloaders, namedReloader{"ban list", banFile})
 	}
+
+	// The config is passed by value, so this must come after the file-store backend selection
+	// above, which resolves config.FileRoot for the chosen backend.
+	opts = append(opts, hotline.WithConfig(*config))
+
+	srv, err := hotline.NewServer(opts...)
+	if err != nil {
+		slogger.Error("Error starting server", "err", err)
+		os.Exit(1)
+	}
+	srv.BanList = banList
+
+	messageBoard, err := mobius.NewFlatNews(path.Join(*configDir, "MessageBoard.txt"))
+	if err != nil {
+		slogger.Error("Error loading message board", "err", err)
+		os.Exit(1)
+	}
+	srv.MessageBoard = messageBoard
+	reloaders = append(reloaders, namedReloader{"message board", messageBoard})
 
 	threadedNews, err := mobius.NewThreadedNewsYAML(path.Join(*configDir, "ThreadedNews.yaml"))
 	if err != nil {
