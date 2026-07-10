@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path"
@@ -102,7 +103,6 @@ func main() {
 		hotline.WithInterface(*netInterface),
 		hotline.WithLogger(slogger),
 		hotline.WithPort(*basePort),
-		hotline.WithConfig(*config),
 	}
 	if tlsConfig != nil {
 		opts = append(opts, hotline.WithTLS(tlsConfig, *tlsPort))
@@ -113,10 +113,17 @@ func main() {
 	// the concrete FileStore and pass it via hotline.WithFileStore.
 	switch *fileStoreBackend {
 	case "os", "":
-		// Default OSFileStore is set by NewServer; nothing to do.
+		// Default OSFileStore is set by NewServer; nothing to do beyond resolving FileRoot,
+		// which is a host filesystem path for this backend only.  Object-store backends treat
+		// FileRoot as a path within the store's own namespace and keep it as configured, so a
+		// relative FileRoot yields host-independent object keys.
+		if !filepath.IsAbs(config.FileRoot) {
+			config.FileRoot = filepath.Join(*configDir, config.FileRoot)
+		}
 	case "memory":
 		opts = append(opts, hotline.WithFileStore(hotline.NewMemFileStore()))
 		slogger.Warn("Using in-memory file store; uploaded files are not persisted")
+		warnAbsoluteFileRoot(slogger, config.FileRoot)
 	case "r2":
 		r2Store, err := newR2FileStore(ctx)
 		if err != nil {
@@ -125,10 +132,15 @@ func main() {
 		}
 		opts = append(opts, hotline.WithFileStore(r2Store))
 		slogger.Info("Using Cloudflare R2 file store", "bucket", os.Getenv("R2_BUCKET"))
+		warnAbsoluteFileRoot(slogger, config.FileRoot)
 	default:
 		slogger.Error("Unknown file-store backend", "backend", *fileStoreBackend)
 		os.Exit(1)
 	}
+
+	// The config is passed by value, so this must come after the backend selection above, which
+	// resolves config.FileRoot for the chosen backend.
+	opts = append(opts, hotline.WithConfig(*config))
 
 	srv, err := hotline.NewServer(opts...)
 	if err != nil {
@@ -285,6 +297,14 @@ func main() {
 type namedReloader struct {
 	name     string
 	reloader mobius.Reloader
+}
+
+// warnAbsoluteFileRoot flags an absolute FileRoot when an object-store backend is selected: the
+// path is used verbatim as the key namespace, so host filesystem layout would leak into every key.
+func warnAbsoluteFileRoot(logger *slog.Logger, fileRoot string) {
+	if filepath.IsAbs(fileRoot) {
+		logger.Warn("FileRoot is an absolute path; object keys will embed it verbatim. Use a relative FileRoot for host-independent keys.", "FileRoot", fileRoot)
+	}
 }
 
 // findConfigPath searches for an existing config directory from the predefined search order.

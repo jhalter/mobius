@@ -52,10 +52,7 @@ func LoadConfig(path string) (*hotline.Config, error) {
 		return nil, fmt.Errorf("validate config: %v", err)
 	}
 
-	// If the FileRoot is an absolute path, use it, otherwise treat as a relative path to the config dir.
-	if !filepath.IsAbs(config.FileRoot) {
-		config.FileRoot = filepath.Join(path, "../", config.FileRoot)
-	}
-
+	// FileRoot is returned verbatim: it is a path within the selected file store's namespace, so
+	// only the caller knows how to resolve it (e.g. against the config dir for the OS backend).
 	return &config, nil
 }

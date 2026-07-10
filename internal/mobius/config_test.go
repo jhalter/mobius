@@ -41,6 +41,45 @@ FileRoot: "files"
 	}
 }
 
+// TestLoadConfig_FileRootKeptVerbatim guards against LoadConfig resolving FileRoot to a host
+// filesystem path.  FileRoot is a path within the selected file store's namespace; rewriting it to
+// a local absolute path here would leak the host's directory layout into object-store keys.
+func TestLoadConfig_FileRootKeptVerbatim(t *testing.T) {
+	tests := []struct {
+		name     string
+		fileRoot string
+	}{
+		{"relative path", "files"},
+		{"nested relative path", "library/files"},
+		{"absolute path", "/srv/hotline/files"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+
+			configContent := `
+Name: "Test Server"
+Description: "Test Description"
+FileRoot: "` + tt.fileRoot + `"
+`
+			configPath := filepath.Join(tmpDir, "config.yaml")
+			if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+				t.Fatalf("Failed to write config file: %v", err)
+			}
+
+			config, err := LoadConfig(configPath)
+			if err != nil {
+				t.Fatalf("Expected no error, got: %v", err)
+			}
+
+			if config.FileRoot != tt.fileRoot {
+				t.Errorf("Expected FileRoot to be %q, got %q", tt.fileRoot, config.FileRoot)
+			}
+		})
+	}
+}
+
 func TestLoadConfig_ValidBannerFileExtensions(t *testing.T) {
 	tests := []struct {
 		name       string
