@@ -1018,6 +1018,58 @@ func TestServer_ListenAndServe_returnsErrorWhenPortUnavailable(t *testing.T) {
 	assert.NotErrorIs(t, err, context.Canceled)
 }
 
+// TestServer_ListenAndServe_closesActiveConnsOnCancel verifies that shutdown force-closes
+// accepted connections rather than only closing the listeners: a client blocked mid-handshake and
+// a file transfer connection that never sends its header would otherwise keep their session
+// goroutines alive past ListenAndServe's return.
+func TestServer_ListenAndServe_closesActiveConnsOnCancel(t *testing.T) {
+	port := findFreePortPair(t)
+	srv, err := NewServer(
+		WithLogger(NewTestLogger()),
+		WithInterface("127.0.0.1"),
+		WithPort(port),
+	)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- srv.ListenAndServe(ctx) }()
+
+	// Give the listeners a moment to start.
+	time.Sleep(100 * time.Millisecond)
+
+	// A session connection that stalls mid-handshake and a file transfer connection that never
+	// sends its 16-byte header: both park their serving goroutines in blocking reads.
+	sessionConn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	require.NoError(t, err)
+	defer func() { _ = sessionConn.Close() }()
+
+	transferConn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", port+1))
+	require.NoError(t, err)
+	defer func() { _ = transferConn.Close() }()
+
+	// Give the accept loops a moment to hand the connections to their goroutines.
+	time.Sleep(100 * time.Millisecond)
+
+	cancel()
+
+	select {
+	case <-errCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("ListenAndServe did not return after context cancellation with active connections")
+	}
+
+	// Both connections must have been closed by the server: reads unblock with EOF.
+	for _, conn := range []net.Conn{sessionConn, transferConn} {
+		require.NoError(t, conn.SetReadDeadline(time.Now().Add(2*time.Second)))
+		_, err = conn.Read(make([]byte, 1))
+		assert.Error(t, err)
+		assert.NotErrorIs(t, err, os.ErrDeadlineExceeded)
+	}
+}
+
 func TestServer_Shutdown_stopsListenAndServe(t *testing.T) {
 	srv, err := NewServer(
 		WithLogger(NewTestLogger()),
