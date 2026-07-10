@@ -62,7 +62,7 @@ func HandleChatSend(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 
 	//cc.Server.mux.Lock()
 	for _, c := range cc.Server.ClientMgr.List() {
-		if c == nil || cc.Account == nil {
+		if c == nil || cc.GetAccount() == nil {
 			continue
 		}
 		// Skip clients that do not have the read chat permission.

@@ -102,11 +102,11 @@ func HandleTranAgreed(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 		if cc.Authorize(hotline.AccessAnyName) {
 			cc.SetUserName(t.GetField(hotline.FieldUserName).Data)
 		} else {
-			cc.SetUserName([]byte(cc.Account.Name))
+			cc.SetUserName([]byte(cc.GetAccount().Name))
 		}
 	}
 
-	login := cc.Account.Login
+	login := cc.GetAccount().Login
 	ip := cc.IP()
 
 	if cc.Server.Presence != nil {
@@ -191,7 +191,7 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 	}
 
 	if clientConn.Authorize(hotline.AccessCannotBeDiscon) {
-		return cc.NewErrReply(t, clientConn.Account.Login+" is not allowed to be disconnected.")
+		return cc.NewErrReply(t, clientConn.GetAccount().Login+" is not allowed to be disconnected.")
 	}
 
 	// If FieldOptions is set, then the client IP is banned in addition to disconnected.
@@ -266,7 +266,7 @@ func HandleSetClientUserInfo(cc *hotline.ClientConn, t *hotline.Transaction) (re
 		newNickname := string(t.GetField(hotline.FieldUserName).Data)
 		cc.SetUserName(t.GetField(hotline.FieldUserName).Data)
 
-		login := cc.Account.Login
+		login := cc.GetAccount().Login
 		ip := cc.IP()
 
 		if cc.Server.Presence != nil {

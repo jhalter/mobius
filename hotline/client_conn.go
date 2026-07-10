@@ -32,13 +32,13 @@ type ClientConn struct {
 	ID         ClientID
 	Version    []byte // TODO: make fixed size of 2
 
-	Account *Account
-	Server  *Server // TODO: consider adding methods to interact with server
+	Server *Server // TODO: consider adding methods to interact with server
 
 	// The following fields hold mutable session state guarded by mu.  They are read and written
 	// by multiple goroutines (the client's own transaction loop, other clients' handlers, and the
 	// server keepalive loop), so production code must use the accessor methods below.  Direct
 	// field access is only safe before the connection is shared, e.g. in tests.
+	Account   *Account
 	Flags     UserFlags
 	UserName  []byte
 	Icon      []byte // TODO: make fixed size of 2
@@ -197,6 +197,45 @@ func (cc *ClientConn) GetAutoReply() []byte {
 	return cc.AutoReply
 }
 
+// SetAccount attaches the authenticated account to the client.
+func (cc *ClientConn) SetAccount(account *Account) {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+
+	cc.Account = account
+}
+
+// GetAccount returns the client's account, or nil before login completes.  Every account field
+// except Access is immutable after login, so callers may read them from the returned struct;
+// Access must be read via Authorize or AccessBytes because SetAccountAccess mutates it.
+func (cc *ClientConn) GetAccount() *Account {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+
+	return cc.Account
+}
+
+// SetAccountAccess replaces the access bitmap on the client's account.
+func (cc *ClientConn) SetAccountAccess(access AccessBitmap) {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+
+	cc.Account.Access = access
+}
+
+// AccessBytes returns a copy of the account's access bitmap, suitable for use as a transaction
+// field.  It returns nil before login completes.
+func (cc *ClientConn) AccessBytes() []byte {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+
+	if cc.Account == nil {
+		return nil
+	}
+	access := cc.Account.Access
+	return access[:]
+}
+
 // incrementIdleTime adds interval seconds to the client's idle time.  It returns true if this
 // crossed the idle threshold and marked the client as away, in which case the caller should
 // notify other clients of the change.
@@ -227,8 +266,8 @@ func (cc *ClientConn) clearIdleAndAway() bool {
 }
 
 func (cc *ClientConn) FileRoot() string {
-	if cc.Account.FileRoot != "" {
-		return cc.Account.FileRoot
+	if account := cc.GetAccount(); account != nil && account.FileRoot != "" {
+		return account.FileRoot
 	}
 	return cc.Server.Config.FileRoot
 }
@@ -331,6 +370,9 @@ func (cc *ClientConn) Authenticate(login string, password []byte) bool {
 
 // Authorize checks if the user account has the specified permission
 func (cc *ClientConn) Authorize(access int) bool {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+
 	if cc.Account == nil {
 		return false
 	}
@@ -424,11 +466,12 @@ func formatDownloadList(fts []FileTransfer) (s string) {
 }
 
 func (cc *ClientConn) String() string {
+	account := cc.GetAccount()
 	template := fmt.Sprintf(
 		userInfoTemplate,
 		cc.GetUserName(),
-		cc.Account.Name,
-		cc.Account.Login,
+		account.Name,
+		account.Login,
 		cc.RemoteAddr,
 		formatDownloadList(cc.ClientFileTransferMgr.Get(FileDownload)),
 		formatDownloadList(cc.ClientFileTransferMgr.Get(FolderDownload)),

@@ -110,7 +110,7 @@ func (srv *APIServer) OnlineHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		for _, c := range srv.hlServer.ClientMgr.List() {
 			users = append(users, map[string]string{
-				"login":    string(c.Account.Login),
+				"login":    c.GetAccount().Login,
 				"nickname": string(c.GetUserName()),
 				"ip":       c.RemoteAddr,
 			})
@@ -164,7 +164,7 @@ func (srv *APIServer) BanHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Disconnect user if online
 	for _, c := range srv.hlServer.ClientMgr.List() {
-		if (req.Username != "" && c.Account.Login == req.Username) ||
+		if (req.Username != "" && c.GetAccount().Login == req.Username) ||
 			(req.Nickname != "" && string(c.GetUserName()) == req.Nickname) ||
 			(req.IP != "" && c.IP() == req.IP) {
 			c.Disconnect()

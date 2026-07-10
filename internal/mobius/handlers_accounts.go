@@ -55,17 +55,17 @@ func HandleSetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 
 	// Notify connected clients logged in as the user of the new access level
 	for _, c := range cc.Server.ClientMgr.List() {
-		if c.Account.Login == login {
+		if c.GetAccount().Login == login {
 			newT := hotline.NewTransaction(hotline.TranUserAccess, c.ID, hotline.NewField(hotline.FieldUserAccess, newAccessLvl))
 			res = append(res, newT)
+
+			c.SetAccountAccess(account.Access)
 
 			if c.Authorize(hotline.AccessDisconUser) {
 				c.SetFlag(hotline.UserFlagAdmin, 1)
 			} else {
 				c.SetFlag(hotline.UserFlagAdmin, 0)
 			}
-
-			c.Account.Access = account.Access
 
 			cc.SendAll(
 				hotline.TranNotifyChangeUser,
@@ -200,7 +200,7 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 			}
 
 			for _, client := range cc.Server.ClientMgr.List() {
-				if client.Account.Login == login {
+				if client.GetAccount().Login == login {
 					//					"You are logged in with an account which was deleted."
 
 					res = append(res,
@@ -374,7 +374,7 @@ func HandleDeleteUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	}
 
 	for _, client := range cc.Server.ClientMgr.List() {
-		if client.Account.Login == login {
+		if client.GetAccount().Login == login {
 			res = append(res,
 				hotline.NewTransaction(hotline.TranServerMsg, client.ID,
 					hotline.NewField(hotline.FieldData, []byte(ErrMsgAccountDeleted)),

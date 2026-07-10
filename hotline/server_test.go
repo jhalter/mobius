@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
@@ -831,8 +830,11 @@ type nopCloserRWC struct {
 func (n *nopCloserRWC) Close() error { return nil }
 
 func TestServer_NewClientConn(t *testing.T) {
+	// The mock has no Add expectation on purpose: NewClientConn must NOT publish the connection
+	// to the ClientManager.  Publication happens later in handleNewConnection, once the session
+	// state (Account, Version, UserName, Flags) is fully initialized, so that other goroutines
+	// never observe a partially initialized client.
 	mockMgr := &MockClientMgr{}
-	mockMgr.On("Add", mock.AnythingOfType("*hotline.ClientConn")).Return()
 
 	srv := &Server{ClientMgr: mockMgr}
 

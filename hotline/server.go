@@ -512,8 +512,6 @@ func (s *Server) NewClientConn(conn io.ReadWriteCloser, remoteAddr string) *Clie
 		ClientFileTransferMgr: NewClientFileTransferMgr(),
 	}
 
-	s.ClientMgr.Add(clientConn)
-
 	return clientConn
 }
 
@@ -627,22 +625,28 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		c.SetIcon(clientLogin.GetField(FieldUserIconID).Data)
 	}
 
-	c.Account = c.Server.AccountManager.Get(login)
-	if c.Account == nil {
+	account := c.Server.AccountManager.Get(login)
+	if account == nil {
 		return nil
 	}
+	c.SetAccount(account)
 
 	if clientLogin.GetField(FieldUserName).Data != nil {
 		if c.Authorize(AccessAnyName) {
 			c.SetUserName(clientLogin.GetField(FieldUserName).Data)
 		} else {
-			c.SetUserName([]byte(c.Account.Name))
+			c.SetUserName([]byte(account.Name))
 		}
 	}
 
 	if c.Authorize(AccessDisconUser) {
 		c.SetFlag(UserFlagAdmin, 1)
 	}
+
+	// Publish the client to the manager only now that its session state (Account, Version,
+	// UserName, Flags) is fully initialized.  Other goroutines iterate ClientMgr.List() and
+	// dereference Account, so a client must never be visible before login completes.
+	s.ClientMgr.Add(c)
 
 	c.Send(c.NewReply(&clientLogin,
 		NewField(FieldVersion, []byte{0x00, 0xbe}),
@@ -651,7 +655,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	))
 
 	// Send user access privs so client UI knows how to behave
-	c.Send(NewTransaction(TranUserAccess, c.ID, NewField(FieldUserAccess, c.Account.Access[:])))
+	c.Send(NewTransaction(TranUserAccess, c.ID, NewField(FieldUserAccess, c.AccessBytes())))
 
 	// Accounts with AccessNoAgreement do not receive the server agreement on login.  The behavior is different between
 	// client versions.  For 1.2.3 client, we do not send TranShowAgreement.  For other client versions, we send
@@ -746,7 +750,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 	}
 	rLogger := s.Logger.With(
 		"remoteAddr", remoteAddr,
-		"login", fileTransfer.ClientConn.Account.Login,
+		"login", fileTransfer.ClientConn.GetAccount().Login,
 		"Name", string(fileTransfer.ClientConn.GetUserName()),
 	)
 
