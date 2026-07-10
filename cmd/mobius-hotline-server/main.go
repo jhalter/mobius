@@ -35,6 +35,7 @@ var (
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGINT, os.Interrupt)
@@ -255,9 +256,14 @@ func main() {
 
 				reloadFunc()
 			default:
-				// Canceling the context stops ListenAndServe, which unblocks main for a clean exit.
+				// Restore default signal handling first, so a second signal kills the process
+				// immediately instead of waiting out the graceful shutdown.
 				signal.Stop(sigChan)
-				cancel()
+
+				// Broadcast a goodbye message to connected clients, then stop ListenAndServe,
+				// which unblocks main for a clean exit.  Shutdown waits a few seconds so client
+				// writers can flush the message before connections are force-closed.
+				srv.Shutdown([]byte("Server is shutting down."))
 			}
 
 		}
