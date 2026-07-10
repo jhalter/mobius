@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/jhalter/mobius/hotline"
+	"github.com/jhalter/mobius/hotline/hltest"
 	"github.com/stretchr/testify/mock"
 	"golang.org/x/text/encoding/charmap"
 )
@@ -26,8 +27,8 @@ func TestHandleSetChatSubject(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ChatMgr: func() *hotline.MockChatManager {
-							m := hotline.MockChatManager{}
+						ChatMgr: func() *hltest.MockChatManager {
+							m := hltest.MockChatManager{}
 							m.On("Members", hotline.ChatID{0x0, 0x0, 0x0, 0x1}).Return([]*hotline.ClientConn{
 								{
 									Account: &hotline.Account{
@@ -64,8 +65,8 @@ func TestHandleSetChatSubject(t *testing.T) {
 						//		},
 						//	},
 						//},
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
 								{
 									Account: &hotline.Account{
@@ -142,8 +143,8 @@ func TestHandleLeaveChat(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ChatMgr: func() *hotline.MockChatManager {
-							m := hotline.MockChatManager{}
+						ChatMgr: func() *hltest.MockChatManager {
+							m := hltest.MockChatManager{}
 							m.On("Members", hotline.ChatID{0x0, 0x0, 0x0, 0x1}).Return([]*hotline.ClientConn{
 								{
 									Account: &hotline.Account{
@@ -156,8 +157,8 @@ func TestHandleLeaveChat(t *testing.T) {
 							m.On("GetSubject").Return("unset")
 							return &m
 						}(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("Get").Return([]*hotline.ClientConn{
 								{
 									Account: &hotline.Account{
@@ -226,8 +227,8 @@ func TestHandleChatSend(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
 								{
 									Account: &hotline.Account{
@@ -289,8 +290,8 @@ func TestHandleChatSend(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
 								{
 									Account: &hotline.Account{
@@ -380,8 +381,8 @@ func TestHandleChatSend(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
 								{
 									Account: &hotline.Account{
@@ -444,8 +445,8 @@ func TestHandleChatSend(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
 								{
 									Account: &hotline.Account{
@@ -504,8 +505,8 @@ func TestHandleChatSend(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
 								{
 									Account: &hotline.Account{
@@ -558,8 +559,8 @@ func TestHandleChatSend(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ChatMgr: func() *hotline.MockChatManager {
-							m := hotline.MockChatManager{}
+						ChatMgr: func() *hltest.MockChatManager {
+							m := hltest.MockChatManager{}
 							m.On("Members", hotline.ChatID{0x0, 0x0, 0x0, 0x1}).Return([]*hotline.ClientConn{
 								{
 									ID: [2]byte{0, 1},
@@ -571,8 +572,8 @@ func TestHandleChatSend(t *testing.T) {
 							m.On("GetSubject").Return("unset")
 							return &m
 						}(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
 								{
 									Account: &hotline.Account{
@@ -685,8 +686,8 @@ func TestHandleSendInstantMsg(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("Get", hotline.ClientID{0x0, 0x2}).Return(&hotline.ClientConn{
 								AutoReply: []byte(nil),
 								Flags:     [2]byte{0, 0},
@@ -735,8 +736,8 @@ func TestHandleSendInstantMsg(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("Get", hotline.ClientID{0x0, 0x2}).Return(&hotline.ClientConn{
 								Flags:     [2]byte{0, 0},
 								ID:        [2]byte{0, 2},
@@ -794,8 +795,8 @@ func TestHandleSendInstantMsg(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("Get", hotline.ClientID{0x0, 0x2}).Return(&hotline.ClientConn{
 								Flags:    [2]byte{255, 255},
 								ID:       [2]byte{0, 2},
@@ -889,16 +890,16 @@ func TestHandleInviteNewChat(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("Get", hotline.ClientID{0x0, 0x2}).Return(&hotline.ClientConn{
 								ID:       [2]byte{0, 2},
 								UserName: []byte("UserB"),
 							})
 							return &m
 						}(),
-						ChatMgr: func() *hotline.MockChatManager {
-							m := hotline.MockChatManager{}
+						ChatMgr: func() *hltest.MockChatManager {
+							m := hltest.MockChatManager{}
 							m.On("New", mock.AnythingOfType("*hotline.ClientConn")).Return(hotline.ChatID{0x52, 0xfd, 0xfc, 0x07})
 							return &m
 						}(),
@@ -950,8 +951,8 @@ func TestHandleInviteNewChat(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("Get", hotline.ClientID{0, 2}).Return(&hotline.ClientConn{
 								ID:       [2]byte{0, 2},
 								Icon:     []byte{0, 1},
@@ -960,8 +961,8 @@ func TestHandleInviteNewChat(t *testing.T) {
 							})
 							return &m
 						}(),
-						ChatMgr: func() *hotline.MockChatManager {
-							m := hotline.MockChatManager{}
+						ChatMgr: func() *hltest.MockChatManager {
+							m := hltest.MockChatManager{}
 							m.On("New", mock.AnythingOfType("*hotline.ClientConn")).Return(hotline.ChatID{0x52, 0xfd, 0xfc, 0x07})
 							return &m
 						}(),
@@ -1031,8 +1032,8 @@ func TestHandleJoinChat(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ChatMgr: func() *hotline.MockChatManager {
-							m := hotline.MockChatManager{}
+						ChatMgr: func() *hltest.MockChatManager {
+							m := hltest.MockChatManager{}
 							// Mock existing members before join
 							m.On("Members", hotline.ChatID{0, 0, 0, 1}).Return([]*hotline.ClientConn{
 								{
@@ -1149,8 +1150,8 @@ func TestHandleJoinChat(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ChatMgr: func() *hotline.MockChatManager {
-							m := hotline.MockChatManager{}
+						ChatMgr: func() *hltest.MockChatManager {
+							m := hltest.MockChatManager{}
 							// Mock empty chat before join
 							m.On("Members", hotline.ChatID{0, 0, 0, 2}).Return([]*hotline.ClientConn{})
 							// Mock join operation
@@ -1220,8 +1221,8 @@ func TestHandleRejectChatInvite(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ChatMgr: func() *hotline.MockChatManager {
-							m := hotline.MockChatManager{}
+						ChatMgr: func() *hltest.MockChatManager {
+							m := hltest.MockChatManager{}
 							// Mock current members of the chat
 							m.On("Members", hotline.ChatID{0, 0, 0, 1}).Return([]*hotline.ClientConn{
 								{
@@ -1273,8 +1274,8 @@ func TestHandleRejectChatInvite(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ChatMgr: func() *hotline.MockChatManager {
-							m := hotline.MockChatManager{}
+						ChatMgr: func() *hltest.MockChatManager {
+							m := hltest.MockChatManager{}
 							// Mock empty chat (no members)
 							m.On("Members", hotline.ChatID{0, 0, 0, 2}).Return([]*hotline.ClientConn{})
 							return &m
@@ -1302,8 +1303,8 @@ func TestHandleRejectChatInvite(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ChatMgr: func() *hotline.MockChatManager {
-							m := hotline.MockChatManager{}
+						ChatMgr: func() *hltest.MockChatManager {
+							m := hltest.MockChatManager{}
 							// Mock chat with single member
 							m.On("Members", hotline.ChatID{0, 0, 0, 3}).Return([]*hotline.ClientConn{
 								{

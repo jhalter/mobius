@@ -6,8 +6,6 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
-
-	"github.com/stretchr/testify/mock"
 )
 
 type ClientID [2]byte
@@ -17,29 +15,6 @@ type ClientManager interface {
 	Get(id ClientID) *ClientConn
 	Add(cc *ClientConn)
 	Delete(id ClientID)
-}
-
-type MockClientMgr struct {
-	mock.Mock
-}
-
-func (m *MockClientMgr) List() []*ClientConn {
-	args := m.Called()
-
-	return args.Get(0).([]*ClientConn)
-}
-
-func (m *MockClientMgr) Get(id ClientID) *ClientConn {
-	args := m.Called(id)
-
-	return args.Get(0).(*ClientConn)
-}
-
-func (m *MockClientMgr) Add(cc *ClientConn) {
-	m.Called(cc)
-}
-func (m *MockClientMgr) Delete(id ClientID) {
-	m.Called(id)
 }
 
 type MemClientMgr struct {

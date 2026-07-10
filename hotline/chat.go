@@ -4,8 +4,6 @@ import (
 	"crypto/rand"
 	"slices"
 	"sync"
-
-	"github.com/stretchr/testify/mock"
 )
 
 type PrivateChat struct {
@@ -100,39 +98,4 @@ func (cm *MemChatManager) SetSubject(id ChatID, subject string) {
 	chat := cm.chats[id]
 
 	chat.Subject = subject
-}
-
-type MockChatManager struct {
-	mock.Mock
-}
-
-func (m *MockChatManager) New(cc *ClientConn) ChatID {
-	args := m.Called(cc)
-
-	return args.Get(0).(ChatID)
-}
-
-func (m *MockChatManager) GetSubject(id ChatID) string {
-	args := m.Called(id)
-
-	return args.String(0)
-}
-
-func (m *MockChatManager) Join(id ChatID, cc *ClientConn) {
-	m.Called(id, cc)
-}
-
-func (m *MockChatManager) Leave(id ChatID, clientID [2]byte) {
-	m.Called(id, clientID)
-}
-
-func (m *MockChatManager) SetSubject(id ChatID, subject string) {
-	m.Called(id, subject)
-
-}
-
-func (m *MockChatManager) Members(id ChatID) []*ClientConn {
-	args := m.Called(id)
-
-	return args.Get(0).([]*ClientConn)
 }

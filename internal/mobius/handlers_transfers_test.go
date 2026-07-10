@@ -244,14 +244,14 @@ func TestHandleDownloadFile(t *testing.T) {
 						TextEncoder: charmap.Macintosh.NewEncoder(),
 						FS:          &hotline.OSFileStore{},
 
-						// FS: func() *hotline.MockFileStore {
+						// FS: func() *hltest.MockFileStore {
 						// 	path, _ := os.Getwd()
 						// 	testFile, err := os.Open(path + "/test/config/Files/testfile-1k")
 						// 	if err != nil {
 						// 		panic(err)
 						// 	}
 						//
-						// 	mfi := &hotline.MockFileInfo{}
+						// 	mfi := &hltest.MockFileInfo{}
 						// 	mfi.On("Mode").Return(fs.FileMode(0))
 						// 	mfs := &MockFileStore{}
 						// 	mfs.On("Stat", "/fakeRoot/Files/testfile.txt").Return(mfi, nil)

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jhalter/mobius/hotline"
+	"github.com/jhalter/mobius/hotline/hltest"
 	"golang.org/x/text/encoding/charmap"
 )
 
@@ -177,8 +178,8 @@ func TestHandleNewFolder(t *testing.T) {
 						Config: hotline.Config{
 							FileRoot: "/Files/",
 						},
-						FS: func() *hotline.MockFileStore {
-							mfs := &hotline.MockFileStore{}
+						FS: func() *hltest.MockFileStore {
+							mfs := &hltest.MockFileStore{}
 							mfs.On("Mkdir", "/Files/aaa/testFolder", fs.FileMode(0777)).Return(nil)
 							mfs.On("Stat", "/Files/aaa/testFolder").Return(nil, os.ErrNotExist)
 							return mfs
@@ -221,8 +222,8 @@ func TestHandleNewFolder(t *testing.T) {
 						Config: hotline.Config{
 							FileRoot: "/Files",
 						},
-						FS: func() *hotline.MockFileStore {
-							mfs := &hotline.MockFileStore{}
+						FS: func() *hltest.MockFileStore {
+							mfs := &hltest.MockFileStore{}
 							mfs.On("Mkdir", "/Files/testFolder", fs.FileMode(0777)).Return(nil)
 							mfs.On("Stat", "/Files/testFolder").Return(nil, os.ErrNotExist)
 							return mfs
@@ -260,8 +261,8 @@ func TestHandleNewFolder(t *testing.T) {
 						Config: hotline.Config{
 							FileRoot: "/Files/",
 						},
-						FS: func() *hotline.MockFileStore {
-							mfs := &hotline.MockFileStore{}
+						FS: func() *hltest.MockFileStore {
+							mfs := &hltest.MockFileStore{}
 							mfs.On("Mkdir", "/Files/aaa/testFolder", fs.FileMode(0777)).Return(nil)
 							mfs.On("Stat", "/Files/aaa/testFolder").Return(nil, os.ErrNotExist)
 							return mfs
@@ -305,8 +306,8 @@ func TestHandleNewFolder(t *testing.T) {
 						Config: hotline.Config{
 							FileRoot: "/Files/",
 						},
-						FS: func() *hotline.MockFileStore {
-							mfs := &hotline.MockFileStore{}
+						FS: func() *hltest.MockFileStore {
+							mfs := &hltest.MockFileStore{}
 							mfs.On("Mkdir", "/Files/testFolder", fs.FileMode(0777)).Return(nil)
 							mfs.On("Stat", "/Files/testFolder").Return(nil, os.ErrNotExist)
 							return mfs
@@ -343,8 +344,8 @@ func TestHandleNewFolder(t *testing.T) {
 						Config: hotline.Config{
 							FileRoot: "/Files/",
 						},
-						FS: func() *hotline.MockFileStore {
-							mfs := &hotline.MockFileStore{}
+						FS: func() *hltest.MockFileStore {
+							mfs := &hltest.MockFileStore{}
 							mfs.On("Mkdir", "/Files/foo/testFolder", fs.FileMode(0777)).Return(nil)
 							mfs.On("Stat", "/Files/foo/testFolder").Return(nil, os.ErrNotExist)
 							return mfs
@@ -416,8 +417,8 @@ func TestHandleMakeAlias(t *testing.T) {
 							}(),
 						},
 						Logger: NewTestLogger(),
-						FS: func() *hotline.MockFileStore {
-							mfs := &hotline.MockFileStore{}
+						FS: func() *hltest.MockFileStore {
+							mfs := &hltest.MockFileStore{}
 							path, _ := os.Getwd()
 							mfs.On(
 								"Symlink",
@@ -464,8 +465,8 @@ func TestHandleMakeAlias(t *testing.T) {
 							}(),
 						},
 						Logger: NewTestLogger(),
-						FS: func() *hotline.MockFileStore {
-							mfs := &hotline.MockFileStore{}
+						FS: func() *hltest.MockFileStore {
+							mfs := &hltest.MockFileStore{}
 							path, _ := os.Getwd()
 							mfs.On(
 								"Symlink",
@@ -576,15 +577,15 @@ func TestHandleDeleteFile(t *testing.T) {
 								return "/fakeRoot/Files"
 							}(),
 						},
-						FS: func() *hotline.MockFileStore {
-							mfi := &hotline.MockFileInfo{}
+						FS: func() *hltest.MockFileStore {
+							mfi := &hltest.MockFileInfo{}
 							mfi.On("Mode").Return(fs.FileMode(0))
 							mfi.On("Size").Return(int64(100))
 							mfi.On("ModTime").Return(time.Parse(time.Layout, time.Layout))
 							mfi.On("IsDir").Return(false)
 							mfi.On("Name").Return("testfile")
 
-							mfs := &hotline.MockFileStore{}
+							mfs := &hltest.MockFileStore{}
 							mfs.On("Stat", "/fakeRoot/Files/aaa/testfile").Return(mfi, nil)
 							mfs.On("Stat", "/fakeRoot/Files/aaa/.info_testfile").Return(nil, errors.New("err"))
 							mfs.On("Stat", "/fakeRoot/Files/aaa/.rsrc_testfile").Return(nil, errors.New("err"))
@@ -634,15 +635,15 @@ func TestHandleDeleteFile(t *testing.T) {
 								return "/fakeRoot/Files"
 							}(),
 						},
-						FS: func() *hotline.MockFileStore {
-							mfi := &hotline.MockFileInfo{}
+						FS: func() *hltest.MockFileStore {
+							mfi := &hltest.MockFileInfo{}
 							mfi.On("Mode").Return(fs.FileMode(0))
 							mfi.On("Size").Return(int64(100))
 							mfi.On("ModTime").Return(time.Parse(time.Layout, time.Layout))
 							mfi.On("IsDir").Return(false)
 							mfi.On("Name").Return("testfile")
 
-							mfs := &hotline.MockFileStore{}
+							mfs := &hltest.MockFileStore{}
 							mfs.On("Stat", "/fakeRoot/Files/aaa/testfile").Return(mfi, nil)
 							mfs.On("Stat", "/fakeRoot/Files/aaa/.info_testfile").Return(nil, errors.New("err"))
 							mfs.On("Stat", "/fakeRoot/Files/aaa/.rsrc_testfile").Return(nil, errors.New("err"))
@@ -681,7 +682,7 @@ func TestHandleDeleteFile(t *testing.T) {
 			gotRes := HandleDeleteFile(tt.args.cc, &tt.args.t)
 			TranAssertEqual(t, tt.wantRes, gotRes)
 
-			tt.args.cc.Server.FS.(*hotline.MockFileStore).AssertExpectations(t)
+			tt.args.cc.Server.FS.(*hltest.MockFileStore).AssertExpectations(t)
 		})
 	}
 }
@@ -821,15 +822,15 @@ func TestHandleMoveFile(t *testing.T) {
 						Config: hotline.Config{
 							FileRoot: "/fakeRoot/Files",
 						},
-						FS: func() *hotline.MockFileStore {
-							mfi := &hotline.MockFileInfo{}
+						FS: func() *hltest.MockFileStore {
+							mfi := &hltest.MockFileInfo{}
 							mfi.On("Mode").Return(fs.FileMode(0))
 							mfi.On("Size").Return(int64(100))
 							mfi.On("ModTime").Return(time.Parse(time.Layout, time.Layout))
 							mfi.On("IsDir").Return(false)
 							mfi.On("Name").Return("testfile")
 
-							mfs := &hotline.MockFileStore{}
+							mfs := &hltest.MockFileStore{}
 							// NewFile calls: Stat data, Stat info, Stat rsrc
 							mfs.On("Stat", "/fakeRoot/Files/aaa/testfile").Return(mfi, nil)
 							mfs.On("Stat", "/fakeRoot/Files/aaa/.info_testfile").Return(nil, errors.New("err"))
@@ -885,15 +886,15 @@ func TestHandleMoveFile(t *testing.T) {
 						Config: hotline.Config{
 							FileRoot: "/fakeRoot/Files",
 						},
-						FS: func() *hotline.MockFileStore {
-							mfi := &hotline.MockFileInfo{}
+						FS: func() *hltest.MockFileStore {
+							mfi := &hltest.MockFileInfo{}
 							mfi.On("Mode").Return(fs.ModeDir)
 							mfi.On("Size").Return(int64(0))
 							mfi.On("ModTime").Return(time.Parse(time.Layout, time.Layout))
 							mfi.On("IsDir").Return(true)
 							mfi.On("Name").Return("testfolder")
 
-							mfs := &hotline.MockFileStore{}
+							mfs := &hltest.MockFileStore{}
 							mfs.On("Stat", "/fakeRoot/Files/aaa/testfolder").Return(mfi, nil)
 							mfs.On("Stat", "/fakeRoot/Files/aaa/.info_testfolder").Return(nil, errors.New("err"))
 							mfs.On("Stat", "/fakeRoot/Files/aaa/.rsrc_testfolder").Return(nil, errors.New("err"))
@@ -966,15 +967,15 @@ func TestHandleSetFileInfo(t *testing.T) {
 						Config: hotline.Config{
 							FileRoot: "/fakeRoot/Files",
 						},
-						FS: func() *hotline.MockFileStore {
-							mfi := &hotline.MockFileInfo{}
+						FS: func() *hltest.MockFileStore {
+							mfi := &hltest.MockFileInfo{}
 							mfi.On("Mode").Return(fs.FileMode(0))
 							mfi.On("Size").Return(int64(100))
 							mfi.On("ModTime").Return(time.Parse(time.Layout, time.Layout))
 							mfi.On("IsDir").Return(false)
 							mfi.On("Name").Return("testfile")
 
-							mfs := &hotline.MockFileStore{}
+							mfs := &hltest.MockFileStore{}
 							mfs.On("Stat", "/fakeRoot/Files/testfile").Return(mfi, nil)
 							mfs.On("Stat", "/fakeRoot/Files/.info_testfile").Return(nil, errors.New("err"))
 							mfs.On("Stat", "/fakeRoot/Files/.rsrc_testfile").Return(nil, errors.New("err"))
@@ -1018,15 +1019,15 @@ func TestHandleSetFileInfo(t *testing.T) {
 						Config: hotline.Config{
 							FileRoot: "/fakeRoot/Files",
 						},
-						FS: func() *hotline.MockFileStore {
-							mfi := &hotline.MockFileInfo{}
+						FS: func() *hltest.MockFileStore {
+							mfi := &hltest.MockFileInfo{}
 							mfi.On("Mode").Return(fs.FileMode(0))
 							mfi.On("Size").Return(int64(100))
 							mfi.On("ModTime").Return(time.Parse(time.Layout, time.Layout))
 							mfi.On("IsDir").Return(false)
 							mfi.On("Name").Return("testfile")
 
-							mfs := &hotline.MockFileStore{}
+							mfs := &hltest.MockFileStore{}
 							mfs.On("Stat", "/fakeRoot/Files/testfile").Return(mfi, nil)
 							mfs.On("Stat", "/fakeRoot/Files/.info_testfile").Return(nil, errors.New("err"))
 							mfs.On("Stat", "/fakeRoot/Files/.rsrc_testfile").Return(nil, errors.New("err"))
@@ -1070,15 +1071,15 @@ func TestHandleSetFileInfo(t *testing.T) {
 						Config: hotline.Config{
 							FileRoot: "/fakeRoot/Files",
 						},
-						FS: func() *hotline.MockFileStore {
-							mfi := &hotline.MockFileInfo{}
+						FS: func() *hltest.MockFileStore {
+							mfi := &hltest.MockFileInfo{}
 							mfi.On("Mode").Return(fs.ModeDir)
 							mfi.On("Size").Return(int64(0))
 							mfi.On("ModTime").Return(time.Parse(time.Layout, time.Layout))
 							mfi.On("IsDir").Return(true)
 							mfi.On("Name").Return("testfolder")
 
-							mfs := &hotline.MockFileStore{}
+							mfs := &hltest.MockFileStore{}
 							mfs.On("Stat", "/fakeRoot/Files/testfolder").Return(mfi, nil)
 							mfs.On("Stat", "/fakeRoot/Files/.info_testfolder").Return(nil, errors.New("err"))
 							mfs.On("Stat", "/fakeRoot/Files/.rsrc_testfolder").Return(nil, errors.New("err"))

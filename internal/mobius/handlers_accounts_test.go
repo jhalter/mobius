@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jhalter/mobius/hotline"
+	"github.com/jhalter/mobius/hotline/hltest"
 	"github.com/stretchr/testify/mock"
 	"golang.org/x/text/encoding/charmap"
 )
@@ -170,8 +171,8 @@ func TestHandleDeleteUser(t *testing.T) {
 							m.On("Delete", "testuser").Return(nil)
 							return &m
 						}(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{}) // TODO
 							return &m
 						}(),
@@ -240,8 +241,8 @@ func TestHandleDeleteUser(t *testing.T) {
 							m.On("Delete", "testuser").Return(nil)
 							return &m
 						}(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
 								{
 									ID: [2]byte{0, 2},
@@ -302,8 +303,8 @@ func TestHandleDeleteUser(t *testing.T) {
 							m.On("Delete", "testuser").Return(nil)
 							return &m
 						}(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
 								{
 									ID: [2]byte{0, 3},
@@ -776,8 +777,8 @@ func TestHandleUpdateUser(t *testing.T) {
 							m.On("Delete", "testuser").Return(nil)
 							return &m
 						}(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{
 								{
 									Account: &hotline.Account{
@@ -1313,8 +1314,8 @@ func TestHandleSetUser(t *testing.T) {
 							m.On("Update", mock.Anything, "testuser").Return(nil)
 							return &m
 						}(),
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{})
 							return &m
 						}(),

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jhalter/mobius/hotline"
+	"github.com/jhalter/mobius/hotline/hltest"
 	"github.com/stretchr/testify/mock"
 	"golang.org/x/text/encoding/charmap"
 )
@@ -185,8 +186,8 @@ func TestHandleDelNewsArt(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
-							m := hotline.MockThreadNewsMgr{}
+						ThreadedNewsMgr: func() *hltest.MockThreadNewsMgr {
+							m := hltest.MockThreadNewsMgr{}
 							m.On("DeleteArticle", []string{"test"}, uint32(1), false).Return(errors.New("write error"))
 							return &m
 						}(),
@@ -274,8 +275,8 @@ func TestHandleDelNewsItem(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
-							m := hotline.MockThreadNewsMgr{}
+						ThreadedNewsMgr: func() *hltest.MockThreadNewsMgr {
+							m := hltest.MockThreadNewsMgr{}
 							m.On("NewsItem", []string{"test"}).Return(hotline.NewsCategoryListData15{
 								Type: hotline.NewsCategory,
 							})
@@ -317,8 +318,8 @@ func TestHandleDelNewsItem(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
-							m := hotline.MockThreadNewsMgr{}
+						ThreadedNewsMgr: func() *hltest.MockThreadNewsMgr {
+							m := hltest.MockThreadNewsMgr{}
 							m.On("NewsItem", []string{"test"}).Return(hotline.NewsCategoryListData15{
 								Type: hotline.NewsBundle,
 							})
@@ -364,8 +365,8 @@ func TestHandleDelNewsItem(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
-							m := hotline.MockThreadNewsMgr{}
+						ThreadedNewsMgr: func() *hltest.MockThreadNewsMgr {
+							m := hltest.MockThreadNewsMgr{}
 							m.On("NewsItem", []string{"test"}).Return(hotline.NewsCategoryListData15{Type: hotline.NewsBundle})
 							m.On("DeleteNewsItem", []string{"test"}).Return(nil)
 							return &m
@@ -452,8 +453,8 @@ func TestHandleTranOldPostNews(t *testing.T) {
 						Config: hotline.Config{
 							NewsDateFormat: "",
 						},
-						ClientMgr: func() *hotline.MockClientMgr {
-							m := hotline.MockClientMgr{}
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
 							m.On("List").Return([]*hotline.ClientConn{})
 							return &m
 						}(),
@@ -532,8 +533,8 @@ func TestHandleGetNewsArtData(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
-							m := hotline.MockThreadNewsMgr{}
+						ThreadedNewsMgr: func() *hltest.MockThreadNewsMgr {
+							m := hltest.MockThreadNewsMgr{}
 							m.On("GetArticle", []string{"Example Category"}, uint32(1)).Return(&hotline.NewsArtData{
 								Title:         "title",
 								Poster:        "poster",
@@ -640,8 +641,8 @@ func TestHandleGetNewsArtNameList(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
-							m := hotline.MockThreadNewsMgr{}
+						ThreadedNewsMgr: func() *hltest.MockThreadNewsMgr {
+							m := hltest.MockThreadNewsMgr{}
 							m.On("ListArticles", []string{"Example Category"}).Return(hotline.NewsArtListData{
 								Name:        []byte{},
 								Description: []byte{},
@@ -741,8 +742,8 @@ func TestHandleNewNewsFldr(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
-							m := hotline.MockThreadNewsMgr{}
+						ThreadedNewsMgr: func() *hltest.MockThreadNewsMgr {
+							m := hltest.MockThreadNewsMgr{}
 							m.On("CreateGrouping", []string{"test"}, "testFolder", hotline.NewsBundle).Return(nil)
 							return &m
 						}(),
@@ -785,8 +786,8 @@ func TestHandleNewNewsFldr(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
-							m := hotline.MockThreadNewsMgr{}
+						ThreadedNewsMgr: func() *hltest.MockThreadNewsMgr {
+							m := hltest.MockThreadNewsMgr{}
 							m.On("CreateGrouping", []string{"test"}, "testFolder", hotline.NewsBundle).Return(errors.New("write error"))
 							return &m
 						}(),
@@ -869,8 +870,8 @@ func TestHandlePostNewsArt(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
-							m := hotline.MockThreadNewsMgr{}
+						ThreadedNewsMgr: func() *hltest.MockThreadNewsMgr {
+							m := hltest.MockThreadNewsMgr{}
 							m.On("PostArticle", []string{"www"}, uint32(0), mock.AnythingOfType("hotline.NewsArtData")).Return(nil)
 							return &m
 						}(),
@@ -905,8 +906,8 @@ func TestHandlePostNewsArt(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
-							m := hotline.MockThreadNewsMgr{}
+						ThreadedNewsMgr: func() *hltest.MockThreadNewsMgr {
+							m := hltest.MockThreadNewsMgr{}
 							m.On("PostArticle", []string{"www"}, uint32(0), mock.AnythingOfType("hotline.NewsArtData")).Return(errors.New("write error"))
 							return &m
 						}(),
@@ -999,8 +1000,8 @@ func TestHandleNewNewsCat(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
-							m := hotline.MockThreadNewsMgr{}
+						ThreadedNewsMgr: func() *hltest.MockThreadNewsMgr {
+							m := hltest.MockThreadNewsMgr{}
 							m.On("CreateGrouping", []string{"test"}, "TestCat", hotline.NewsCategory).Return(errors.New("write error"))
 							return &m
 						}(),
@@ -1046,8 +1047,8 @@ func TestHandleNewNewsCat(t *testing.T) {
 					Server: &hotline.Server{
 						TextDecoder: charmap.Macintosh.NewDecoder(),
 						TextEncoder: charmap.Macintosh.NewEncoder(),
-						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
-							m := hotline.MockThreadNewsMgr{}
+						ThreadedNewsMgr: func() *hltest.MockThreadNewsMgr {
+							m := hltest.MockThreadNewsMgr{}
 							m.On("CreateGrouping", []string{"test"}, "TestCat", hotline.NewsCategory).Return(nil)
 							return &m
 						}(),
@@ -1128,8 +1129,8 @@ func TestHandleGetNewsCatNameList(t *testing.T) {
 					ID:     [2]byte{0, 1},
 					Logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
 					Server: &hotline.Server{
-						ThreadedNewsMgr: func() *hotline.MockThreadNewsMgr {
-							m := hotline.MockThreadNewsMgr{}
+						ThreadedNewsMgr: func() *hltest.MockThreadNewsMgr {
+							m := hltest.MockThreadNewsMgr{}
 							m.On("GetCategories", []string{}).Return([]hotline.NewsCategoryListData15{
 								{
 									Type: hotline.NewsBundle,
