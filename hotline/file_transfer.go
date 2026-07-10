@@ -330,7 +330,7 @@ func UploadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfe
 
 	rLogger.Debug("File upload started", "dstFile", fullPath)
 
-	var rForkWriter, iForkWriter io.Writer = io.Discard, io.Discard
+	var rForkWriter, iForkWriter = io.Discard, io.Discard
 	var forkClosers []io.Closer
 	if preserveForks {
 		rFork, err := f.rsrcForkWriter()
@@ -664,7 +664,7 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 					return err
 				}
 
-				var rForkWriter, iForkWriter io.Writer = io.Discard, io.Discard
+				var rForkWriter, iForkWriter = io.Discard, io.Discard
 				var forkClosers []io.Closer
 				if preserveForks {
 					iFork, err := hlFile.InfoForkWriter()
