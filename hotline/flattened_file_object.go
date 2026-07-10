@@ -12,6 +12,10 @@ import (
 // that precedes the variable-length name (and optional comment).
 const flatFileInfoForkMinLen = 72
 
+// flatFileInfoForkMaxLen bounds the information fork size declared in an untrusted fork header:
+// the fixed-size fields plus the maximum name and comment (both uint16-length-prefixed).
+const flatFileInfoForkMaxLen = flatFileInfoForkMinLen + 65535 + 2 + 65535
+
 type flattenedFileObject struct {
 	FlatFileHeader                FlatFileHeader
 	FlatFileInformationForkHeader FlatFileForkHeader
@@ -254,6 +258,9 @@ func (ffo *flattenedFileObject) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	dataLen := binary.BigEndian.Uint32(ffo.FlatFileInformationForkHeader.DataSize[:])
+	if dataLen > flatFileInfoForkMaxLen {
+		return n, fmt.Errorf("flat file information fork size %d exceeds maximum %d", dataLen, flatFileInfoForkMaxLen)
+	}
 	ffifBuf := make([]byte, dataLen)
 	if _, err := io.ReadFull(r, ffifBuf); err != nil {
 		return n, err

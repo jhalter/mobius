@@ -16,21 +16,31 @@ func NewTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stdout, nil))
 }
 
-// assertTransferBytesEqual takes a string with a hexdump in the same format that `hexdump -C` produces and compares with
-// a hexdump for the bytes in got, after stripping the create/modify timestamps.
-// I don't love this, but as git does not  preserve file create/modify timestamps, we either need to fully mock the
-// filesystem interactions or work around in this way.
-// TODO: figure out a better solution
+// flatFileTimestampOffset is the byte offset of the information fork's CreateDate within a
+// flattened file object stream: FlatFileHeader (24) + INFO FlatFileForkHeader (16) + the info
+// fork's fixed fields up to CreateDate (Platform+TypeSignature+CreatorSignature+Flags+
+// PlatformFlags = 20, then RSVD = 32). CreateDate and ModifyDate are 8 bytes each and adjacent.
+const (
+	flatFileTimestampOffset = 24 + 16 + 20 + 32
+	flatFileTimestampLen    = 16 // CreateDate (8) + ModifyDate (8)
+)
+
+// assertTransferBytesEqual takes a string with a hexdump in the same format that `hexdump -C`
+// produces and compares with a hexdump for the bytes in got, after zeroing the info fork's
+// create/modify timestamps. Git does not preserve file create/modify times, so those bytes vary
+// between checkouts; the offset is derived structurally from the flattened file object layout
+// rather than hardcoded (see flatFileTimestampOffset).
 func assertTransferBytesEqual(t *testing.T, wantHexDump string, got []byte) bool {
 	if wantHexDump == "" {
 		return true
 	}
 
-	clean := slices.Concat(
-		got[:92],
-		make([]byte, 16),
-		got[108:],
-	)
+	clean := slices.Clone(got)
+	if len(clean) >= flatFileTimestampOffset+flatFileTimestampLen {
+		for i := flatFileTimestampOffset; i < flatFileTimestampOffset+flatFileTimestampLen; i++ {
+			clean[i] = 0
+		}
+	}
 	return assert.Equal(t, wantHexDump, hex.Dump(clean))
 }
 

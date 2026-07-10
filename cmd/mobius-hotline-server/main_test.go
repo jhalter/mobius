@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path"
 	"testing"
@@ -178,4 +179,83 @@ func TestFindConfigPath(t *testing.T) {
 		result := findConfigPath()
 		assert.Equal(t, "config", result)
 	})
+}
+
+// r2EnvVars are every R2_* variable newR2FileStore reads. Each case clears all of them and sets
+// only what it needs, so ambient credentials in the test environment can't leak in.
+var r2EnvVars = []string{
+	"R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY",
+	"R2_ENDPOINT", "R2_ACCOUNT_ID", "R2_PREFIX", "R2_STAGING_DIR",
+}
+
+func TestNewR2FileStore_EnvValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		env     map[string]string
+		wantErr string // substring; empty means the store must construct successfully
+	}{
+		{
+			name:    "missing bucket and credentials",
+			env:     map[string]string{},
+			wantErr: "R2_BUCKET, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY must be set",
+		},
+		{
+			name: "missing secret key",
+			env: map[string]string{
+				"R2_BUCKET":        "b",
+				"R2_ACCESS_KEY_ID": "ak",
+			},
+			wantErr: "R2_BUCKET, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY must be set",
+		},
+		{
+			name: "credentials set but no endpoint or account id",
+			env: map[string]string{
+				"R2_BUCKET":            "b",
+				"R2_ACCESS_KEY_ID":     "ak",
+				"R2_SECRET_ACCESS_KEY": "sk",
+			},
+			wantErr: "either R2_ENDPOINT or R2_ACCOUNT_ID must be set",
+		},
+		{
+			name: "account id derives the endpoint",
+			env: map[string]string{
+				"R2_BUCKET":            "b",
+				"R2_ACCESS_KEY_ID":     "ak",
+				"R2_SECRET_ACCESS_KEY": "sk",
+				"R2_ACCOUNT_ID":        "acct123",
+			},
+		},
+		{
+			name: "explicit endpoint",
+			env: map[string]string{
+				"R2_BUCKET":            "b",
+				"R2_ACCESS_KEY_ID":     "ak",
+				"R2_SECRET_ACCESS_KEY": "sk",
+				"R2_ENDPOINT":          "https://example.com",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, k := range r2EnvVars {
+				t.Setenv(k, "")
+			}
+			// Keep staging off the shared temp dir even on the success paths.
+			t.Setenv("R2_STAGING_DIR", t.TempDir())
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
+
+			store, err := newR2FileStore(context.Background())
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				assert.Nil(t, store)
+				return
+			}
+			require.NoError(t, err)
+			assert.NotNil(t, store)
+		})
+	}
 }

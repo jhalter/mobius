@@ -13,18 +13,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// loadFromYAMLFile loads data from a YAML file into the provided data structure.
-func loadFromYAMLFile(path string, data interface{}) error {
-	fh, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = fh.Close() }()
-
-	decoder := yaml.NewDecoder(fh)
-	return decoder.Decode(data)
-}
-
 // YAMLAccountManager implements AccountManager interface using YAML files for persistence.
 // It maintains an in-memory cache of accounts and synchronizes with YAML files on disk.
 type YAMLAccountManager struct {

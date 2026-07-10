@@ -57,14 +57,14 @@ type s3API interface {
 
 // s3Uploader streams a body to R2 as a (multipart, if large) upload. *manager.Uploader satisfies it.
 type s3Uploader interface {
-	Upload(ctx context.Context, in *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error)
+	Upload(ctx context.Context, in *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error) //nolint:staticcheck // SA1019: transfermanager successor is not yet GA
 }
 
 // NewR2FileStore builds an R2-backed FileStore from a configured S3 client. prefix is an optional
 // key prefix within the bucket; stagingDir is a local directory used to buffer in-progress
 // (.incomplete) uploads before they are promoted to R2.
 func NewR2FileStore(client *s3.Client, bucket, prefix, stagingDir string) *R2FileStore {
-	return newR2FileStore(client, manager.NewUploader(client), bucket, prefix, stagingDir)
+	return newR2FileStore(client, manager.NewUploader(client), bucket, prefix, stagingDir) //nolint:staticcheck // SA1019: transfermanager successor is not yet GA
 }
 
 func newR2FileStore(api s3API, up s3Uploader, bucket, prefix, stagingDir string) *R2FileStore {
@@ -148,14 +148,14 @@ func (s *R2FileStore) ReadFile(name string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		defer r.Close()
+		defer func() { _ = r.Close() }()
 		return io.ReadAll(r)
 	}
 	r, err := s.Open(name)
 	if err != nil {
 		return nil, err
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 	return io.ReadAll(r)
 }
 
@@ -400,7 +400,7 @@ func (s *R2FileStore) promote(oldName, newName string) error {
 	if err != nil {
 		return err // already fs.ErrNotExist-compatible
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if _, err := s.uploader.Upload(context.Background(), &s3.PutObjectInput{
 		Bucket: aws.String(s.bucket),

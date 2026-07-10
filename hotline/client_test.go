@@ -21,8 +21,8 @@ func newTestClient() *Client {
 func TestClient_Handshake(t *testing.T) {
 	t.Run("successful handshake", func(t *testing.T) {
 		clientConn, serverConn := net.Pipe()
-		defer clientConn.Close()
-		defer serverConn.Close()
+		defer func() { _ = clientConn.Close() }()
+		defer func() { _ = serverConn.Close() }()
 
 		c := newTestClient()
 		c.Connection = clientConn
@@ -41,8 +41,8 @@ func TestClient_Handshake(t *testing.T) {
 
 	t.Run("server returns error response", func(t *testing.T) {
 		clientConn, serverConn := net.Pipe()
-		defer clientConn.Close()
-		defer serverConn.Close()
+		defer func() { _ = clientConn.Close() }()
+		defer func() { _ = serverConn.Close() }()
 
 		c := newTestClient()
 		c.Connection = clientConn
@@ -61,7 +61,7 @@ func TestClient_Handshake(t *testing.T) {
 
 	t.Run("connection closed during read", func(t *testing.T) {
 		clientConn, serverConn := net.Pipe()
-		defer clientConn.Close()
+		defer func() { _ = clientConn.Close() }()
 
 		c := newTestClient()
 		c.Connection = clientConn
@@ -69,7 +69,7 @@ func TestClient_Handshake(t *testing.T) {
 		go func() {
 			buf := make([]byte, 12)
 			_, _ = io.ReadFull(serverConn, buf)
-			serverConn.Close()
+			_ = serverConn.Close()
 		}()
 
 		err := c.Handshake()
@@ -81,8 +81,8 @@ func TestClient_Handshake(t *testing.T) {
 func TestClient_Send(t *testing.T) {
 	t.Run("sends non-reply transaction and tracks it", func(t *testing.T) {
 		clientConn, serverConn := net.Pipe()
-		defer clientConn.Close()
-		defer serverConn.Close()
+		defer func() { _ = clientConn.Close() }()
+		defer func() { _ = serverConn.Close() }()
 
 		c := newTestClient()
 		c.Connection = clientConn
@@ -104,8 +104,8 @@ func TestClient_Send(t *testing.T) {
 
 	t.Run("reply transactions are not tracked", func(t *testing.T) {
 		clientConn, serverConn := net.Pipe()
-		defer clientConn.Close()
-		defer serverConn.Close()
+		defer func() { _ = clientConn.Close() }()
+		defer func() { _ = serverConn.Close() }()
 
 		c := newTestClient()
 		c.Connection = clientConn
@@ -195,7 +195,7 @@ func TestClient_HandleTransaction(t *testing.T) {
 func TestClient_Disconnect(t *testing.T) {
 	t.Run("closes connection and done channel", func(t *testing.T) {
 		clientConn, serverConn := net.Pipe()
-		defer serverConn.Close()
+		defer func() { _ = serverConn.Close() }()
 
 		c := newTestClient()
 		c.Connection = clientConn
@@ -220,7 +220,7 @@ func TestClient_Disconnect(t *testing.T) {
 
 	t.Run("handles nil done channel", func(t *testing.T) {
 		clientConn, serverConn := net.Pipe()
-		defer serverConn.Close()
+		defer func() { _ = serverConn.Close() }()
 
 		c := newTestClient()
 		c.Connection = clientConn

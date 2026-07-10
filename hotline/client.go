@@ -84,15 +84,19 @@ func (c *Client) Connect(address, login, passwd string) (err error) {
 		return fmt.Errorf("error sending login transaction: %w", err)
 	}
 
-	// start keepalive go routine
-	go func() { _ = c.keepalive() }()
+	// start keepalive go routine.  Capture the done channel now so keepalive never races with
+	// Disconnect, which replaces c.done under the mutex.
+	c.mu.Lock()
+	done := c.done
+	c.mu.Unlock()
+	go func() { _ = c.keepalive(done) }()
 
 	return nil
 }
 
 const keepaliveInterval = 300 * time.Second
 
-func (c *Client) keepalive() error {
+func (c *Client) keepalive(done <-chan struct{}) error {
 	ticker := time.NewTicker(keepaliveInterval)
 	defer ticker.Stop()
 
@@ -100,7 +104,7 @@ func (c *Client) keepalive() error {
 		select {
 		case <-ticker.C:
 			_ = c.Send(NewTransaction(TranKeepAlive, [2]byte{}))
-		case <-c.done:
+		case <-done:
 			return nil
 		}
 	}

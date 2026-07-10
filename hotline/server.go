@@ -74,6 +74,12 @@ type Server struct {
 	TLSConfig *tls.Config
 	TLSPort   int
 
+	// connRateLimit and connRateBurst bound how frequently a single IP may connect. They default to
+	// the production values (perIPRateLimit, 1) and are overridable via WithConnectionRateLimit,
+	// which tests set to rate.Inf to avoid the 2s-per-connection throttle.
+	connRateLimit rate.Limit
+	connRateBurst int
+
 	shutdownInit sync.Once     // lazily creates shutdownCh so Shutdown works on test-constructed Servers
 	shutdownOnce sync.Once     // guards close(shutdownCh)
 	shutdownCh   chan struct{} // closed by Shutdown to stop ListenAndServe
@@ -203,6 +209,16 @@ func WithTLS(tlsConfig *tls.Config, port int) func(s *Server) {
 	}
 }
 
+// WithConnectionRateLimit overrides the per-IP connection rate limit. limit is the sustained rate
+// (connections per second) and burst the bucket size. Pass rate.Inf to disable throttling, e.g. in
+// tests that open several connections in quick succession.
+func WithConnectionRateLimit(limit rate.Limit, burst int) func(s *Server) {
+	return func(s *Server) {
+		s.connRateLimit = limit
+		s.connRateBurst = burst
+	}
+}
+
 type ServerConfig struct {
 }
 
@@ -216,6 +232,8 @@ func NewServer(options ...Option) (*Server, error) {
 		FileTransferMgr:  NewMemFileTransferMgr(),
 		Stats:            NewStats(),
 		TrackerRegistrar: NewRealTrackerRegistrar(),
+		connRateLimit:    perIPRateLimit,
+		connRateBurst:    1,
 	}
 
 	for _, opt := range options {
@@ -430,7 +448,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 			s.rateLimitersMu.Lock()
 			entry, ok := s.rateLimiters[ipAddr]
 			if !ok {
-				entry = &rateLimiterEntry{limiter: rate.NewLimiter(perIPRateLimit, 1)}
+				entry = &rateLimiterEntry{limiter: rate.NewLimiter(s.connRateLimit, s.connRateBurst)}
 				s.rateLimiters[ipAddr] = entry
 			}
 			entry.lastSeen = time.Now()
@@ -741,8 +759,16 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 			c.Send(NewTransaction(TranShowAgreement, c.ID, NewField(FieldNoServerAgreement, []byte{1})))
 		}
 	} else {
-		_, _ = c.Server.Agreement.Seek(0, 0)
-		data, _ := io.ReadAll(c.Server.Agreement)
+		// Prefer a snapshot read: the Agreement is shared across all connections, so the stateful
+		// Seek+ReadAll below races when clients log in concurrently.  Implementations that expose
+		// AgreementBytes return a private copy safely.
+		var data []byte
+		if ab, ok := c.Server.Agreement.(interface{ AgreementBytes() []byte }); ok {
+			data = ab.AgreementBytes()
+		} else {
+			_, _ = c.Server.Agreement.Seek(0, 0)
+			data, _ = io.ReadAll(c.Server.Agreement)
+		}
 
 		c.Send(NewTransaction(TranShowAgreement, c.ID, NewField(FieldData, data)))
 	}

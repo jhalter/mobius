@@ -30,10 +30,25 @@ type fakeS3 struct {
 	mu      sync.Mutex
 	objects map[string][]byte
 	modTime map[string]time.Time
+
+	// failOp injects an error the next time the named operation runs (e.g. "GetObject").
+	// The entry is consumed on use so callers can target a single call.
+	failOp map[string]error
 }
 
 func newFakeS3() *fakeS3 {
-	return &fakeS3{objects: map[string][]byte{}, modTime: map[string]time.Time{}}
+	return &fakeS3{objects: map[string][]byte{}, modTime: map[string]time.Time{}, failOp: map[string]error{}}
+}
+
+// fail returns and consumes an injected error for op, or nil if none is set.
+func (f *fakeS3) fail(op string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err, ok := f.failOp[op]; ok {
+		delete(f.failOp, op)
+		return err
+	}
+	return nil
 }
 
 func (f *fakeS3) put(key string, data []byte) {
@@ -44,6 +59,9 @@ func (f *fakeS3) put(key string, data []byte) {
 }
 
 func (f *fakeS3) HeadObject(_ context.Context, in *s3.HeadObjectInput, _ ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+	if err := f.fail("HeadObject"); err != nil {
+		return nil, err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	data, ok := f.objects[aws.ToString(in.Key)]
@@ -57,6 +75,9 @@ func (f *fakeS3) HeadObject(_ context.Context, in *s3.HeadObjectInput, _ ...func
 }
 
 func (f *fakeS3) GetObject(_ context.Context, in *s3.GetObjectInput, _ ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	if err := f.fail("GetObject"); err != nil {
+		return nil, err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	data, ok := f.objects[aws.ToString(in.Key)]
@@ -70,6 +91,9 @@ func (f *fakeS3) GetObject(_ context.Context, in *s3.GetObjectInput, _ ...func(*
 }
 
 func (f *fakeS3) PutObject(_ context.Context, in *s3.PutObjectInput, _ ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
+	if err := f.fail("PutObject"); err != nil {
+		return nil, err
+	}
 	data, err := io.ReadAll(in.Body)
 	if err != nil {
 		return nil, err
@@ -79,7 +103,10 @@ func (f *fakeS3) PutObject(_ context.Context, in *s3.PutObjectInput, _ ...func(*
 }
 
 // Upload satisfies s3Uploader; the fake treats it identically to PutObject.
-func (f *fakeS3) Upload(_ context.Context, in *s3.PutObjectInput, _ ...func(*manager.Uploader)) (*manager.UploadOutput, error) {
+func (f *fakeS3) Upload(_ context.Context, in *s3.PutObjectInput, _ ...func(*manager.Uploader)) (*manager.UploadOutput, error) { //nolint:staticcheck // SA1019: transfermanager successor is not yet GA
+	if err := f.fail("Upload"); err != nil {
+		return nil, err
+	}
 	data, err := io.ReadAll(in.Body)
 	if err != nil {
 		return nil, err
@@ -89,6 +116,9 @@ func (f *fakeS3) Upload(_ context.Context, in *s3.PutObjectInput, _ ...func(*man
 }
 
 func (f *fakeS3) DeleteObject(_ context.Context, in *s3.DeleteObjectInput, _ ...func(*s3.Options)) (*s3.DeleteObjectOutput, error) {
+	if err := f.fail("DeleteObject"); err != nil {
+		return nil, err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	delete(f.objects, aws.ToString(in.Key))
@@ -97,6 +127,9 @@ func (f *fakeS3) DeleteObject(_ context.Context, in *s3.DeleteObjectInput, _ ...
 }
 
 func (f *fakeS3) DeleteObjects(_ context.Context, in *s3.DeleteObjectsInput, _ ...func(*s3.Options)) (*s3.DeleteObjectsOutput, error) {
+	if err := f.fail("DeleteObjects"); err != nil {
+		return nil, err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, o := range in.Delete.Objects {
@@ -107,6 +140,9 @@ func (f *fakeS3) DeleteObjects(_ context.Context, in *s3.DeleteObjectsInput, _ .
 }
 
 func (f *fakeS3) CopyObject(_ context.Context, in *s3.CopyObjectInput, _ ...func(*s3.Options)) (*s3.CopyObjectOutput, error) {
+	if err := f.fail("CopyObject"); err != nil {
+		return nil, err
+	}
 	src, err := decodeCopySource(aws.ToString(in.CopySource))
 	if err != nil {
 		return nil, err
@@ -135,6 +171,9 @@ func decodeCopySource(s string) (string, error) {
 }
 
 func (f *fakeS3) ListObjectsV2(_ context.Context, in *s3.ListObjectsV2Input, _ ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+	if err := f.fail("ListObjectsV2"); err != nil {
+		return nil, err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -393,6 +432,76 @@ func TestR2FileStore_DownloadRoundTrip(t *testing.T) {
 
 	assert.True(t, bytes.Contains(out.Bytes(), fileData), "download output should contain the file data")
 	assert.Equal(t, int64(len(fileData)), ft.bytesSentCounter.Total)
+}
+
+// TestR2FileStore_ErrorPropagation verifies that S3 API failures surface as errors rather than
+// being swallowed or panicking. Errors are injected via fakeS3.failOp.
+func TestR2FileStore_ErrorPropagation(t *testing.T) {
+	injected := errors.New("r2 unavailable")
+
+	t.Run("Open surfaces GetObject error", func(t *testing.T) {
+		s, fake := newTestR2Store(t)
+		require.NoError(t, s.WriteFile("/a.txt", []byte("x"), 0644))
+		fake.failOp["GetObject"] = injected
+
+		_, err := s.Open("/a.txt")
+		require.ErrorIs(t, err, injected)
+	})
+
+	t.Run("Stat surfaces HeadObject error", func(t *testing.T) {
+		s, fake := newTestR2Store(t)
+		require.NoError(t, s.WriteFile("/a.txt", []byte("x"), 0644))
+		fake.failOp["HeadObject"] = injected
+
+		_, err := s.Stat("/a.txt")
+		require.ErrorIs(t, err, injected)
+	})
+
+	t.Run("WriteFile surfaces PutObject error", func(t *testing.T) {
+		s, fake := newTestR2Store(t)
+		fake.failOp["PutObject"] = injected
+
+		require.ErrorIs(t, s.WriteFile("/a.txt", []byte("x"), 0644), injected)
+	})
+
+	t.Run("Remove surfaces DeleteObject error", func(t *testing.T) {
+		s, fake := newTestR2Store(t)
+		require.NoError(t, s.WriteFile("/a.txt", []byte("x"), 0644))
+		fake.failOp["DeleteObject"] = injected
+
+		require.ErrorIs(t, s.Remove("/a.txt"), injected)
+	})
+
+	t.Run("RemoveAll surfaces ListObjectsV2 error", func(t *testing.T) {
+		s, fake := newTestR2Store(t)
+		require.NoError(t, s.WriteFile("/dir/a.txt", []byte("x"), 0644))
+		fake.failOp["ListObjectsV2"] = injected
+
+		require.ErrorIs(t, s.RemoveAll("/dir"), injected)
+	})
+
+	t.Run("Rename of existing object surfaces CopyObject error", func(t *testing.T) {
+		s, fake := newTestR2Store(t)
+		require.NoError(t, s.WriteFile("/a.txt", []byte("x"), 0644))
+		fake.failOp["CopyObject"] = injected
+
+		require.ErrorIs(t, s.Rename("/a.txt", "/b.txt"), injected)
+	})
+
+	t.Run("upload commit surfaces Upload error and leaves staged file", func(t *testing.T) {
+		s, fake := newTestR2Store(t)
+		incomplete := "/upload.txt" + IncompleteFileSuffix
+		require.NoError(t, s.WriteFile(incomplete, []byte("partial"), 0644))
+		fake.failOp["Upload"] = injected
+
+		// promote() streams the staged file up on the terminal rename; a failure must surface.
+		err := s.Rename(incomplete, "/upload.txt")
+		require.ErrorIs(t, err, injected)
+
+		// The staged file is retained so the transfer can resume.
+		_, statErr := s.Stat(incomplete)
+		require.NoError(t, statErr)
+	})
 }
 
 // TestR2FileStore_Integration round-trips against a real R2 bucket. It is skipped unless R2_BUCKET

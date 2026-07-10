@@ -169,6 +169,12 @@ func (t *Transaction) Write(p []byte) (n int, err error) {
 	totalSize := binary.BigEndian.Uint32(p[12:16])
 	tranLen := int(20 + totalSize)
 
+	// The size fields are untrusted network input; reject sizes that fall outside the buffer
+	// rather than letting the field slice below panic.
+	if tranLen < 22 || tranLen > len(p) {
+		return 0, errors.New("invalid transaction size")
+	}
+
 	paramCount := binary.BigEndian.Uint16(p[20:22])
 
 	t.Flags = p[0]
@@ -213,13 +219,14 @@ func transactionScanner(data []byte, _ bool) (advance int, token []byte, err err
 
 	totalSize := binary.BigEndian.Uint32(data[12:16])
 
-	// tranLen represents the length of bytes that are part of the transaction
-	tranLen := int(tranHeaderLen + totalSize)
-	if tranLen > len(data) {
+	// tranLen represents the length of bytes that are part of the transaction. Compute it in int64
+	// so a near-max totalSize can't overflow (uint32 addition would wrap and yield a short length).
+	tranLen := int64(tranHeaderLen) + int64(totalSize)
+	if tranLen > int64(len(data)) {
 		return 0, nil, nil
 	}
 
-	return tranLen, data[0:tranLen], nil
+	return int(tranLen), data[0:tranLen], nil
 }
 
 const minFieldLen = 4

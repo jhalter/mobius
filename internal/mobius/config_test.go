@@ -9,11 +9,7 @@ import (
 
 func TestLoadConfig_InvalidBannerFileExtension(t *testing.T) {
 	// Create a temporary directory for test files
-	tmpDir, err := os.MkdirTemp("", "mobius-config-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create a test config file with an invalid banner file extension
 	configContent := `
@@ -28,7 +24,7 @@ FileRoot: "files"
 	}
 
 	// Attempt to load the config
-	_, err = LoadConfig(configPath)
+	_, err := LoadConfig(configPath)
 
 	// Verify that we get the improved error message
 	if err == nil {
@@ -94,11 +90,7 @@ func TestLoadConfig_ValidBannerFileExtensions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a temporary directory for test files
-			tmpDir, err := os.MkdirTemp("", "mobius-config-test")
-			if err != nil {
-				t.Fatalf("Failed to create temp dir: %v", err)
-			}
-			defer os.RemoveAll(tmpDir)
+			tmpDir := t.TempDir()
 
 			// Create files subdirectory
 			filesDir := filepath.Join(tmpDir, "files")

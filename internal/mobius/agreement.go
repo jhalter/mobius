@@ -63,7 +63,21 @@ func (a *Agreement) Read(p []byte) (int, error) {
 }
 
 func (a *Agreement) Seek(offset int64, _ int) (int64, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	a.readOffset = int(offset)
 
 	return 0, nil
+}
+
+// AgreementBytes returns a private copy of the agreement text. Unlike Seek+Read it touches no
+// shared read offset, so concurrent logins can each obtain the agreement without racing.
+func (a *Agreement) AgreementBytes() []byte {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	out := make([]byte, len(a.data))
+	copy(out, a.data)
+	return out
 }
