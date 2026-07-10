@@ -330,18 +330,22 @@ func UploadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfe
 
 	rLogger.Debug("File upload started", "dstFile", fullPath)
 
-	rForkWriter := io.Discard
-	iForkWriter := io.Discard
+	var rForkWriter, iForkWriter io.Writer = io.Discard, io.Discard
+	var forkClosers []io.Closer
 	if preserveForks {
-		rForkWriter, err = f.rsrcForkWriter()
+		rFork, err := f.rsrcForkWriter()
 		if err != nil {
 			return err
 		}
+		rForkWriter = rFork
+		forkClosers = append(forkClosers, rFork)
 
-		iForkWriter, err = f.InfoForkWriter()
+		iFork, err := f.InfoForkWriter()
 		if err != nil {
 			return err
 		}
+		iForkWriter = iFork
+		forkClosers = append(forkClosers, iFork)
 	}
 
 	if err := receiveFile(rwc, file, rForkWriter, iForkWriter, fileTransfer.bytesSentCounter); err != nil {
@@ -349,9 +353,16 @@ func UploadHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileTransfe
 		return fmt.Errorf("receive file: %v", err)
 	}
 
-	// Close the file before attempting to rename it.
+	// Close the data fork and the resource/info fork writers before renaming.
+	// Closing the fork writers is required for backends that only commit on
+	// Close (e.g. an object store); leaving them open also leaks descriptors.
 	if err := file.Close(); err != nil {
 		return fmt.Errorf("close file: %v", err)
+	}
+	for _, c := range forkClosers {
+		if err := c.Close(); err != nil {
+			return fmt.Errorf("close fork: %v", err)
+		}
 	}
 
 	// Rename the temporary upload file to the final file name.
@@ -653,26 +664,37 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 					return err
 				}
 
-				rForkWriter := io.Discard
-				iForkWriter := io.Discard
+				var rForkWriter, iForkWriter io.Writer = io.Discard, io.Discard
+				var forkClosers []io.Closer
 				if preserveForks {
-					iForkWriter, err = hlFile.InfoForkWriter()
+					iFork, err := hlFile.InfoForkWriter()
 					if err != nil {
 						return err
 					}
+					iForkWriter = iFork
+					forkClosers = append(forkClosers, iFork)
 
-					rForkWriter, err = hlFile.rsrcForkWriter()
+					rFork, err := hlFile.rsrcForkWriter()
 					if err != nil {
 						return err
 					}
+					rForkWriter = rFork
+					forkClosers = append(forkClosers, rFork)
 				}
 				if err := receiveFile(rwc, incWriter, rForkWriter, iForkWriter, fileTransfer.bytesSentCounter); err != nil {
 					return err
 				}
 
-				// Close the file before attempting to rename it.
+				// Close the data fork and the resource/info fork writers before
+				// renaming. Closing the fork writers is required for backends
+				// that only commit on Close and avoids leaking descriptors.
 				if err := incWriter.Close(); err != nil {
 					return fmt.Errorf("close file: %v", err)
+				}
+				for _, c := range forkClosers {
+					if err := c.Close(); err != nil {
+						return fmt.Errorf("close fork: %v", err)
+					}
 				}
 
 				// Rename the temporary upload file to the final file name.

@@ -154,6 +154,33 @@ func TestUploadHandler(t *testing.T) {
 		assert.True(t, os.IsNotExist(err))
 	})
 
+	t.Run("commits fork data on a backend that only persists on Close", func(t *testing.T) {
+		// MemFileStore's writers buffer and only commit on Close. This guards
+		// against regressing the fork writers being left unclosed, which would
+		// silently drop the resource and info forks on such backends.
+		fileStore := NewMemFileStore()
+		dst := "/files/note.txt"
+
+		data := []byte("body")
+		rsrc := []byte("rsrc")
+
+		ft := &FileTransfer{bytesSentCounter: &WriteCounter{}}
+		rwc := readWriter{r: bytes.NewReader(flatFileBytes("note.txt", data, rsrc))}
+
+		require.NoError(t, UploadHandler(rwc, dst, ft, fileStore, logger, true))
+
+		got, err := fileStore.ReadFile(dst)
+		require.NoError(t, err)
+		assert.Equal(t, data, got)
+
+		gotRsrc, err := fileStore.ReadFile("/files/" + fmt.Sprintf(RsrcForkNameTemplate, "note.txt"))
+		require.NoError(t, err, "resource fork must be committed")
+		assert.Equal(t, rsrc, gotRsrc)
+
+		_, err = fileStore.ReadFile("/files/" + fmt.Sprintf(InfoForkNameTemplate, "note.txt"))
+		require.NoError(t, err, "info fork must be committed")
+	})
+
 	t.Run("refuses to overwrite an existing file", func(t *testing.T) {
 		dir := t.TempDir()
 		fileStore := &OSFileStore{}
