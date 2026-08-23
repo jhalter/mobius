@@ -47,6 +47,10 @@ type Server struct {
 
 	FS FileStore // Storage backend to use for File storage
 
+	// accountFileRootResolver maps per-account file-library roots into the namespace expected by
+	// FS. It is immutable after server construction.
+	accountFileRootResolver func(string) string
+
 	Agreement io.ReadSeeker
 
 	banner   []byte // server banner image; guarded by bannerMu as it is replaced on config reload
@@ -199,6 +203,22 @@ func WithFileStore(fs FileStore) func(s *Server) {
 	return func(s *Server) {
 		s.FS = fs
 	}
+}
+
+// WithAccountFileRootResolver sets how per-account FileRoot values are mapped into the selected
+// file store's namespace. By default values are used verbatim.
+func WithAccountFileRootResolver(resolve func(string) string) func(s *Server) {
+	return func(s *Server) {
+		s.accountFileRootResolver = resolve
+	}
+}
+
+func (s *Server) resolveAccountFileRoot(fileRoot string) string {
+	if s.accountFileRootResolver == nil {
+		return fileRoot
+	}
+
+	return s.accountFileRootResolver(fileRoot)
 }
 
 // WithTLS optionally enables TLS support on the specified port.

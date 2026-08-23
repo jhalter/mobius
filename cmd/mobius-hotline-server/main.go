@@ -114,13 +114,14 @@ func main() {
 	// the concrete FileStore and pass it via hotline.WithFileStore.
 	switch *fileStoreBackend {
 	case "os", "":
-		// Default OSFileStore is set by NewServer; nothing to do beyond resolving FileRoot,
-		// which is a host filesystem path for this backend only.  Object-store backends treat
-		// FileRoot as a path within the store's own namespace and keep it as configured, so a
-		// relative FileRoot yields host-independent object keys.
-		if !filepath.IsAbs(config.FileRoot) {
-			config.FileRoot = filepath.Join(*configDir, config.FileRoot)
+		// Default OSFileStore is set by NewServer. Unlike object stores, it needs both global and
+		// per-account relative FileRoot values resolved against the config directory.
+		fileRootBase := *configDir
+		accountFileRootResolver := func(fileRoot string) string {
+			return resolveOSFileRoot(fileRootBase, fileRoot)
 		}
+		config.FileRoot = resolveOSFileRoot(fileRootBase, config.FileRoot)
+		opts = append(opts, hotline.WithAccountFileRootResolver(accountFileRootResolver))
 	case "memory":
 		opts = append(opts, hotline.WithFileStore(hotline.NewMemFileStore()))
 		slogger.Warn("Using in-memory file store; uploaded files are not persisted")
@@ -329,6 +330,14 @@ func warnAbsoluteFileRoot(logger *slog.Logger, fileRoot string) {
 	if filepath.IsAbs(fileRoot) {
 		logger.Warn("FileRoot is an absolute path; object keys will embed it verbatim. Use a relative FileRoot for host-independent keys.", "FileRoot", fileRoot)
 	}
+}
+
+func resolveOSFileRoot(configDir, fileRoot string) string {
+	if filepath.IsAbs(fileRoot) {
+		return fileRoot
+	}
+
+	return filepath.Join(configDir, fileRoot)
 }
 
 // findConfigPath searches for an existing config directory from the predefined search order.

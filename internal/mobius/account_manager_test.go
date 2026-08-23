@@ -68,6 +68,24 @@ func TestNewYAMLAccountManager(t *testing.T) {
 	})
 }
 
+func TestYAMLAccountManager_PreservesRelativeFileRoot(t *testing.T) {
+	tempDir := t.TempDir()
+	copyTestFiles(t, "test/config/Users", tempDir)
+
+	accountMgr, err := NewYAMLAccountManager(tempDir)
+	require.NoError(t, err)
+
+	account := accountMgr.Get("guest")
+	require.NotNil(t, account)
+	account.FileRoot = "Files/guest"
+	require.NoError(t, accountMgr.Update(*account, account.Login))
+
+	reloadedAccountMgr, err := NewYAMLAccountManager(tempDir)
+	require.NoError(t, err)
+	require.NotNil(t, reloadedAccountMgr.Get("guest"))
+	assert.Equal(t, "Files/guest", reloadedAccountMgr.Get("guest").FileRoot)
+}
+
 func TestYAMLAccountManager_Delete(t *testing.T) {
 	t.Run("successful deletions", func(t *testing.T) {
 		type args struct {

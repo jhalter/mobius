@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/jhalter/mobius/internal/mobius"
@@ -179,6 +180,39 @@ func TestFindConfigPath(t *testing.T) {
 		result := findConfigPath()
 		assert.Equal(t, "config", result)
 	})
+}
+
+func TestResolveOSFileRoot(t *testing.T) {
+	configDir := t.TempDir()
+	absoluteRoot := t.TempDir()
+
+	tests := []struct {
+		name     string
+		fileRoot string
+		want     string
+	}{
+		{
+			name:     "relative root",
+			fileRoot: "Files",
+			want:     filepath.Join(configDir, "Files"),
+		},
+		{
+			name:     "nested relative account root",
+			fileRoot: filepath.Join("Files", "alice"),
+			want:     filepath.Join(configDir, "Files", "alice"),
+		},
+		{
+			name:     "absolute root",
+			fileRoot: absoluteRoot,
+			want:     absoluteRoot,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, resolveOSFileRoot(configDir, tt.fileRoot))
+		})
+	}
 }
 
 // r2EnvVars are every R2_* variable newR2FileStore reads. Each case clears all of them and sets

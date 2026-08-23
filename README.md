@@ -165,6 +165,12 @@ The default installation includes two users:
 
 User administration should be performed from a Hotline client.  Avoid editing the files under the `Users` directory.
 
+The `FileRoot` field in an account YAML file is the exception when assigning that account a
+separate file library. An empty value inherits the global `FileRoot`. With the default `os` file
+store, a relative value is resolved from the config directory and an absolute value is used as-is.
+With the `memory` or `r2` file store, a relative value remains a path in the store's namespace.
+Restart the server after changing this field manually.
+
 ## Run the server
 
 By default running `mobius-hotline-server` will listen on ports 5500/5501 of all interfaces with info level logging to STDOUT.

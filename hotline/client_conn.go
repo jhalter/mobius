@@ -267,8 +267,9 @@ func (cc *ClientConn) clearIdleAndAway() bool {
 
 func (cc *ClientConn) FileRoot() string {
 	if account := cc.GetAccount(); account != nil && account.FileRoot != "" {
-		return account.FileRoot
+		return cc.Server.resolveAccountFileRoot(account.FileRoot)
 	}
+
 	return cc.Server.Config.FileRoot
 }
 

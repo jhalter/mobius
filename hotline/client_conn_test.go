@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -59,33 +60,79 @@ func TestClientConn_IP(t *testing.T) {
 }
 
 func TestClientConn_FileRoot(t *testing.T) {
+	configDir := t.TempDir()
+	absoluteAccountRoot := t.TempDir()
+	absoluteServerRoot := t.TempDir()
+	resolveFromConfigDir := func(fileRoot string) string {
+		if filepath.IsAbs(fileRoot) {
+			return fileRoot
+		}
+		return filepath.Join(configDir, fileRoot)
+	}
+	relativeConfigDir := "config"
+	resolveFromRelativeConfigDir := func(fileRoot string) string {
+		if filepath.IsAbs(fileRoot) {
+			return fileRoot
+		}
+		return filepath.Join(relativeConfigDir, fileRoot)
+	}
+
 	tests := []struct {
 		name            string
 		accountFileRoot string
 		serverFileRoot  string
+		resolver        func(string) string
 		want            string
 	}{
 		{
-			name:            "returns account FileRoot when set",
-			accountFileRoot: "/home/user/files",
-			serverFileRoot:  "/srv/files",
-			want:            "/home/user/files",
+			name:            "returns absolute account FileRoot when set",
+			accountFileRoot: absoluteAccountRoot,
+			serverFileRoot:  absoluteServerRoot,
+			resolver:        resolveFromConfigDir,
+			want:            absoluteAccountRoot,
+		},
+		{
+			name:            "resolves relative account FileRoot with configured resolver",
+			accountFileRoot: "Users/alice/Files",
+			serverFileRoot:  absoluteServerRoot,
+			resolver:        resolveFromConfigDir,
+			want:            filepath.Join(configDir, "Users/alice/Files"),
+		},
+		{
+			name:            "keeps relative account FileRoot verbatim without resolver",
+			accountFileRoot: "Users/alice/Files",
+			serverFileRoot:  "Files",
+			want:            "Users/alice/Files",
 		},
 		{
 			name:            "falls back to server Config FileRoot",
 			accountFileRoot: "",
-			serverFileRoot:  "/srv/files",
-			want:            "/srv/files",
+			serverFileRoot:  absoluteServerRoot,
+			resolver:        resolveFromConfigDir,
+			want:            absoluteServerRoot,
+		},
+		{
+			name:            "does not resolve inherited relative Config FileRoot twice",
+			accountFileRoot: "",
+			serverFileRoot:  filepath.Join(relativeConfigDir, "Files"),
+			resolver:        resolveFromRelativeConfigDir,
+			want:            filepath.Join(relativeConfigDir, "Files"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			account := &Account{FileRoot: tt.accountFileRoot}
+			server := &Server{Config: Config{FileRoot: tt.serverFileRoot}}
+			if tt.resolver != nil {
+				WithAccountFileRootResolver(tt.resolver)(server)
+			}
 			cc := &ClientConn{
-				Account: &Account{FileRoot: tt.accountFileRoot},
-				Server:  &Server{Config: Config{FileRoot: tt.serverFileRoot}},
+				Account: account,
+				Server:  server,
 			}
 			assert.Equal(t, tt.want, cc.FileRoot())
+			assert.Equal(t, tt.accountFileRoot, account.FileRoot, "resolving must not mutate the account")
 		})
 	}
 }
