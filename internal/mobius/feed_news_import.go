@@ -13,7 +13,7 @@ import (
 	"github.com/jhalter/mobius/hotline"
 )
 
-var errNewsArticleListTooLarge = errors.New("Hotline news article list exceeds 65,535 bytes")
+var errNewsArticleListTooLarge = errors.New("hotline news article list exceeds 65,535 bytes")
 
 type feedImportResult struct {
 	count        int
