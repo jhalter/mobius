@@ -8,6 +8,7 @@ RUN CGO_ENABLED=0 go build -ldflags "-X main.version=$(git describe --tags --alw
 FROM scratch
 
 COPY --from=builder /app/server /app/server
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /app/cmd/mobius-hotline-server/mobius/config /usr/local/var/mobius/config
 
 EXPOSE 5500 5501
