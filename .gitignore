@@ -30,4 +30,4 @@ config/*
 
 # Claude Code IDE files
 .claude
-.worktress
+.worktrees
