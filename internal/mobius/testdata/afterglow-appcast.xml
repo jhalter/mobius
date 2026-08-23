@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Afterglow</title>
+    <link>https://morphing.cloud/afterglow/appcast.xml</link>
+    <description>Most recent updates to Afterglow</description>
+    <item>
+      <title>Afterglow 1.0rc4</title>
+      <pubDate>Sat, 22 Aug 2026 18:09:55 -0700</pubDate>
+      <sparkle:version>23</sparkle:version>
+      <sparkle:releaseNotesLink>https://morphing.cloud/afterglow/1.0rc4-notes.html</sparkle:releaseNotesLink>
+      <description><![CDATA[
+        <h3>Fixes</h3>
+        <ul>
+          <li>Fixed main-window resizing.</li>
+          <li>Restored the missing <strong>Quit</strong> command.</li>
+        </ul>
+      ]]></description>
+      <enclosure url="https://morphing.cloud/afterglow/Afterglow-v1.0rc4.zip" length="33560698" type="application/octet-stream"/>
+    </item>
+  </channel>
+</rss>

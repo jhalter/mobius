@@ -25,10 +25,11 @@ Trackers:
   - hotline.kicks-ass.net:5499
 # - example-tracker-with-password.com:5499:mypassword
 
-# Text encoding used for file and folder names sent to and from clients.
+# Text encoding used for file and folder names and server-generated feed news.
+# User-authored chat, news, replies, and usernames remain raw protocol bytes.
 # Supported values:
-#   "macintosh" - Translates between Mac Roman and UTF-8 (default, compatible with classic Hotline clients)
-#   "utf8"      - No conversion; passes file names through as-is (for servers with only modern UTF-8 clients)
+#   "macintosh" - Converts filesystem names and feed news for classic Hotline clients (default)
+#   "utf8"      - Leaves UTF-8 filesystem names and feed news unchanged (modern clients only)
 # If omitted, defaults to "macintosh".
 Encoding: macintosh
 
@@ -51,6 +52,18 @@ NewsDateFormat: ""
 
 # Optional custom delimiter between flat news postings
 NewsDelimiter: ""
+
+# Optional mappings from existing ordinary news categories to public RSS or
+# Atom feeds. Opening a mapped category checks its source and imports unseen
+# entries as ordinary root articles in ThreadedNews.yaml. The complete category
+# path must already exist. Feed formats are detected automatically.
+#
+# NewsFeeds:
+#   - CategoryPath: ["Software Updates", "Afterglow"]
+#     URL: "https://morphing.cloud/afterglow/appcast.xml"
+#   - CategoryPath: ["Software Updates", "Mobius"]
+#     URL: "https://github.com/jhalter/mobius/releases.atom"
+NewsFeeds: []
 
 # Maximum simultaneous downloads; currently unimplemented
 MaxDownloads: 0

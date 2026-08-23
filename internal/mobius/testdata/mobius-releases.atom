@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en-US">
+  <id>tag:github.com,2008:https://github.com/jhalter/mobius/releases</id>
+  <link type="text/html" rel="alternate" href="https://github.com/jhalter/mobius/releases"/>
+  <link type="application/atom+xml" rel="self" href="https://github.com/jhalter/mobius/releases.atom"/>
+  <title>Release notes from mobius</title>
+  <updated>2026-06-12T15:55:05Z</updated>
+  <entry>
+    <id>tag:github.com,2008:Repository/272052223/v0.22.0</id>
+    <updated>2026-06-12T16:03:33Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/jhalter/mobius/releases/tag/v0.22.0"/>
+    <title>v0.22.0</title>
+    <content type="html">&lt;h2&gt;Changelog&lt;/h2&gt;&lt;ul&gt;&lt;li&gt;Fix data races&lt;/li&gt;&lt;li&gt;Improve graceful shutdown&lt;/li&gt;&lt;/ul&gt;</content>
+    <author><name>jhalter</name></author>
+  </entry>
+</feed>

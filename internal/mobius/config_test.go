@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLoadConfig_InvalidBannerFileExtension(t *testing.T) {
@@ -121,6 +124,94 @@ FileRoot: "files"
 			if config.BannerFile != tt.bannerFile {
 				t.Errorf("Expected BannerFile to be %q, got %q", tt.bannerFile, config.BannerFile)
 			}
+		})
+	}
+}
+
+func TestLoadConfig_NewsFeeds(t *testing.T) {
+	t.Run("accepts an auto-detected RSS or Atom feed", func(t *testing.T) {
+		dir := t.TempDir()
+		configPath := filepath.Join(dir, "config.yaml")
+		configContent := `
+Name: Test Server
+Description: Test Description
+FileRoot: Files
+NewsFeeds:
+  - CategoryPath: [Afterglow Releases]
+    URL: https://morphing.cloud/afterglow/appcast.xml
+`
+		require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
+
+		config, err := LoadConfig(configPath)
+		require.NoError(t, err)
+		require.Len(t, config.NewsFeeds, 1)
+		assert.Equal(t, []string{"Afterglow Releases"}, config.NewsFeeds[0].CategoryPath)
+		assert.Equal(t, "https://morphing.cloud/afterglow/appcast.xml", config.NewsFeeds[0].URL)
+	})
+
+	tests := []struct {
+		name     string
+		feedYAML string
+		wantErr  string
+	}{
+		{
+			name: "rejects non HTTP URL",
+			feedYAML: `
+  - CategoryPath: [News]
+    URL: file:///tmp/feed.xml`,
+			wantErr: "absolute HTTP or HTTPS URL",
+		},
+		{
+			name: "rejects credentials",
+			feedYAML: `
+  - CategoryPath: [News]
+    URL: https://user:password@example.com/feed.xml`,
+			wantErr: "must not contain credentials",
+		},
+		{
+			name: "rejects duplicate category",
+			feedYAML: `
+  - CategoryPath: [News]
+    URL: https://example.com/one.xml
+  - CategoryPath: [News]
+    URL: https://example.com/two.xml`,
+			wantErr: "duplicates another news feed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			configPath := filepath.Join(dir, "config.yaml")
+			configContent := `
+Name: Test Server
+Description: Test Description
+FileRoot: Files
+NewsFeeds:` + tt.feedYAML + "\n"
+			require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
+
+			_, err := LoadConfig(configPath)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+
+	for _, removed := range []string{"Format: rss", "RefreshInterval: 1h", "MaxItems: 25"} {
+		t.Run("rejects removed setting "+removed, func(t *testing.T) {
+			dir := t.TempDir()
+			configPath := filepath.Join(dir, "config.yaml")
+			configContent := `
+Name: Test Server
+Description: Test Description
+FileRoot: Files
+NewsFeeds:
+  - CategoryPath: [Releases]
+    URL: http://example.com/releases.xml
+    ` + removed + "\n"
+			require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
+
+			_, err := LoadConfig(configPath)
+			require.ErrorContains(t, err, "unknown NewsFeeds setting")
 		})
 	}
 }

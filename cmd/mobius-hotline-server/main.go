@@ -205,8 +205,23 @@ func main() {
 		slogger.Error("Error loading news", "err", err)
 		os.Exit(1)
 	}
-	srv.ThreadedNewsMgr = threadedNews
 	reloaders = append(reloaders, namedReloader{"threaded news", threadedNews})
+
+	srv.ThreadedNewsMgr = threadedNews
+	if len(config.NewsFeeds) > 0 {
+		feedNews, err := mobius.NewFeedNewsManager(
+			threadedNews,
+			config.NewsFeeds,
+			slogger,
+			"mobius-hotline-server/"+version,
+			config.Encoding,
+		)
+		if err != nil {
+			slogger.Error("Error configuring feed-backed news", "err", err)
+			os.Exit(1)
+		}
+		srv.ThreadedNewsMgr = feedNews
+	}
 
 	srv.AccountManager, err = mobius.NewYAMLAccountManager(path.Join(*configDir, "Users/"))
 	if err != nil {

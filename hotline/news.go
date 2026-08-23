@@ -28,14 +28,25 @@ type ThreadedNews struct {
 	Categories map[string]NewsCategoryListData15 `yaml:"Categories"`
 }
 
+// NewsFeedCategoryState is durable import metadata for a feed-mapped category.
+// It is YAML-only: NewsCategoryListData15.Read explicitly serializes the
+// Hotline protocol fields and therefore never exposes this state to clients.
+type NewsFeedCategoryState struct {
+	SourceURL    string            `yaml:"SourceURL"`
+	ETag         string            `yaml:"ETag,omitempty"`
+	LastModified string            `yaml:"LastModified,omitempty"`
+	Imported     map[string]uint32 `yaml:"Imported"`
+}
+
 type NewsCategoryListData15 struct {
-	Type     [2]byte                           `yaml:"Type,flow"` // Bundle (2) or category (3)
-	Name     string                            `yaml:"Name"`
-	Articles map[uint32]*NewsArtData           `yaml:"Articles"` // Optional, if Type is Category
-	SubCats  map[string]NewsCategoryListData15 `yaml:"SubCats"`
-	GUID     [16]byte                          `yaml:"-"` // What does this do?  Undocumented and seeming unused.
-	AddSN    [4]byte                           `yaml:"-"` // What does this do?  Undocumented and seeming unused.
-	DeleteSN [4]byte                           `yaml:"-"` // What does this do?  Undocumented and seeming unused.
+	Type      [2]byte                           `yaml:"Type,flow"` // Bundle (2) or category (3)
+	Name      string                            `yaml:"Name"`
+	Articles  map[uint32]*NewsArtData           `yaml:"Articles"` // Optional, if Type is Category
+	SubCats   map[string]NewsCategoryListData15 `yaml:"SubCats"`
+	FeedState *NewsFeedCategoryState            `yaml:"FeedState,omitempty"`
+	GUID      [16]byte                          `yaml:"-"` // What does this do?  Undocumented and seeming unused.
+	AddSN     [4]byte                           `yaml:"-"` // What does this do?  Undocumented and seeming unused.
+	DeleteSN  [4]byte                           `yaml:"-"` // What does this do?  Undocumented and seeming unused.
 
 	readOffset  int    // Internal offset to track read progress
 	writeOffset int    // Internal offset to track write progress

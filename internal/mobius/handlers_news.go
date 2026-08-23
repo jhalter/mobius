@@ -342,7 +342,7 @@ func HandlePostNewsArt(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		hotline.NewsArtData{
 			Title:    string(t.GetField(hotline.FieldNewsArtTitle).Data),
 			Poster:   string(cc.GetUserName()),
-			Date:     hotline.NewTime(time.Now()),
+			Date:     hotline.NewNewsTime(time.Now()),
 			DataFlav: hotline.NewsFlavor,
 			Data:     string(t.GetField(hotline.FieldNewsArtData).Data),
 		},

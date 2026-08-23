@@ -130,6 +130,31 @@ Within this directory some files are intended to be edited to customize the serv
 
 🛠️ `config.yaml` - Edit to set your server name, description, and enable tracker registration.
 
+### Feed-backed threaded news
+
+An advanced `NewsFeeds` configuration can import RSS or Atom entries into an
+existing ordinary news category, including Sparkle appcasts and GitHub release
+feeds:
+
+See [Feed-backed threaded news](docs/feed-backed-news.md) for the complete
+administrator guide, including configuration rules, retention behavior,
+durable state, operational limits, and troubleshooting.
+
+```yaml
+NewsFeeds:
+  - CategoryPath: ["Software Updates", "Afterglow"]
+    URL: "https://morphing.cloud/afterglow/appcast.xml"
+  - CategoryPath: ["Software Updates", "Mobius"]
+    URL: "https://github.com/jhalter/mobius/releases.atom"
+```
+
+The full target path must already exist as an ordinary category. Whenever a
+client opens it, Mobius conditionally checks the source and saves new entries
+as ordinary root articles in `ThreadedNews.yaml`. Existing entries are never
+rewritten, and deleted imports stay deleted. Feed failures are logged while the
+current local articles remain available. RSS and Atom are detected
+automatically; changes to `NewsFeeds` require restarting the server.
+
 
 ### User accounts
 

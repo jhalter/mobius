@@ -36,6 +36,22 @@ func NewTime(t time.Time) (b Time) {
 	))
 }
 
+// NewNewsTime converts a time.Time to the year-relative timestamp encoding
+// used by threaded-news article lists. Classic Hotline clients combine the
+// leading year field with seconds elapsed since January 1 of that year.
+//
+// This intentionally differs from NewTime's Mac-epoch encoding, which is
+// needed for compatibility with clients such as Pitbull Pro in other protocol
+// fields.
+func NewNewsTime(t time.Time) (b Time) {
+	localTime := t.In(time.Local)
+	startOfYear := time.Date(localTime.Year(), time.January, 1, 0, 0, 0, 0, time.Local)
+
+	binary.BigEndian.PutUint16(b[0:2], uint16(localTime.Year()))
+	binary.BigEndian.PutUint32(b[4:8], uint32(localTime.Sub(startOfYear).Seconds()))
+	return b
+}
+
 // Time converts the Hotline Time format to a Go time.Time.
 // The Hotline format stores: Year (2 bytes) + milliseconds (2 bytes, unused) +
 // seconds since the Mac OS epoch (4 bytes).
@@ -43,6 +59,15 @@ func (t Time) Time() time.Time {
 	seconds := binary.BigEndian.Uint32(t[4:8])
 
 	return macEpoch.Add(time.Duration(seconds) * time.Second)
+}
+
+// NewsTime decodes the year-relative timestamp format produced by
+// NewNewsTime.
+func (t Time) NewsTime() time.Time {
+	year := binary.BigEndian.Uint16(t[0:2])
+	seconds := binary.BigEndian.Uint32(t[4:8])
+	startOfYear := time.Date(int(year), time.January, 1, 0, 0, 0, 0, time.Local)
+	return startOfYear.Add(time.Duration(seconds) * time.Second)
 }
 
 // Format returns the time formatted according to the layout string.

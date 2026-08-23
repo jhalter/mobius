@@ -47,3 +47,16 @@ func TestNewTime_SecondsSinceMacEpoch(t *testing.T) {
 		t.Errorf("Mac-epoch decode = %v, want %v", decoded, tm)
 	}
 }
+
+func TestNewNewsTime_UsesSecondsSinceStartOfYear(t *testing.T) {
+	want := time.Date(2026, time.August, 22, 18, 9, 55, 0, time.Local)
+
+	encoded := NewNewsTime(want)
+	seconds := binary.BigEndian.Uint32(encoded[4:8])
+	if seconds >= 366*24*60*60 {
+		t.Fatalf("news seconds field = %d, want a year-relative value", seconds)
+	}
+	if got := encoded.NewsTime(); !got.Equal(want) {
+		t.Errorf("news time round trip = %v, want %v", got, want)
+	}
+}
