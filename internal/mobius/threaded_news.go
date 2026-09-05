@@ -34,6 +34,9 @@ func (n *ThreadedNewsYAML) CreateGrouping(newsPath []string, name string, t [2]b
 	defer n.mu.Unlock()
 
 	cats := n.getCatByPath(newsPath)
+	if _, exists := cats[name]; exists {
+		return fmt.Errorf("news item %q already exists", name)
+	}
 	cats[name] = hotline.NewsCategoryListData15{
 		Name:     name,
 		Type:     t,

@@ -307,6 +307,34 @@ func TestThreadedNewsYAML_CreateGrouping(t *testing.T) {
 	})
 }
 
+func TestThreadedNewsYAML_CreateGroupingRejectsDuplicates(t *testing.T) {
+	for _, existingPath := range [][]string{{"General"}, {"Archive"}, {"Archive", "Old News"}} {
+		for typeName, newType := range map[string][2]byte{"category": hotline.NewsCategory, "bundle": hotline.NewsBundle} {
+			t.Run(filepath.Join(existingPath...)+"/"+typeName, func(t *testing.T) {
+				tn := newTestThreadedNews(t)
+				beforeDisk, err := os.ReadFile(tn.filePath)
+				require.NoError(t, err)
+				beforeMemory, err := yaml.Marshal(tn.ThreadedNews)
+				require.NoError(t, err)
+
+				err = tn.CreateGrouping(existingPath[:len(existingPath)-1], existingPath[len(existingPath)-1], newType)
+
+				require.ErrorContains(t, err, "already exists")
+				afterMemory, err := yaml.Marshal(tn.ThreadedNews)
+				require.NoError(t, err)
+				assert.Equal(t, beforeMemory, afterMemory, "articles and subcategories must remain in memory")
+				afterDisk, err := os.ReadFile(tn.filePath)
+				require.NoError(t, err)
+				assert.Equal(t, beforeDisk, afterDisk, "duplicate creation must not change the saved news")
+				require.NoError(t, tn.Reload())
+				afterReload, err := yaml.Marshal(tn.ThreadedNews)
+				require.NoError(t, err)
+				assert.Equal(t, beforeMemory, afterReload)
+			})
+		}
+	}
+}
+
 func TestThreadedNewsYAML_DeleteNewsItem(t *testing.T) {
 	t.Run("deletes a top-level category", func(t *testing.T) {
 		tn := newTestThreadedNews(t)
