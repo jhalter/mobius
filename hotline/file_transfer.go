@@ -645,11 +645,6 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 				offset := make([]byte, 4)
 				binary.BigEndian.PutUint32(offset, uint32(incompleteFile.Size()))
 
-				file, err := fileStore.OpenFile(itemPath+IncompleteFileSuffix, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-				if err != nil {
-					return err
-				}
-
 				fileResumeData := NewFileResumeData([]ForkInfoList{*NewForkInfoList(offset)})
 
 				b, _ := fileResumeData.BinaryMarshal()
@@ -665,8 +660,20 @@ func UploadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *FileT
 					return err
 				}
 
-				if err := receiveFile(rwc, file, io.Discard, io.Discard, fileTransfer.bytesSentCounter); err != nil {
-					rLogger.Error("Error receiving file", "err", err)
+				file, err := fileStore.OpenFile(itemPath+IncompleteFileSuffix, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				if err != nil {
+					return err
+				}
+
+				receiveErr := receiveFile(rwc, file, io.Discard, io.Discard, fileTransfer.bytesSentCounter)
+				// Close even after a failed receive to save resumable progress on stores
+				// that buffer writes. Only promote the file after both operations succeed.
+				closeErr := file.Close()
+				if receiveErr != nil {
+					return fmt.Errorf("receive resumed file: %w", errors.Join(receiveErr, closeErr))
+				}
+				if closeErr != nil {
+					return fmt.Errorf("close resumed file: %w", closeErr)
 				}
 
 				err = fileStore.Rename(itemPath+IncompleteFileSuffix, itemPath)
