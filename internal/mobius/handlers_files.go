@@ -1,6 +1,7 @@
 package mobius
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -140,7 +141,8 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 			return cc.NewErrReply(t, ErrMsgSetFileInfo)
 		}
 		_, err = io.Copy(w, &hlFile.Ffo.FlatFileInformationFork)
-		if err != nil {
+		// Close commits buffered writes and completes object-store uploads before any rename.
+		if err = errors.Join(err, w.Close()); err != nil {
 			cc.Logger.Error("set file info: write info fork", "err", err)
 			return cc.NewErrReply(t, ErrMsgSetFileInfo)
 		}
