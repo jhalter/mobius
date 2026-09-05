@@ -80,11 +80,14 @@ func (ffif *FlatFileInformationFork) FriendlyCreator() []byte {
 }
 
 func (ffif *FlatFileInformationFork) SetComment(comment []byte) error {
+	if len(comment) > 65535 {
+		return fmt.Errorf("file comment too long: %d bytes, maximum is 65535", len(comment))
+	}
+
 	commentSize := make([]byte, 2)
 	ffif.Comment = comment
 	binary.BigEndian.PutUint16(commentSize, uint16(len(comment)))
 	ffif.CommentSize = [2]byte(commentSize)
-	// TODO: return err if comment is too long
 	return nil
 }
 

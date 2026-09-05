@@ -1,11 +1,14 @@
 package hotline
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFlatFileInformationFork_UnmarshalBinary(t *testing.T) {
@@ -52,7 +55,7 @@ func TestFlatFileInformationFork_UnmarshalBinary(t *testing.T) {
 		{
 			name: "when the declared comment size overruns the buffer returns an error",
 			args: args{b: func() []byte {
-				b := make([]byte, 74)            // 72 header + 2 comment-size bytes, no name
+				b := make([]byte, 74)                    // 72 header + 2 comment-size bytes, no name
 				binary.BigEndian.PutUint16(b[72:74], 50) // claims a 50-byte comment that isn't present
 				return b
 			}()},
@@ -158,6 +161,40 @@ func TestFlatFileInformationFork_SetComment(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, tt.wantComment, ffif.Comment)
 			assert.Equal(t, tt.wantCommentSize, ffif.CommentSize)
+		})
+	}
+}
+
+func TestFlatFileInformationFork_SetCommentLengthLimits(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		comment []byte
+		wantErr bool
+	}{
+		{name: "below maximum", comment: bytes.Repeat([]byte("x"), 65534)},
+		{name: "maximum", comment: bytes.Repeat([]byte("x"), 65535)},
+		{name: "above maximum", comment: bytes.Repeat([]byte("x"), 65536), wantErr: true},
+		{name: "multibyte length is measured in bytes", comment: bytes.Repeat([]byte("é"), 32768), wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ffif := NewFlatFileInformationFork("file.txt", [8]byte{}, "TEXT", "TEXT")
+			require.NoError(t, ffif.SetComment([]byte("original comment")))
+			original := ffif
+
+			err := ffif.SetComment(tc.comment)
+
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.Equal(t, original, ffif, "reject oversized comments before changing the information fork")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, len(tc.comment), int(binary.BigEndian.Uint16(ffif.CommentSize[:])))
+			encoded, err := io.ReadAll(&ffif)
+			require.NoError(t, err)
+			var decoded FlatFileInformationFork
+			require.NoError(t, decoded.UnmarshalBinary(encoded))
+			assert.Equal(t, tc.comment, decoded.Comment, "the full comment must survive serialization")
 		})
 	}
 }
