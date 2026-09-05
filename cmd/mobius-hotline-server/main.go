@@ -90,14 +90,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	// reloaders collects components reloaded on SIGHUP or via the reload API endpoint.
+	var reloaders []namedReloader
 	var tlsConfig *tls.Config
 	if *tlsCert != "" && *tlsKey != "" {
-		cert, err := tls.LoadX509KeyPair(*tlsCert, *tlsKey)
+		certificates, err := mobius.NewCertificateManager(*tlsCert, *tlsKey, slogger)
 		if err != nil {
 			slogger.Error("Error loading TLS certificate", "err", err)
 			os.Exit(1)
 		}
-		tlsConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
+		// Leave Certificates empty so GetCertificate also runs for clients without SNI.
+		tlsConfig = &tls.Config{GetCertificate: certificates.GetCertificate}
+		reloaders = append(reloaders, namedReloader{"TLS certificate", certificates})
 	}
 
 	opts := []hotline.Option{
@@ -139,10 +143,6 @@ func main() {
 		slogger.Error("Unknown file-store backend", "backend", *fileStoreBackend)
 		os.Exit(1)
 	}
-
-	// reloaders collects the storage backends whose state is reloaded on SIGHUP or via the
-	// reload API endpoint.
-	var reloaders []namedReloader
 
 	// Select the ban list and presence backends: Redis if configured, otherwise file-based. This
 	// runs before NewServer so the presence tracker can be supplied via WithPresenceTracker.
@@ -253,13 +253,7 @@ func main() {
 	}
 	reloaders = append(reloaders, namedReloader{"banner", reloadBanner})
 
-	reloadFunc := func() {
-		for _, item := range reloaders {
-			if err := item.reloader.Reload(); err != nil {
-				slogger.Error("Error reloading "+item.name, "err", err)
-			}
-		}
-	}
+	reloadFunc := newReloadFunc(reloaders, slogger)
 
 	if *apiAddr != "" {
 		sh := mobius.NewAPIServer(srv, onlineLister, reloadFunc, slogger, *apiKey)
@@ -322,6 +316,18 @@ func main() {
 type namedReloader struct {
 	name     string
 	reloader mobius.Reloader
+}
+
+// newReloadFunc is shared by SIGHUP and the API. Failures are logged and do not prevent
+// other components from reloading or change the API's response.
+func newReloadFunc(reloaders []namedReloader, logger *slog.Logger) func() {
+	return func() {
+		for _, item := range reloaders {
+			if err := item.reloader.Reload(); err != nil {
+				logger.Error("Error reloading "+item.name, "err", err)
+			}
+		}
+	}
 }
 
 // warnAbsoluteFileRoot flags an absolute FileRoot when an object-store backend is selected: the

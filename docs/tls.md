@@ -78,6 +78,30 @@ mobius-hotline-server \
   -tls-port 5600
 ```
 
+## Reloading Certificates
+
+When TLS is enabled, SIGHUP and `POST /api/v1/reload` also reload the certificate and key from the original `-tls-cert` and `-tls-key` paths. New TLS handshakes on both the Hotline and file-transfer ports use the replacement certificate, including clients without SNI. Listeners stay open, and established connections and active file transfers continue uninterrupted.
+
+Finish replacing **both files before triggering reload**. Stage the new certificate and matching key in separate files, then move each into its configured location. Either file may be replaced first, but do not send SIGHUP or call the reload API between those replacements. Preserve permissions that allow the Mobius process to read both files. Certificate renewal tools should trigger reload only after they have finished updating the pair.
+
+Once both files are in place, use either command:
+
+```bash
+# Replace 12345 with the running Mobius process ID.
+kill -HUP 12345
+```
+
+```bash
+# If the HTTP API is enabled, use its configured address and API key.
+curl -X POST -H "X-API-Key: your-secret-key" http://127.0.0.1:5503/api/v1/reload
+```
+
+Omit the `X-API-Key` header if no `-api-key` is configured. Both commands also reload the other components handled by the existing reload operation.
+
+A successful replacement logs `TLS certificate reloaded`. If either file is missing, the PEM is malformed, or the certificate and key do not match, Mobius logs `Error reloading TLS certificate` and keeps the previous certificate active for new handshakes. Correct both files and trigger reload again; a failed attempt does not require a restart. Self-signed certificates remain supported, with the same acceptance rules as at startup.
+
+The reload API keeps its existing HTTP 200 response and body, `{ "msg": "config reloaded" }`, even if an individual component fails to reload. Check the server logs to confirm certificate reload success. Replacing files alone does not update the certificate; a reload trigger is required. An invalid pair at startup still prevents the server from starting.
+
 ## Verifying TLS is Working
 
 When TLS is enabled, you'll see a log message at startup:

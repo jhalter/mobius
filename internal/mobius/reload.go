@@ -1,6 +1,6 @@
 package mobius
 
-// Reloader is implemented by storage backends that can reload their state from disk, e.g. in
+// Reloader is implemented by components that can reload their state from disk, e.g. in
 // response to SIGHUP or the reload API endpoint.
 type Reloader interface {
 	Reload() error
@@ -16,4 +16,5 @@ var (
 	_ Reloader = (*BanFile)(nil)
 	_ Reloader = (*ThreadedNewsYAML)(nil)
 	_ Reloader = (*Agreement)(nil)
+	_ Reloader = (*CertificateManager)(nil)
 )
