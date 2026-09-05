@@ -65,6 +65,7 @@ const (
 	// Ban messages
 	ErrMsgTemporaryBan = "You are temporarily banned on this server"
 	ErrMsgPermanentBan = "You are permanently banned on this server"
+	ErrMsgSaveBan      = "Error saving ban. User was not disconnected."
 
 	// General error messages
 	ErrMsgFileNotFound       = "File not found."

@@ -204,6 +204,14 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 	if options := t.GetField(hotline.FieldOptions).Data; len(options) > 1 {
 		switch options[1] {
 		case 1:
+			banUntil := time.Now().Add(hotline.BanDuration)
+			ip := clientConn.IP()
+
+			if err := cc.Server.BanList.Add(ip, &banUntil); err != nil {
+				cc.Logger.Error("Error saving ban", "err", err)
+				return cc.NewErrReply(t, ErrMsgSaveBan)
+			}
+
 			// send message: "You are temporarily banned on this server"
 			cc.Logger.Info("Disconnect & temporarily ban user", "username", string(clientConn.GetUserName()))
 
@@ -214,15 +222,14 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 				hotline.NewField(hotline.FieldChatOptions, []byte{0, 0}),
 			))
 
-			banUntil := time.Now().Add(hotline.BanDuration)
+		case 2:
 			ip := clientConn.IP()
 
-			err := cc.Server.BanList.Add(ip, &banUntil)
-			if err != nil {
+			if err := cc.Server.BanList.Add(ip, nil); err != nil {
 				cc.Logger.Error("Error saving ban", "err", err)
-				// TODO
+				return cc.NewErrReply(t, ErrMsgSaveBan)
 			}
-		case 2:
+
 			// send message: "You are permanently banned on this server"
 			cc.Logger.Info("Disconnect & ban user", "username", string(clientConn.GetUserName()))
 
@@ -232,13 +239,6 @@ func HandleDisconnectUser(cc *hotline.ClientConn, t *hotline.Transaction) (res [
 				hotline.NewField(hotline.FieldData, []byte(ErrMsgPermanentBan)),
 				hotline.NewField(hotline.FieldChatOptions, []byte{0, 0}),
 			))
-
-			ip := clientConn.IP()
-
-			err := cc.Server.BanList.Add(ip, nil)
-			if err != nil {
-				cc.Logger.Error("Error saving ban", "err", err)
-			}
 		}
 	}
 
