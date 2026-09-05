@@ -268,7 +268,7 @@ var dispatchTypes = [][2]byte{
 	hotline.TranGetNewsArtData, hotline.TranPostNewsArt,
 	hotline.TranGetFileNameList, hotline.TranDownloadFile, hotline.TranUploadFile,
 	hotline.TranGetUser, hotline.TranNewUser, hotline.TranSetUser, hotline.TranDeleteUser,
-	hotline.TranListUsers, hotline.TranGetUserNameList,
+	hotline.TranListUsers, hotline.TranGetUserNameList, hotline.TranUpdateUser,
 	hotline.TranNotifyChangeUser, hotline.TranNotifyDeleteUser,
 	hotline.TranServerMsg, hotline.TranDisconnectMsg, hotline.TranUserAccess,
 	hotline.TranInviteNewChat, hotline.TranInviteToChat, hotline.TranJoinChat,

@@ -53,31 +53,38 @@ func HandleSetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 		return cc.NewErrReply(t, ErrMsgUpdateAccount)
 	}
 
-	// Notify connected clients logged in as the user of the new access level
-	for _, c := range cc.Server.ClientMgr.List() {
-		if c.GetAccount().Login == login {
-			newT := hotline.NewTransaction(hotline.TranUserAccess, c.ID, hotline.NewField(hotline.FieldUserAccess, newAccessLvl))
-			res = append(res, newT)
-
-			c.SetAccountAccess(account.Access)
-
-			if c.Authorize(hotline.AccessDisconUser) {
-				c.SetFlag(hotline.UserFlagAdmin, 1)
-			} else {
-				c.SetFlag(hotline.UserFlagAdmin, 0)
-			}
-
-			cc.SendAll(
-				hotline.TranNotifyChangeUser,
-				hotline.NewField(hotline.FieldUserID, c.ID[:]),
-				hotline.NewField(hotline.FieldUserFlags, c.FlagBytes()),
-				hotline.NewField(hotline.FieldUserName, c.GetUserName()),
-				hotline.NewField(hotline.FieldUserIconID, c.GetIcon()),
-			)
-		}
-	}
+	updateAccountSessions(cc, login, *account)
 
 	return append(res, cc.NewReply(t))
+}
+
+// updateAccountSessions applies a saved account update to every matching session. Send
+// notifications immediately so a later failure in a batch cannot discard them.
+func updateAccountSessions(cc *hotline.ClientConn, previousLogin string, account hotline.Account) {
+	for _, c := range cc.Server.ClientMgr.List() {
+		if current := c.GetAccount(); current == nil || current.Login != previousLogin {
+			continue
+		}
+
+		// Each session owns its snapshot. Replacing it also tracks login renames without
+		// mutating identity fields that other goroutines may still be reading.
+		updated := account
+		c.SetAccount(&updated)
+		if account.Access.IsSet(hotline.AccessDisconUser) {
+			c.SetFlag(hotline.UserFlagAdmin, 1)
+		} else {
+			c.SetFlag(hotline.UserFlagAdmin, 0)
+		}
+
+		c.Send(hotline.NewTransaction(hotline.TranUserAccess, c.ID, hotline.NewField(hotline.FieldUserAccess, c.AccessBytes())))
+		cc.SendAll(
+			hotline.TranNotifyChangeUser,
+			hotline.NewField(hotline.FieldUserID, c.ID[:]),
+			hotline.NewField(hotline.FieldUserFlags, c.FlagBytes()),
+			hotline.NewField(hotline.FieldUserName, c.GetUserName()),
+			hotline.NewField(hotline.FieldUserIconID, c.GetIcon()),
+		)
+	}
 }
 
 // HandleGetUser requests the information for a specific user from the server's list of allowed users.
@@ -276,12 +283,14 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 
 			acc.Name = string(hotline.GetField(hotline.FieldUserName, &subFields).Data)
 
-			err := cc.Server.AccountManager.Update(*acc, string(hotline.EncodeString(hotline.GetField(hotline.FieldUserLogin, &subFields).Data)))
+			err := cc.Server.AccountManager.Update(*acc, userLogin)
 
 			if err != nil {
 				cc.Logger.Error("update user: update account", "err", err)
 				return cc.NewErrReply(t, ErrMsgUpdateAccount)
 			}
+			acc.Login = userLogin
+			updateAccountSessions(cc, accountToUpdate, *acc)
 		} else {
 			if !cc.Authorize(hotline.AccessCreateUser) {
 				return cc.NewErrReply(t, ErrMsgNotAllowedCreateAccounts)

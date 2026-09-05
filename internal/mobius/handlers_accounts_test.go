@@ -1201,6 +1201,9 @@ func TestHandleUpdateUser(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.args.cc.Server.ClientMgr == nil {
+				tt.args.cc.Server.ClientMgr = hotline.NewMemClientMgr()
+			}
 			gotRes := HandleUpdateUser(tt.args.cc, &tt.args.t)
 			TranAssertEqual(t, tt.wantRes, gotRes)
 		})
