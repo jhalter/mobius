@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/jhalter/mobius/hotline"
 )
@@ -84,6 +85,7 @@ func HandleGetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	fileName := t.GetField(hotline.FieldFileName).Data
 	filePath := t.GetField(hotline.FieldFilePath).Data
+	fileNewName := t.GetField(hotline.FieldFileNewName).Data
 
 	fullFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileName, cc.TextDecoder())
 	if err != nil {
@@ -95,6 +97,20 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 	if err != nil {
 		cc.Logger.Error("set file info: stat file", "err", err)
 		return cc.NewErrReply(t, ErrMsgFileNotFound)
+	}
+
+	var decodedNewName string
+	if fileNewName != nil {
+		decodedNewName, err = cc.TextDecoder().String(string(fileNewName))
+		if err != nil {
+			cc.Logger.Error("set file info: decode new name", "err", err)
+			return cc.NewErrReply(t, ErrMsgRenameFile)
+		}
+		// File.Move joins Name directly to the destination directory. Require a single
+		// component, rejecting both Unix and Windows separators before any mutations.
+		if decodedNewName == "" || decodedNewName == "." || decodedNewName == ".." || strings.ContainsAny(decodedNewName, "/\\\x00") {
+			return cc.NewErrReply(t, ErrMsgRenameFile)
+		}
 	}
 
 	hlFile, err := hotline.NewFile(cc.Server.FS, fullFilePath, 0)
@@ -130,13 +146,11 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		}
 	}
 
-	fullNewFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, t.GetField(hotline.FieldFileNewName).Data, cc.TextDecoder())
+	fullNewFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileNewName, cc.TextDecoder())
 	if err != nil {
 		cc.Logger.Error("set file info: read new name path", "err", err)
 		return cc.NewErrReply(t, ErrMsgRenameFile)
 	}
-
-	fileNewName := t.GetField(hotline.FieldFileNewName).Data
 
 	if fileNewName != nil {
 		switch mode := fi.Mode(); {
@@ -161,11 +175,7 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 				cc.Logger.Error("set file info: read file dir", "err", err)
 				return cc.NewErrReply(t, ErrMsgRenameFile)
 			}
-			hlFile.Name, err = cc.TextDecoder().String(string(fileNewName))
-			if err != nil {
-				cc.Logger.Error("set file info: decode new name", "err", err)
-				return cc.NewErrReply(t, ErrMsgRenameFile)
-			}
+			hlFile.Name = decodedNewName
 
 			err = hlFile.Move(fileDir)
 			if os.IsNotExist(err) {
