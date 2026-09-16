@@ -750,6 +750,17 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		} else {
 			c.SetUserName([]byte(account.Name))
 		}
+
+		// Legacy clients set their nickname here instead of in TranAgreed. Check the
+		// resolved name before publishing the client or sending a successful login reply.
+		if s.BanList != nil && s.BanList.IsNicknameBanned(string(c.GetUserName())) {
+			if err := s.BanList.Add(ipAddr, nil); err != nil {
+				c.Logger.Error("Failed to ban IP for banned nickname", "ip", ipAddr, "err", err)
+			}
+			sendBanMessage(rwc, "You are banned on this server")
+			c.Logger.Debug("Disconnecting banned nickname", "name", string(c.GetUserName()))
+			return nil
+		}
 	}
 
 	if c.Authorize(AccessDisconUser) {

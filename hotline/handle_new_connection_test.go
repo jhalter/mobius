@@ -3,6 +3,7 @@ package hotline
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"sync"
 	"testing"
@@ -211,6 +212,82 @@ func TestServer_handleNewConnection_bannedIP(t *testing.T) {
 	assert.Empty(t, srv.ClientMgr.List())
 }
 
+func TestServer_handleNewConnection_legacyNicknameBan(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		suppliedName string
+		accountName  string
+		anyName      bool
+		banErr       error
+		wantBanned   bool
+	}{
+		{
+			name: "banned client nickname", suppliedName: "Banned", accountName: "Allowed",
+			anyName: true, wantBanned: true,
+		},
+		{
+			name: "banned enforced account name", suppliedName: "Allowed", accountName: "Banned",
+			wantBanned: true,
+		},
+		{
+			name: "banned client nickname overridden by account", suppliedName: "Banned", accountName: "Allowed",
+		},
+		{
+			name: "allowed client nickname", suppliedName: "Allowed", accountName: "Banned",
+			anyName: true,
+		},
+		{
+			name: "IP ban persistence failure still rejects login", suppliedName: "Banned", accountName: "Allowed",
+			anyName: true, banErr: errors.New("cannot save ban"), wantBanned: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			account := accountWithPassword(t, "guest", "")
+			account.Name = tc.accountName
+			if tc.anyName {
+				account.Access.Set(AccessAnyName)
+			}
+			srv := newLoginTestServer(map[string]*Account{"guest": account})
+			ban := &stubBanMgr{bannedNicknames: map[string]bool{"Banned": true}, addErr: tc.banErr}
+			srv.BanList = ban
+			presence := &stubPresence{}
+			srv.Presence = presence
+
+			handled := false
+			srv.handlers = map[TranType]HandlerFunc{
+				TranKeepAlive: func(*ClientConn, *Transaction) []Transaction {
+					handled = true
+					return nil
+				},
+			}
+			conn := &scriptedConn{in: loginInput(t, "guest", "",
+				NewField(FieldUserName, []byte(tc.suppliedName)),
+			)}
+			conn.in.Write(serializeTransaction(t, NewTransaction(TranKeepAlive, ClientID{})))
+
+			err := srv.handleNewConnection(context.Background(), conn, "192.0.2.1:1234")
+			srv.connWG.Wait()
+			require.NoError(t, err)
+			assert.Empty(t, srv.ClientMgr.List())
+
+			out := string(conn.written())
+			if tc.wantBanned {
+				assert.False(t, handled, "banned users must not reach the transaction loop")
+				assert.Contains(t, out, "You are banned on this server")
+				assert.NotContains(t, out, "Test Server", "do not send a successful login reply")
+				assert.Equal(t, []string{"192.0.2.1"}, ban.added)
+				assert.Empty(t, presence.renamed, "do not announce the banned nickname")
+				assert.Zero(t, srv.Stats.Get(StatConnectionCounter))
+			} else {
+				assert.True(t, handled)
+				assert.Contains(t, out, "Test Server")
+				assert.Empty(t, ban.added)
+				assert.Equal(t, []string{"guest:Allowed"}, presence.renamed)
+			}
+		})
+	}
+}
+
 func TestServer_handleNewConnection_handshakeFailure(t *testing.T) {
 	srv := newLoginTestServer(nil)
 
@@ -241,24 +318,26 @@ func (s *stubPresence) UserDisconnected(login, nickname, ip string) {
 
 // stubBanMgr is a minimal BanMgr for exercising the ban branches of handleNewConnection.
 type stubBanMgr struct {
-	usernameBanned bool
-	ipBanned       bool
-	banUntil       *time.Time
-	added          []string
+	usernameBanned  bool
+	ipBanned        bool
+	bannedNicknames map[string]bool
+	banUntil        *time.Time
+	added           []string
+	addErr          error
 }
 
 func (s *stubBanMgr) Add(ip string, until *time.Time) error {
 	s.added = append(s.added, ip)
-	return nil
+	return s.addErr
 }
-func (s *stubBanMgr) IsBanned(ip string) (bool, *time.Time) { return s.ipBanned, s.banUntil }
-func (s *stubBanMgr) UnbanIP(ip string) error               { return nil }
-func (s *stubBanMgr) BanUsername(username string) error     { return nil }
-func (s *stubBanMgr) UnbanUsername(username string) error   { return nil }
-func (s *stubBanMgr) IsUsernameBanned(username string) bool { return s.usernameBanned }
-func (s *stubBanMgr) BanNickname(nickname string) error     { return nil }
-func (s *stubBanMgr) UnbanNickname(nickname string) error   { return nil }
-func (s *stubBanMgr) IsNicknameBanned(nickname string) bool { return false }
-func (s *stubBanMgr) ListBannedIPs() ([]string, error)      { return nil, nil }
+func (s *stubBanMgr) IsBanned(ip string) (bool, *time.Time)  { return s.ipBanned, s.banUntil }
+func (s *stubBanMgr) UnbanIP(ip string) error                { return nil }
+func (s *stubBanMgr) BanUsername(username string) error      { return nil }
+func (s *stubBanMgr) UnbanUsername(username string) error    { return nil }
+func (s *stubBanMgr) IsUsernameBanned(username string) bool  { return s.usernameBanned }
+func (s *stubBanMgr) BanNickname(nickname string) error      { return nil }
+func (s *stubBanMgr) UnbanNickname(nickname string) error    { return nil }
+func (s *stubBanMgr) IsNicknameBanned(nickname string) bool  { return s.bannedNicknames[nickname] }
+func (s *stubBanMgr) ListBannedIPs() ([]string, error)       { return nil, nil }
 func (s *stubBanMgr) ListBannedUsernames() ([]string, error) { return nil, nil }
 func (s *stubBanMgr) ListBannedNicknames() ([]string, error) { return nil, nil }
