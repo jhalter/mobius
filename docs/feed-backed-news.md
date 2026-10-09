@@ -79,11 +79,13 @@ The Hotline protocol limits the complete encoded article-list payload for one
 category to 65,535 bytes. This listing contains article metadata—not article
 bodies—so the practical capacity depends mostly on the number and encoded
 length of titles and authors. Mobius checks the full list after each candidate
-article. It saves the oldest prefix that fits and stops before an addition
-would exceed the limit. It does not save new HTTP validators while unseen
-entries remain, so the next category load fetches and retries them. Mobius does
-not prune local or imported articles automatically; split a large source across
-categories when a category approaches this protocol limit.
+article. When an addition would exceed the limit, Mobius removes the oldest
+imported articles until the newer one fits, so a full category keeps the most
+recent entries. Removed entries stay recorded as seen and are not imported
+again. Locally posted articles, and imported articles that have replies, are
+never removed. If those alone leave no room, Mobius stops before the addition
+and does not save new HTTP validators, so the next category load retries the
+unseen entries.
 
 Individual imported titles and authors are limited to 255 encoded bytes, and
 article bodies to 65,535 encoded bytes, matching Hotline's field sizes.

@@ -88,7 +88,7 @@ func (n *ThreadedNewsYAML) importFeedArticles(
 			continue
 		}
 
-		articleID, previousID, err := nextNewsArticleID(working.Articles)
+		articleID, previousID, err := nextNewsArticleID(working.Articles, working.FeedState)
 		if err != nil {
 			return feedImportResult{}, err
 		}
@@ -107,7 +107,13 @@ func (n *ThreadedNewsYAML) importFeedArticles(
 		}
 		working.Articles[articleID] = &article
 
-		if err := validateNewsArticleListSize(working.Articles); err != nil {
+		err = validateNewsArticleListSize(working.Articles)
+		if errors.Is(err, errNewsArticleListTooLarge) {
+			if pruned, ok := pruneImportedToFit(working, articleID); ok {
+				working, err = pruned, nil
+			}
+		}
+		if err != nil {
 			delete(working.Articles, articleID)
 			if previousID != 0 {
 				working.Articles[previousID].NextArt = oldPreviousNext
@@ -188,17 +194,80 @@ func cloneNewsCategory(category hotline.NewsCategoryListData15) hotline.NewsCate
 	return clone
 }
 
-func nextNewsArticleID(articles map[uint32]*hotline.NewsArtData) (uint32, uint32, error) {
+func nextNewsArticleID(articles map[uint32]*hotline.NewsArtData, state *hotline.NewsFeedCategoryState) (uint32, uint32, error) {
 	var previousID uint32
 	for id := range articles {
 		if id > previousID {
 			previousID = id
 		}
 	}
-	if previousID == math.MaxUint32 {
+	highest := max(previousID, maxImportedArticleID(state))
+	if highest == math.MaxUint32 {
 		return 0, 0, errors.New("news category exhausted article IDs")
 	}
-	return previousID + 1, previousID, nil
+	return highest + 1, previousID, nil
+}
+
+// maxImportedArticleID is the highest ID a feed has imported an article under. New articles are
+// numbered above it even when that article is gone, so an ID the feed state names is never given
+// to a locally posted article that pruning could then remove.
+func maxImportedArticleID(state *hotline.NewsFeedCategoryState) uint32 {
+	var highest uint32
+	if state != nil {
+		for _, id := range state.Imported {
+			highest = max(highest, id)
+		}
+	}
+	return highest
+}
+
+// pruneImportedToFit removes the oldest imported articles from a copy of category until its
+// article list fits the protocol limit, so a full category keeps the newest feed items rather
+// than the oldest. Locally posted articles, imported articles that have replies, and keep are
+// never removed. It reports false, leaving category untouched, if removing every candidate
+// would not be enough.
+func pruneImportedToFit(category hotline.NewsCategoryListData15, keep uint32) (hotline.NewsCategoryListData15, bool) {
+	var candidates []uint32
+	for _, id := range category.FeedState.Imported {
+		if _, ok := category.Articles[id]; ok && id != keep && !hasNewsReplies(category.Articles, id) {
+			candidates = append(candidates, id)
+		}
+	}
+	slices.Sort(candidates)
+	candidates = slices.Compact(candidates)
+
+	pruned := cloneNewsCategory(category)
+	for _, id := range candidates {
+		unlinkNewsArticle(pruned.Articles, id)
+		err := validateNewsArticleListSize(pruned.Articles)
+		if err == nil {
+			return pruned, true
+		}
+		if !errors.Is(err, errNewsArticleListTooLarge) {
+			return category, false
+		}
+	}
+	return category, false
+}
+
+func hasNewsReplies(articles map[uint32]*hotline.NewsArtData, id uint32) bool {
+	for _, article := range articles {
+		if article != nil && binary.BigEndian.Uint32(article.ParentArt[:]) == id {
+			return true
+		}
+	}
+	return false
+}
+
+func unlinkNewsArticle(articles map[uint32]*hotline.NewsArtData, id uint32) {
+	article := articles[id]
+	if previous, ok := articles[binary.BigEndian.Uint32(article.PrevArt[:])]; ok && previous != nil {
+		previous.NextArt = article.NextArt
+	}
+	if next, ok := articles[binary.BigEndian.Uint32(article.NextArt[:])]; ok && next != nil {
+		next.PrevArt = article.PrevArt
+	}
+	delete(articles, id)
 }
 
 func validateNewsArticleListSize(articles map[uint32]*hotline.NewsArtData) error {
