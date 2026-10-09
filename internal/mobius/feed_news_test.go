@@ -7,6 +7,9 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
+	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -423,6 +426,93 @@ func TestFeedFetcherLimitsAndConditional304(t *testing.T) {
 		_, err := fetcher.fetch(t.Context(), testFeedURL, feedHTTPValidators{})
 		require.ErrorContains(t, err, "without a conditional request")
 	})
+}
+
+func TestIsPublicAddr(t *testing.T) {
+	tests := []struct {
+		addr string
+		want bool
+	}{
+		{"93.184.215.14", true},
+		{"2606:4700::6810:84e5", true},
+		{"127.0.0.1", false},
+		{"::1", false},
+		{"10.1.2.3", false},
+		{"172.16.0.1", false},
+		{"192.168.1.1", false},
+		{"169.254.169.254", false},
+		{"100.64.0.1", false},
+		{"0.0.0.0", false},
+		{"::", false},
+		{"fd00::1", false},
+		{"fe80::1", false},
+		{"224.0.0.1", false},
+		{"::ffff:127.0.0.1", false},
+		{"::ffff:192.168.1.1", false},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, isPublicAddr(netip.MustParseAddr(tt.addr)), tt.addr)
+	}
+}
+
+func TestFeedFetcherRefusesNonPublicDestinations(t *testing.T) {
+	var hits atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		hits.Add(1)
+	}))
+	defer server.Close()
+
+	t.Run("configured URL", func(t *testing.T) {
+		_, err := newFeedFetcher("test").fetch(t.Context(), server.URL+"/feed.xml", feedHTTPValidators{})
+		assert.ErrorIs(t, err, errFeedAddressNotPublic)
+	})
+
+	t.Run("redirect", func(t *testing.T) {
+		fetcher := newFeedFetcher("test")
+		dialing := fetcher.client.Transport
+		fetcher.client.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			if request.URL.Host == "feeds.example.com" {
+				return testFeedResponse(http.StatusFound, "", map[string]string{"Location": server.URL + "/feed.xml"}), nil
+			}
+			return dialing.RoundTrip(request)
+		})
+		_, err := fetcher.fetch(t.Context(), "http://feeds.example.com/feed.xml", feedHTTPValidators{})
+		assert.ErrorIs(t, err, errFeedAddressNotPublic)
+	})
+
+	assert.Zero(t, hits.Load())
+}
+
+func TestFeedFetcherConnectsToAPrivateProxy(t *testing.T) {
+	var proxied []string
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		proxied = append(proxied, request.URL.String())
+		_, _ = io.WriteString(w, rssFixture("Release", "release-1", "Mon, 02 Jan 2006 15:04:05 GMT"))
+	}))
+	defer proxy.Close()
+	proxyURL, err := url.Parse(proxy.URL)
+	require.NoError(t, err)
+	fetcher := newFeedFetcherVia("test", http.ProxyURL(proxyURL))
+
+	result, err := fetcher.fetch(t.Context(), "http://feeds.example.com/feed.xml", feedHTTPValidators{})
+	require.NoError(t, err)
+	assert.Len(t, result.items, 1)
+
+	_, err = fetcher.fetch(t.Context(), "http://169.254.169.254/feed.xml", feedHTTPValidators{})
+	assert.ErrorIs(t, err, errFeedAddressNotPublic)
+	assert.Equal(t, []string{"http://feeds.example.com/feed.xml"}, proxied)
+}
+
+func TestFeedFetcherRefusesHTTPSDowngrade(t *testing.T) {
+	fetcher := newFeedFetcher("test")
+	var requested []string
+	fetcher.client.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requested = append(requested, request.URL.String())
+		return testFeedResponse(http.StatusFound, "", map[string]string{"Location": "http://feeds.example.com/feed.xml"}), nil
+	})
+	_, err := fetcher.fetch(t.Context(), "https://feeds.example.com/feed.xml", feedHTTPValidators{})
+	require.ErrorContains(t, err, "redirected from https to http")
+	assert.Equal(t, []string{"https://feeds.example.com/feed.xml"}, requested)
 }
 
 func feedFixture(t *testing.T, name string) string {

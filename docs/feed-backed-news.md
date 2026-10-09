@@ -30,6 +30,12 @@ NewsFeeds:
 `CategoryPath` is the complete path from the root of threaded news to the
 existing category. `URL` must be an absolute public `http` or `https` URL and
 cannot contain embedded credentials. Only one feed may map to a category.
+Mobius refuses to connect to loopback, private, link-local or carrier-grade NAT
+addresses, whether the URL names one or a redirect leads to one, and does not
+follow a redirect from `https` to `http`. A proxy set with `HTTP_PROXY` or
+`HTTPS_PROXY` may be on a private address. Through a proxy, Mobius cannot see
+what a host name resolves to, so it refuses only a URL that names a non-public
+address directly; the proxy's own rules decide the rest.
 
 Mobius detects RSS and Atom automatically. Sparkle appcasts are RSS; GitHub's
 `releases.atom` endpoints are Atom. JSON Feed and provider-specific APIs are not
