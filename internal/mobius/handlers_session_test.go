@@ -498,6 +498,62 @@ func TestHandleTranAgreed(t *testing.T) {
 			},
 		},
 		{
+			name: "without options field",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessDisconUser)
+							bits.Set(hotline.AccessAnyName)
+							return bits
+						}()},
+					Icon:    []byte{0, 1},
+					Flags:   [2]byte{0, 1},
+					Version: []byte{0, 1},
+					ID:      [2]byte{0, 1},
+					Logger:  NewTestLogger(),
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						Config: hotline.Config{
+							BannerFile: "Banner.jpg",
+						},
+						ClientMgr: func() *hltest.MockClientMgr {
+							m := hltest.MockClientMgr{}
+							m.On("List").Return([]*hotline.ClientConn{
+								//{
+								//	ID:       [2]byte{0, 2},
+								//	UserName: []byte("UserB"),
+								//},
+							},
+							)
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranAgreed, [2]byte{},
+					hotline.NewField(hotline.FieldUserName, []byte("username")),
+					hotline.NewField(hotline.FieldUserIconID, []byte{0, 1}),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					ClientID: [2]byte{0, 1},
+					Type:     [2]byte{0, 0x7a},
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldBannerType, []byte("JPEG")),
+					},
+				},
+				{
+					ClientID: [2]byte{0, 1},
+					IsReply:  0x01,
+					Fields:   []hotline.Field{},
+				},
+			},
+		},
+		{
 			name: "with gif banner",
 			args: args{
 				cc: &hotline.ClientConn{

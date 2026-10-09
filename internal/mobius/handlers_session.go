@@ -131,8 +131,12 @@ func HandleTranAgreed(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	cc.Logger = cc.Logger.With("Name", string(cc.GetUserName()))
 	cc.Logger.Info("Login successful")
 
-	options := t.GetField(hotline.FieldOptions).Data
-	optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
+	// the options field is only passed by the client versions > 1.2.3.
+	var opts uint16
+	if options := t.GetField(hotline.FieldOptions).Data; len(options) >= 2 {
+		opts = binary.BigEndian.Uint16(options)
+	}
+	optBitmap := big.NewInt(int64(opts))
 
 	// Check refuse private PM option
 	cc.SetFlag(hotline.UserFlagRefusePM, optBitmap.Bit(hotline.UserOptRefusePM))
