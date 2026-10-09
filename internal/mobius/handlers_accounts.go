@@ -88,7 +88,7 @@ func HandleSetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 // Fields used in the reply:
 //   - 102 User name      Account display name
 //   - 105 User login     Account login (encoded, each character negated)
-//   - 106 User password  Account password
+//   - 106 User password  "x" if the account has a password, omitted otherwise
 //   - 110 User access    User access privileges bitmap
 func HandleGetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotline.Transaction) {
 	if !cc.Authorize(hotline.AccessOpenUser) {
@@ -100,12 +100,18 @@ func HandleGetUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotlin
 		return cc.NewErrReply(t, ErrMsgAccountNotExist)
 	}
 
-	return append(res, cc.NewReply(t,
+	// Never send the stored hash: it is crackable offline, and a client that sends the
+	// field back unchanged in SetUser would have the hash itself become the password.
+	fields := []hotline.Field{
 		hotline.NewField(hotline.FieldUserName, []byte(account.Name)),
 		hotline.NewField(hotline.FieldUserLogin, hotline.EncodeString(t.GetField(hotline.FieldUserLogin).Data)),
-		hotline.NewField(hotline.FieldUserPassword, []byte(account.Password)),
-		hotline.NewField(hotline.FieldUserAccess, account.Access[:]),
-	))
+	}
+	if account.HasPassword() {
+		fields = append(fields, hotline.NewField(hotline.FieldUserPassword, []byte("x")))
+	}
+	fields = append(fields, hotline.NewField(hotline.FieldUserAccess, account.Access[:]))
+
+	return append(res, cc.NewReply(t, fields...))
 }
 
 // HandleListUsers returns a list of all user accounts on the server.
