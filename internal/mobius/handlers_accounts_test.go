@@ -22,7 +22,7 @@ func TestHandleGetUser(t *testing.T) {
 		wantRes []hotline.Transaction
 	}{
 		{
-			name: "when account is valid",
+			name: "when account has a password",
 			args: args{
 				cc: &hotline.ClientConn{
 					Account: &hotline.Account{
@@ -40,7 +40,7 @@ func TestHandleGetUser(t *testing.T) {
 							m.On("Get", "guest").Return(&hotline.Account{
 								Login:    "guest",
 								Name:     "Guest",
-								Password: "password",
+								Password: hotline.HashAndSalt([]byte("password")),
 								Access:   hotline.AccessBitmap{},
 							})
 							return &m
@@ -58,7 +58,49 @@ func TestHandleGetUser(t *testing.T) {
 					Fields: []hotline.Field{
 						hotline.NewField(hotline.FieldUserName, []byte("Guest")),
 						hotline.NewField(hotline.FieldUserLogin, hotline.EncodeString([]byte("guest"))),
-						hotline.NewField(hotline.FieldUserPassword, []byte("password")),
+						hotline.NewField(hotline.FieldUserPassword, []byte("x")),
+						hotline.NewField(hotline.FieldUserAccess, []byte{0, 0, 0, 0, 0, 0, 0, 0}),
+					},
+				},
+			},
+		},
+		{
+			name: "when account has no password",
+			args: args{
+				cc: &hotline.ClientConn{
+					Account: &hotline.Account{
+						Access: func() hotline.AccessBitmap {
+							var bits hotline.AccessBitmap
+							bits.Set(hotline.AccessOpenUser)
+							return bits
+						}(),
+					},
+					Server: &hotline.Server{
+						TextDecoder: charmap.Macintosh.NewDecoder(),
+						TextEncoder: charmap.Macintosh.NewEncoder(),
+						AccountManager: func() *MockAccountManager {
+							m := MockAccountManager{}
+							m.On("Get", "guest").Return(&hotline.Account{
+								Login:    "guest",
+								Name:     "Guest",
+								Password: hotline.HashAndSalt([]byte("")),
+								Access:   hotline.AccessBitmap{},
+							})
+							return &m
+						}(),
+					},
+				},
+				t: hotline.NewTransaction(
+					hotline.TranGetUser, [2]byte{0, 1},
+					hotline.NewField(hotline.FieldUserLogin, []byte("guest")),
+				),
+			},
+			wantRes: []hotline.Transaction{
+				{
+					IsReply: 0x01,
+					Fields: []hotline.Field{
+						hotline.NewField(hotline.FieldUserName, []byte("Guest")),
+						hotline.NewField(hotline.FieldUserLogin, hotline.EncodeString([]byte("guest"))),
 						hotline.NewField(hotline.FieldUserAccess, []byte{0, 0, 0, 0, 0, 0, 0, 0}),
 					},
 				},

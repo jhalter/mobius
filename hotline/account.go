@@ -30,6 +30,11 @@ func NewAccount(login, name, password string, access AccessBitmap) *Account {
 	}
 }
 
+// HasPassword reports whether the account has a non-empty password.
+func (a *Account) HasPassword() bool {
+	return bcrypt.CompareHashAndPassword([]byte(a.Password), []byte("")) != nil
+}
+
 // Read implements io.Reader interface for Account
 func (a *Account) Read(p []byte) (int, error) {
 	fields := []Field{
@@ -38,7 +43,7 @@ func (a *Account) Read(p []byte) (int, error) {
 		NewField(FieldUserAccess, a.Access[:]),
 	}
 
-	if bcrypt.CompareHashAndPassword([]byte(a.Password), []byte("")) != nil {
+	if a.HasPassword() {
 		fields = append(fields, NewField(FieldUserPassword, []byte("x")))
 	}
 
