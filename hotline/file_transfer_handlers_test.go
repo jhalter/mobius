@@ -286,6 +286,19 @@ func runFolderDownloadClient(t *testing.T, conn net.Conn, nExpected int) []downl
 	return got
 }
 
+type symlinkRootFileStore struct {
+	*OSFileStore
+	linkName string
+	target   string
+}
+
+func (s *symlinkRootFileStore) ReadLink(name string) (string, error) {
+	if filepath.Clean(name) == filepath.Clean(s.linkName) {
+		return s.target, nil
+	}
+	return s.OSFileStore.ReadLink(name)
+}
+
 func TestDownloadFolderHandler(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -331,6 +344,35 @@ func TestDownloadFolderHandler(t *testing.T) {
 
 		require.Contains(t, byName, filepath.Join("sub", "b.txt"))
 		assert.Equal(t, []byte("bbbbb"), byName[filepath.Join("sub", "b.txt")].data)
+	})
+
+	t.Run("streams files from a symlinked root", func(t *testing.T) {
+		dir := t.TempDir()
+		fileStore := &symlinkRootFileStore{OSFileStore: &OSFileStore{}}
+
+		root := filepath.Join(dir, "share")
+		fileStore.linkName = root
+		target := filepath.Join(dir, "actual-share")
+		fileStore.target = filepath.Base(target) // Symlink targets are often relative to their parent.
+		require.NoError(t, os.Mkdir(root, 0755))
+		require.NoError(t, os.Mkdir(target, 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(target, "a.txt"), []byte("from target"), 0644))
+
+		serverConn, clientConn := net.Pipe()
+		require.NoError(t, clientConn.SetDeadline(time.Now().Add(10*time.Second)))
+
+		ft := &FileTransfer{bytesSentCounter: &WriteCounter{}}
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- DownloadFolderHandler(serverConn, root, ft, fileStore, logger, true)
+			_ = serverConn.Close()
+		}()
+
+		got := runFolderDownloadClient(t, clientConn, 1)
+		require.NoError(t, <-errCh)
+		require.Len(t, got, 1)
+		assert.Equal(t, "a.txt", got[0].name)
+		assert.Equal(t, []byte("from target"), got[0].data)
 	})
 
 	t.Run("honors a resume request for a file", func(t *testing.T) {

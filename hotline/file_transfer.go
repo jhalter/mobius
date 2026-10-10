@@ -13,6 +13,7 @@ import (
 	"math"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -404,6 +405,15 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 	// This notifies the server to send the next item header
 
 	basePathLen := len(fullPath)
+	walkRoot := fullPath + "/"
+	if target, err := fileStore.ReadLink(fullPath); err == nil {
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(fullPath), target)
+		}
+		if targetInfo, err := fileStore.Stat(target); err == nil && targetInfo.IsDir() {
+			walkRoot = target
+		}
+	}
 
 	rLogger.Info("Start folder download", "path", fullPath)
 
@@ -413,12 +423,23 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 	}
 
 	i := 0
-	err := fileStore.Walk(fullPath+"/", func(path string, info os.FileInfo, err error) error {
+	err := fileStore.Walk(walkRoot, func(walkPath string, info os.FileInfo, err error) error {
 		//s.Stats.DownloadCounter += 1
 		i += 1
 
 		if err != nil {
 			return err
+		}
+		displayPath := walkPath
+		if filepath.Clean(walkRoot) != filepath.Clean(fullPath+"/") {
+			relativePath, err := filepath.Rel(walkRoot, walkPath)
+			if err != nil {
+				return fmt.Errorf("map symlink download path: %w", err)
+			}
+			displayPath = fullPath + string(filepath.Separator)
+			if relativePath != "." {
+				displayPath = filepath.Join(fullPath, relativePath)
+			}
 		}
 
 		// skip dot files
@@ -426,12 +447,12 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 			return nil
 		}
 
-		hlFile, err := NewFile(fileStore, path, 0)
+		hlFile, err := NewFile(fileStore, walkPath, 0)
 		if err != nil {
 			return err
 		}
 
-		subPath := path[basePathLen+1:]
+		subPath := displayPath[basePathLen+1:]
 
 		if i == 1 {
 			return nil
@@ -496,13 +517,17 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 			return fmt.Errorf("error sending flat file object: %w", err)
 		}
 
-		file, err := fileStore.Open(path)
+		file, err := fileStore.Open(walkPath)
 		if err != nil {
 			return fmt.Errorf("error opening file: %w", err)
 		}
 
 		if _, err = io.Copy(rwc, io.TeeReader(file, fileTransfer.bytesSentCounter)); err != nil {
+			_ = file.Close()
 			return fmt.Errorf("error sending file: %w", err)
+		}
+		if err := file.Close(); err != nil {
+			return fmt.Errorf("error closing file: %w", err)
 		}
 
 		if nextAction[1] != 2 && hlFile.Ffo.FlatFileHeader.ForkCount[1] == 3 {
@@ -517,7 +542,11 @@ func DownloadFolderHandler(rwc io.ReadWriter, fullPath string, fileTransfer *Fil
 			}
 
 			if _, err = io.Copy(rwc, io.TeeReader(rFile, fileTransfer.bytesSentCounter)); err != nil {
+				_ = rFile.Close()
 				return fmt.Errorf("error sending resource fork: %w", err)
+			}
+			if err := rFile.Close(); err != nil {
+				return fmt.Errorf("error closing resource fork: %w", err)
 			}
 		}
 
