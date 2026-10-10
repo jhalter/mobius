@@ -2,10 +2,12 @@ package mobius
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -490,6 +492,28 @@ func TestFeedFetcherKeepsAPublicFeedOffTheLocalNetwork(t *testing.T) {
 		assert.ErrorIs(t, err, errFeedAddressNotPublic)
 		assert.Equal(t, before, hits.Load())
 	})
+}
+
+// A name server can answer loopback to the lookup that judges the feed and its real address to
+// the connection, then redirect into the network. The judging lookup's answers are where the
+// feed connects, so the server behind the second answer is never reached.
+func TestFeedFetcherConnectsWhereTheJudgingLookupSaid(t *testing.T) {
+	var hits atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		hits.Add(1)
+		http.Redirect(w, request, "http://169.254.169.254/latest/meta-data/", http.StatusFound)
+	}))
+	defer server.Close()
+	_, port, err := net.SplitHostPort(strings.TrimPrefix(server.URL, "http://"))
+	require.NoError(t, err)
+
+	fetcher := newFeedFetcher("test")
+	fetcher.lookup = func(context.Context, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("127.0.0.2")}, nil
+	}
+	_, err = fetcher.fetch(t.Context(), "http://localhost:"+port+"/feed.xml", feedHTTPValidators{})
+	require.Error(t, err)
+	assert.Zero(t, hits.Load(), "connected to the second answer, not the first")
 }
 
 func TestFeedFetcherConnectsToAPrivateProxy(t *testing.T) {

@@ -32,7 +32,8 @@ existing category. `URL` must be an absolute `http` or `https` URL and
 cannot contain embedded credentials. Only one feed may map to a category.
 A feed on the local network is fine: when the configured URL names a loopback,
 private, link-local or carrier-grade NAT address, or a host that resolves only
-to such addresses, Mobius fetches it as configured. A public feed is held to
+to such addresses, Mobius fetches it as configured, connecting to the
+addresses that lookup gave. A public feed is held to
 public addresses on every connection, so a redirect it serves cannot reach the
 server's local network. No redirect from `https` to `http` is followed. A proxy
 set with `HTTP_PROXY` or `HTTPS_PROXY` may be on a private address. Through a
