@@ -1,6 +1,6 @@
 # Feed-backed threaded news
 
-Mobius can import a public RSS or Atom feed into an existing Hotline news
+Mobius can import an RSS or Atom feed into an existing Hotline news
 category. This is useful for project announcements, Sparkle appcasts, and
 GitHub release feeds.
 
@@ -28,14 +28,17 @@ NewsFeeds:
 ```
 
 `CategoryPath` is the complete path from the root of threaded news to the
-existing category. `URL` must be an absolute public `http` or `https` URL and
+existing category. `URL` must be an absolute `http` or `https` URL and
 cannot contain embedded credentials. Only one feed may map to a category.
-Mobius refuses to connect to loopback, private, link-local or carrier-grade NAT
-addresses, whether the URL names one or a redirect leads to one, and does not
-follow a redirect from `https` to `http`. A proxy set with `HTTP_PROXY` or
-`HTTPS_PROXY` may be on a private address. Through a proxy, Mobius cannot see
-what a host name resolves to, so it refuses only a URL that names a non-public
-address directly; the proxy's own rules decide the rest.
+A feed on the local network is fine: when the configured URL names a loopback,
+private, link-local or carrier-grade NAT address, or a host that resolves only
+to such addresses, Mobius fetches it as configured. A public feed is held to
+public addresses on every connection, so a redirect it serves cannot reach the
+server's local network. No redirect from `https` to `http` is followed. A proxy
+set with `HTTP_PROXY` or `HTTPS_PROXY` may be on a private address. Through a
+proxy, Mobius cannot see what a host name resolves to, so for a public feed it
+refuses only a URL that names a non-public address directly; the proxy's own
+rules decide the rest.
 
 Mobius detects RSS and Atom automatically. Sparkle appcasts are RSS; GitHub's
 `releases.atom` endpoints are Atom. JSON Feed and provider-specific APIs are not
@@ -126,7 +129,7 @@ rewrite history.
   news category rather than a bundle. Also check for duplicate paths and
   invalid or credential-bearing URLs.
 - If new entries do not appear, open the category and inspect the server log.
-  Confirm that the URL is public RSS or Atom and that entries have stable IDs,
+  Confirm that the URL is RSS or Atom and that entries have stable IDs,
   links, or enclosures.
 - If old releases are missing on the first import, inspect the source feed. Its
   published window is the initial cutoff; Mobius does not use pagination or a

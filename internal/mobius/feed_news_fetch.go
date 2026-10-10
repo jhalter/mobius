@@ -44,10 +44,30 @@ func isPublicAddr(ip netip.Addr) bool {
 	return ip.IsGlobalUnicast() && !ip.IsPrivate() && !sharedAddressSpace.Contains(ip)
 }
 
-// refuseNonPublicDial is checked against the resolved address of every direct connection, so
-// neither a feed's host name nor a redirect it serves can point the server at loopback, the local
+// privateFeed marks a fetch whose configured URL is itself on a non-public address. The operator
+// chose that, so nothing it connects to is refused.
+type privateFeed struct{}
+
+// isPrivateFeed reports whether the configured URL names a non-public address, or a host whose
+// every address is one. A host that does not resolve here, as behind a proxy, counts as public.
+func isPrivateFeed(ctx context.Context, u *url.URL) bool {
+	if ip, err := netip.ParseAddr(u.Hostname()); err == nil {
+		return !isPublicAddr(ip)
+	}
+	addrs, err := net.DefaultResolver.LookupNetIP(ctx, "ip", u.Hostname())
+	if err != nil || len(addrs) == 0 {
+		return false
+	}
+	return !slices.ContainsFunc(addrs, isPublicAddr)
+}
+
+// refuseNonPublicDial is checked against the resolved address of every direct connection a public
+// feed's fetch makes, so a redirect it serves cannot point the server at loopback, the local
 // network, or a cloud metadata endpoint.
-func refuseNonPublicDial(_ context.Context, _, address string, _ syscall.RawConn) error {
+func refuseNonPublicDial(ctx context.Context, _, address string, _ syscall.RawConn) error {
+	if ctx.Value(privateFeed{}) != nil {
+		return nil
+	}
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
 		return err
@@ -95,7 +115,8 @@ func newFeedFetcher(userAgent string) *feedFetcher {
 
 // newFeedFetcherVia fetches through the proxies proxy chooses. A proxy is the operator's choice,
 // and is commonly on the local network, so connections to it are not checked; through it the
-// server cannot see what a host name resolves to, so only an address written into the URL is.
+// server cannot see what a host name resolves to, so for a public feed only an address written
+// into a URL is.
 func newFeedFetcherVia(userAgent string, proxy func(*http.Request) (*url.URL, error)) *feedFetcher {
 	if userAgent == "" {
 		userAgent = "mobius-hotline-server"
@@ -109,7 +130,8 @@ func newFeedFetcherVia(userAgent string, proxy func(*http.Request) (*url.URL, er
 		if err != nil || proxyURL == nil {
 			return proxyURL, err
 		}
-		if ip, err := netip.ParseAddr(req.URL.Hostname()); err == nil && !isPublicAddr(ip) {
+		ip, err := netip.ParseAddr(req.URL.Hostname())
+		if err == nil && !isPublicAddr(ip) && req.Context().Value(privateFeed{}) == nil {
 			return nil, fmt.Errorf("%w: %s", errFeedAddressNotPublic, ip)
 		}
 		proxies.Store(proxyAddr(proxyURL), struct{}{})
@@ -162,6 +184,9 @@ func (f *feedFetcher) fetch(ctx context.Context, sourceURL string, validators fe
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sourceURL, nil)
 	if err != nil {
 		return feedFetchResult{}, errors.New("create request from configured feed URL")
+	}
+	if isPrivateFeed(ctx, req.URL) {
+		req = req.WithContext(context.WithValue(ctx, privateFeed{}, true))
 	}
 	req.Header.Set("Accept", "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.8")
 	req.Header.Set("User-Agent", f.userAgent)
