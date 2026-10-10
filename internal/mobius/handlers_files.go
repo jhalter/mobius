@@ -289,6 +289,32 @@ func HandleMoveFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 			return cc.NewErrReply(t, ErrMsgNotAllowedMoveFiles)
 		}
 	}
+	// Check every destination before moving anything, including partial uploads and forks
+	// that may exist without a completed data file.
+	for _, name := range []string{
+		hlFile.Name,
+		hlFile.Name + hotline.IncompleteFileSuffix,
+		fmt.Sprintf(hotline.RsrcForkNameTemplate, hlFile.Name),
+		fmt.Sprintf(hotline.InfoForkNameTemplate, hlFile.Name),
+	} {
+		destination := path.Join(fileNewPath, name)
+		_, err := cc.Server.FS.Stat(destination)
+		if errors.Is(err, os.ErrNotExist) {
+			// Stat follows aliases; a dangling alias still occupies this destination.
+			_, err = cc.Server.FS.ReadLink(destination)
+			if errors.Is(err, errors.ErrUnsupported) {
+				continue // Object stores do not support aliases.
+			}
+		}
+		if err == nil {
+			return cc.NewErrReply(t, fmt.Sprintf(ErrMsgMoveConflictTemplate, fileName))
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			cc.Logger.Error("move file: check destination", "path", destination, "err", err)
+			return cc.NewErrReply(t, ErrMsgMoveFile)
+		}
+	}
+
 	if err := hlFile.Move(fileNewPath); err != nil {
 		cc.Logger.Error("move file: move", "err", err)
 		return cc.NewErrReply(t, ErrMsgMoveFile)

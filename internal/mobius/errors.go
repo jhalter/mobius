@@ -52,6 +52,7 @@ const (
 	ErrMsgCannotDeleteFileNotFound   = "Cannot delete file %s because it does not exist or cannot be found."
 
 	// File operation error templates (for dynamic content)
+	ErrMsgMoveConflictTemplate         = "Cannot move \"%s\" because there is already a file/folder in the destination folder with the same name."
 	ErrMsgFolderCreateConflictTemplate = "Cannot create folder \"%s\" because there is already a file or folder with that Name."
 	ErrMsgFolderCreateErrorTemplate    = "Cannot create folder \"%s\" because an error occurred."
 
