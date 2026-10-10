@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
@@ -41,8 +40,7 @@ func LoadConfig(path string) (*hotline.Config, error) {
 		if filename == "" {
 			return true // Allow empty since BannerFile is optional
 		}
-		ext := strings.ToLower(filepath.Ext(filename))
-		return ext == ".jpg" || ext == ".jpeg" || ext == ".gif"
+		return isBannerFilename(filename)
 	}); err != nil {
 		return nil, fmt.Errorf("register validation: %v", err)
 	}

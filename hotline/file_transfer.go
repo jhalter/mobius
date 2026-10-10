@@ -100,6 +100,7 @@ type FileTransfer struct {
 	Options          []byte
 	bytesSentCounter *WriteCounter
 	ClientConn       *ClientConn
+	bannerData       []byte // immutable payload captured before this transfer is registered
 }
 
 // WriteCounter counts the number of bytes written to it.
@@ -128,6 +129,11 @@ func (cc *ClientConn) NewFileTransfer(transferType FileTransferType, fileroot st
 		TransferSize:     size,
 		ClientConn:       cc,
 		bytesSentCounter: &WriteCounter{},
+	}
+	if transferType == BannerDownload {
+		ft.bannerData = cc.Banner().Data
+		ft.TransferSize = make([]byte, 4)
+		binary.BigEndian.PutUint32(ft.TransferSize, uint32(len(ft.bannerData)))
 	}
 
 	cc.Server.FileTransferMgr.Add(ft)

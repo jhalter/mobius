@@ -130,6 +130,44 @@ Within this directory some files are intended to be edited to customize the serv
 
 🛠️ `config.yaml` - Edit to set your server name, description, and enable tracker registration.
 
+### Server banners
+
+Existing configurations using `BannerFile` continue to serve one banner. To
+choose a random banner for each client session, add `BannerDirectory`:
+
+```yaml
+BannerFile: "banner.jpg"    # Single banner, and fallback for directory mode
+BannerDirectory: "banners" # Optional; relative to the configuration directory
+```
+
+Create the directory and place JPEG or GIF banners inside it. Absolute directory
+paths are also accepted. Banners are always read from the local filesystem,
+independently of the file library's storage backend. The server loads readable,
+nonempty `.jpg`, `.jpeg`, and `.gif` files (case-insensitively) from that directory's
+immediate contents. Hidden files, subdirectories, and symlinks are skipped.
+Keep each image within the existing 262,140-byte client limit; the standard banner
+size is 468 × 60 pixels. Images are served as provided, without conversion or
+additional image-content validation. Banner display is only known to work in
+Hotline 1.8 clients.
+
+When `BannerDirectory` is set, it takes precedence over `BannerFile`. Each session
+gets an equally likely choice and keeps that image for repeat downloads. Different
+sessions can receive the same image, and JPEG and GIF banners can be mixed. Images
+are cached in memory, so directory size determines the pool's memory use.
+
+If the directory is missing, unreadable, or contains no usable images, the server
+logs a warning and uses `BannerFile`. `BannerFile` can be omitted in directory mode
+if no fallback is wanted. If neither source can be loaded, startup fails; a failed
+reload retains the previous working images.
+
+After adding, removing, or replacing images, send SIGHUP or use
+`POST /api/v1/reload`. New sessions use the refreshed pool; existing directory-mode
+sessions retain their selected image, including a fallback image. Single-file
+mode continues to use the refreshed banner for subsequent download requests.
+Downloads already requested always finish with the bytes and size captured for
+that transfer. Restart after changing `BannerDirectory` or `BannerFile` in
+`config.yaml`. There is no automatic directory watching or timed rotation.
+
 ### Feed-backed threaded news
 
 An advanced `NewsFeeds` configuration can import RSS or Atom entries into an

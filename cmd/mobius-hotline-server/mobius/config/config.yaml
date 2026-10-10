@@ -11,6 +11,15 @@ Description: A default configured Hotline server running Mobius
 #  * The banner must be a jpg or gif
 BannerFile: "banner.jpg"
 
+# Optional local directory of banners. Relative paths start at the config directory;
+# absolute paths are also accepted. When set, choose one random image per client
+# session. Read only immediate, non-hidden regular .jpg/.jpeg/.gif files (case
+# insensitive); skip subdirectories, symlinks, unreadable files, and empty files.
+# If no usable images can be loaded, warn and fall back to BannerFile above.
+# SIGHUP or POST /api/v1/reload refreshes images for new sessions; existing sessions
+# keep their image. Restart after changing these config settings.
+# BannerDirectory: "banners"
+
 # Path to the Files directory, by default in a subdirectory of the config root named Files
 FileRoot: Files
 

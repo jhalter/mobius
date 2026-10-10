@@ -238,15 +238,7 @@ func main() {
 	srv.Agreement = agreement
 	reloaders = append(reloaders, namedReloader{"agreement", agreement})
 
-	// On reload failure, the previous banner is kept because SetBanner is only called on success.
-	reloadBanner := mobius.ReloaderFunc(func() error {
-		banner, err := os.ReadFile(path.Join(*configDir, config.BannerFile))
-		if err != nil {
-			return err
-		}
-		srv.SetBanner(banner)
-		return nil
-	})
+	reloadBanner := mobius.NewBannerReloader(*configDir, srv)
 	if err := reloadBanner.Reload(); err != nil {
 		slogger.Error("Error loading banner", "err", err)
 		os.Exit(1)

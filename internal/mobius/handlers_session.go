@@ -160,9 +160,11 @@ func HandleTranAgreed(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	)
 	res = append(res, trans...)
 
-	if cc.Server.Config.BannerFile != "" {
-		bannerType := hotline.FileTypeFromFilename(cc.Server.Config.BannerFile).TypeCode
-		res = append(res, hotline.NewTransaction(hotline.TranServerBanner, cc.ID, hotline.NewField(hotline.FieldBannerType, []byte(bannerType))))
+	if cc.Server.Config.BannerFile != "" || cc.Server.Config.BannerDirectory != "" {
+		banner := cc.Banner()
+		if banner.TypeCode != "" {
+			res = append(res, hotline.NewTransaction(hotline.TranServerBanner, cc.ID, hotline.NewField(hotline.FieldBannerType, []byte(banner.TypeCode))))
+		}
 	}
 
 	res = append(res, cc.NewReply(t))

@@ -49,7 +49,8 @@ type ClientConn struct {
 
 	Logger *slog.Logger
 
-	mu sync.RWMutex // guards the mutable session state fields above
+	mu     sync.RWMutex // guards the mutable session state fields above
+	banner *BannerImage // directory-mode selection, also guarded by mu
 
 	sendCh     chan Transaction
 	sendInit   sync.Once

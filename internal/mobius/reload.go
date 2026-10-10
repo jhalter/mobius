@@ -17,4 +17,5 @@ var (
 	_ Reloader = (*ThreadedNewsYAML)(nil)
 	_ Reloader = (*Agreement)(nil)
 	_ Reloader = (*CertificateManager)(nil)
+	_ Reloader = (*BannerReloader)(nil)
 )

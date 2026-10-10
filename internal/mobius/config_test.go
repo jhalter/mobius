@@ -10,6 +10,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestLoadConfig_BannerDirectory(t *testing.T) {
+	for _, bannerFile := range []string{"", "fallback.gif"} {
+		dir := t.TempDir()
+		configPath := filepath.Join(dir, "config.yaml")
+		require.NoError(t, os.WriteFile(configPath, []byte(`Name: Test
+Description: Test server
+FileRoot: Files
+BannerFile: "`+bannerFile+`"
+BannerDirectory: banners
+`), 0600))
+		cfg, err := LoadConfig(configPath)
+		require.NoError(t, err)
+		assert.Equal(t, "banners", cfg.BannerDirectory)
+		assert.Equal(t, bannerFile, cfg.BannerFile)
+	}
+}
+
 func TestLoadConfig_InvalidBannerFileExtension(t *testing.T) {
 	// Create a temporary directory for test files
 	tmpDir := t.TempDir()

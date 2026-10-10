@@ -53,8 +53,9 @@ type Server struct {
 
 	Agreement io.ReadSeeker
 
-	banner   []byte // server banner image; guarded by bannerMu as it is replaced on config reload
-	bannerMu sync.RWMutex
+	banner     []byte // server banner image; guarded by bannerMu as it is replaced on config reload
+	bannerMu   sync.RWMutex
+	bannerPool []BannerImage // immutable image snapshots; also guarded by bannerMu
 
 	FileTransferMgr FileTransferMgr
 	ChatMgr         ChatManager
@@ -897,7 +898,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 
 	switch fileTransfer.Type {
 	case BannerDownload:
-		if _, err := io.Copy(rwc, bytes.NewReader(s.Banner())); err != nil {
+		if _, err := io.Copy(rwc, bytes.NewReader(fileTransfer.bannerData)); err != nil {
 			return fmt.Errorf("banner download: %w", err)
 		}
 	case FileDownload:
