@@ -384,7 +384,15 @@ func (s *Server) ServeFileTransfers(ctx context.Context, ln net.Listener) error 
 			)
 
 			if err != nil {
-				s.Logger.Error("file transfer error", "err", err)
+				level := slog.LevelError
+				// Until a request matches a pending transfer, malformed traffic and
+				// TLS failures are usually probes, not failed uploads or downloads.
+				if errors.Is(err, errFileTransferRequest) || errors.Is(err, errFileTransferReference) {
+					level = slog.LevelDebug
+				}
+				s.Logger.Log(ctx, level, "file transfer error",
+					"remote_addr", conn.RemoteAddr().String(),
+					"local_addr", conn.LocalAddr().String(), "err", err)
 			}
 		}()
 	}
@@ -883,6 +891,9 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	return nil
 }
 
+var errFileTransferRequest = errors.New("error reading file transfer")
+var errFileTransferReference = errors.New("invalid transaction ID")
+
 // handleFileTransfer receives a client net.Conn from the file transfer server, performs the requested transfer type, then closes the connection
 func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) error {
 	defer dontPanic(s.Logger)
@@ -890,12 +901,12 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 	// The first 16 bytes contain the file transfer.
 	var t transfer
 	if _, err := io.CopyN(&t, rwc, 16); err != nil {
-		return fmt.Errorf("error reading file transfer: %w", err)
+		return fmt.Errorf("%w: %w", errFileTransferRequest, err)
 	}
 
 	fileTransfer := s.FileTransferMgr.Get(t.ReferenceNumber)
 	if fileTransfer == nil {
-		return fmt.Errorf("invalid transaction ID: %v", t.ReferenceNumber)
+		return fmt.Errorf("%w: %v", errFileTransferReference, t.ReferenceNumber)
 	}
 
 	defer func() {
