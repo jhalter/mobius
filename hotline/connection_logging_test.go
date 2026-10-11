@@ -238,7 +238,12 @@ func TestConnectionLoggingServe(t *testing.T) {
 		}
 		_, err = io.ReadAll(conn)
 		require.NoError(t, err)
-		srv.connWG.Wait()
+		// EOF can arrive before the closing event is logged. Wait on the
+		// mutex-protected log output; connWG.Wait would race with Serve's Add
+		// while the listener is still accepting connections.
+		require.Eventually(t, func() bool {
+			return bytes.Count(output.written(), []byte("\n")) == 2*(i+1)
+		}, 2*time.Second, time.Millisecond, "connection opening and closing events must be logged")
 	}
 	records := logRecords(t, output)
 	require.Len(t, records, 4, "each connection has exactly one opening and closing event")
