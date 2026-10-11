@@ -2,11 +2,16 @@ package mobius
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/http/httptest"
+	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -423,6 +428,129 @@ func TestFeedFetcherLimitsAndConditional304(t *testing.T) {
 		_, err := fetcher.fetch(t.Context(), testFeedURL, feedHTTPValidators{})
 		require.ErrorContains(t, err, "without a conditional request")
 	})
+}
+
+func TestIsPublicAddr(t *testing.T) {
+	tests := []struct {
+		addr string
+		want bool
+	}{
+		{"93.184.215.14", true},
+		{"2606:4700::6810:84e5", true},
+		{"127.0.0.1", false},
+		{"::1", false},
+		{"10.1.2.3", false},
+		{"172.16.0.1", false},
+		{"192.168.1.1", false},
+		{"169.254.169.254", false},
+		{"100.64.0.1", false},
+		{"0.0.0.0", false},
+		{"::", false},
+		{"fd00::1", false},
+		{"fe80::1", false},
+		{"224.0.0.1", false},
+		{"::ffff:127.0.0.1", false},
+		{"::ffff:192.168.1.1", false},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, isPublicAddr(netip.MustParseAddr(tt.addr)), tt.addr)
+	}
+}
+
+// publicFeedURL is a literal public address, so whether the feed is public never depends on DNS.
+const publicFeedURL = "http://93.184.215.14/feed.xml"
+
+func TestFeedFetcherKeepsAPublicFeedOffTheLocalNetwork(t *testing.T) {
+	var hits atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/moved" {
+			http.Redirect(w, request, "/feed.xml", http.StatusFound)
+			return
+		}
+		hits.Add(1)
+		_, _ = io.WriteString(w, rssFixture("Release", "release-1", "Mon, 02 Jan 2006 15:04:05 GMT"))
+	}))
+	defer server.Close()
+
+	t.Run("a feed on the local network is fetched as configured", func(t *testing.T) {
+		result, err := newFeedFetcher("test").fetch(t.Context(), server.URL+"/moved", feedHTTPValidators{})
+		require.NoError(t, err)
+		assert.Len(t, result.items, 1)
+	})
+
+	t.Run("a public feed cannot redirect into it", func(t *testing.T) {
+		before := hits.Load()
+		fetcher := newFeedFetcher("test")
+		dialing := fetcher.client.Transport
+		fetcher.client.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			if request.URL.String() == publicFeedURL {
+				return testFeedResponse(http.StatusFound, "", map[string]string{"Location": server.URL + "/feed.xml"}), nil
+			}
+			return dialing.RoundTrip(request)
+		})
+		_, err := fetcher.fetch(t.Context(), publicFeedURL, feedHTTPValidators{})
+		assert.ErrorIs(t, err, errFeedAddressNotPublic)
+		assert.Equal(t, before, hits.Load())
+	})
+}
+
+// A name server can answer loopback to the lookup that judges the feed and its real address to
+// the connection, then redirect into the network. The judging lookup's answers are where the
+// feed connects, so the server behind the second answer is never reached.
+func TestFeedFetcherConnectsWhereTheJudgingLookupSaid(t *testing.T) {
+	var hits atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		hits.Add(1)
+		http.Redirect(w, request, "http://169.254.169.254/latest/meta-data/", http.StatusFound)
+	}))
+	defer server.Close()
+	_, port, err := net.SplitHostPort(strings.TrimPrefix(server.URL, "http://"))
+	require.NoError(t, err)
+
+	fetcher := newFeedFetcher("test")
+	fetcher.lookup = func(context.Context, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("127.0.0.2")}, nil
+	}
+	_, err = fetcher.fetch(t.Context(), "http://localhost:"+port+"/feed.xml", feedHTTPValidators{})
+	require.Error(t, err)
+	assert.Zero(t, hits.Load(), "connected to the second answer, not the first")
+}
+
+func TestFeedFetcherConnectsToAPrivateProxy(t *testing.T) {
+	var proxied []string
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		proxied = append(proxied, request.URL.String())
+		if request.URL.String() == publicFeedURL {
+			http.Redirect(w, request, "http://169.254.169.254/feed.xml", http.StatusFound)
+			return
+		}
+		_, _ = io.WriteString(w, rssFixture("Release", "release-1", "Mon, 02 Jan 2006 15:04:05 GMT"))
+	}))
+	defer proxy.Close()
+	proxyURL, err := url.Parse(proxy.URL)
+	require.NoError(t, err)
+	fetcher := newFeedFetcherVia("test", http.ProxyURL(proxyURL))
+
+	result, err := fetcher.fetch(t.Context(), "http://10.1.2.3/feed.xml", feedHTTPValidators{})
+	require.NoError(t, err, "a feed on the local network, through the proxy")
+	assert.Len(t, result.items, 1)
+
+	_, err = fetcher.fetch(t.Context(), publicFeedURL, feedHTTPValidators{})
+	assert.ErrorIs(t, err, errFeedAddressNotPublic)
+	assert.Equal(t, []string{"http://10.1.2.3/feed.xml", publicFeedURL}, proxied,
+		"the redirect to a metadata address never reaches the proxy")
+}
+
+func TestFeedFetcherRefusesHTTPSDowngrade(t *testing.T) {
+	fetcher := newFeedFetcher("test")
+	var requested []string
+	fetcher.client.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requested = append(requested, request.URL.String())
+		return testFeedResponse(http.StatusFound, "", map[string]string{"Location": "http://feeds.example.com/feed.xml"}), nil
+	})
+	_, err := fetcher.fetch(t.Context(), "https://feeds.example.com/feed.xml", feedHTTPValidators{})
+	require.ErrorContains(t, err, "redirected from https to http")
+	assert.Equal(t, []string{"https://feeds.example.com/feed.xml"}, requested)
 }
 
 func feedFixture(t *testing.T, name string) string {
