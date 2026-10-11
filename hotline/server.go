@@ -782,7 +782,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		if s.BanList != nil && s.BanList.IsNicknameBanned(string(c.GetUserName())) {
 			log.reason = "banned_nickname"
 			if err := s.BanList.Add(ipAddr, nil); err != nil {
-				c.Logger.Error("Failed to ban IP for banned nickname", "ip", ipAddr, "err", err)
+				c.Logger.Error("Failed to ban IP for banned nickname", "err", err)
 			}
 			sendBanMessage(rwc, "You are banned on this server")
 			c.Logger.Debug("Disconnecting banned nickname", "name", string(c.GetUserName()))
@@ -916,7 +916,7 @@ func (s *Server) handleFileTransfer(ctx context.Context, rwc io.ReadWriter) erro
 		remoteAddr = rc.remoteAddr
 	}
 	rLogger := s.Logger.With(
-		"remoteAddr", remoteAddr,
+		"remote_addr", remoteAddr,
 		"login", fileTransfer.ClientConn.GetAccount().Login,
 		"Name", string(fileTransfer.ClientConn.GetUserName()),
 	)

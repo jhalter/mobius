@@ -119,7 +119,7 @@ func HandleTranAgreed(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 			cc.Server.Presence.UserDisconnected(login, string(cc.GetUserName()), ip)
 		}
 		if err := cc.Server.BanList.Add(ip, nil); err != nil {
-			cc.Logger.Error("Failed to ban IP for banned nickname", "ip", ip, "err", err)
+			cc.Logger.Error("Failed to ban IP for banned nickname", "err", err)
 		}
 		cc.Disconnect()
 		// Connection is being torn down; no reply is sent to the client.
@@ -284,7 +284,7 @@ func HandleSetClientUserInfo(cc *hotline.ClientConn, t *hotline.Transaction) (re
 				cc.Server.Presence.UserDisconnected(login, newNickname, ip)
 			}
 			if err := cc.Server.BanList.Add(ip, nil); err != nil {
-				cc.Logger.Error("Failed to ban IP for banned nickname", "ip", ip, "err", err)
+				cc.Logger.Error("Failed to ban IP for banned nickname", "err", err)
 			}
 			cc.Disconnect()
 			// Connection is being torn down; no reply is sent to the client.

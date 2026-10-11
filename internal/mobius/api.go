@@ -63,7 +63,7 @@ func (srv *APIServer) logMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lrw := NewLogResponseWriter(w)
 		next.ServeHTTP(lrw, r)
-		srv.logger.Info("req", "method", r.Method, "url", r.URL.Path, "remoteAddr", r.RemoteAddr, "response_code", lrw.statusCode)
+		srv.logger.Info("req", "method", r.Method, "url", r.URL.Path, "remote_addr", r.RemoteAddr, "response_code", lrw.statusCode)
 	})
 }
 

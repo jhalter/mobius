@@ -438,7 +438,7 @@ func (cc *ClientConn) Disconnect() {
 	cc.closeSendQueue()
 
 	if err := cc.closeConnection(); err != nil {
-		cc.Server.Logger.Debug("error closing client connection", "remoteAddr", cc.RemoteAddr)
+		cc.Server.Logger.Debug("error closing client connection", "remote_addr", cc.RemoteAddr)
 	}
 }
 

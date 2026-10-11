@@ -102,7 +102,7 @@ func TestConnectionLoggingBeforeLogin(t *testing.T) {
 			assert.Equal(t, float64(0), closed["requests_received"])
 			assert.Equal(t, float64(0), closed["requests_handled"])
 			assert.Equal(t, records[0]["remote_addr"], closed["remote_addr"])
-			assert.Equal(t, "172.184.219.214", closed["ip"])
+			assert.NotContains(t, closed, "ip")
 			assert.Equal(t, "172.184.219.214:52256", closed["remote_addr"])
 			if tc.buffered != 0 {
 				assert.Equal(t, float64(tc.buffered), closed["buffered_bytes"])

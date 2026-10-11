@@ -29,9 +29,8 @@ var errInvalidTransaction = errors.New("invalid transaction")
 var errTransactionRead = errors.New("transaction read failed")
 
 func newConnectionLog(logger *slog.Logger, remoteAddr string) *connectionLog {
-	ip, _, _ := net.SplitHostPort(remoteAddr)
 	return &connectionLog{
-		logger:  logger.With("ip", ip, "remote_addr", remoteAddr),
+		logger:  logger.With("remote_addr", remoteAddr),
 		started: time.Now(),
 		stage:   "handshake",
 	}
