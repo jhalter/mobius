@@ -1033,7 +1033,7 @@ func newPresenceTestServer(presence hotline.PresenceTracker) *hotline.Server {
 func TestHandleTranAgreed_NotifiesPresenceTracker(t *testing.T) {
 	presence := &fakePresenceTracker{}
 	var logs bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&logs, nil)).With("conn_id", "test-connection")
+	logger := slog.New(slog.NewTextHandler(&logs, nil)).With("remote_addr", "192.168.1.1:12345")
 	cc := &hotline.ClientConn{
 		Account: &hotline.Account{
 			Login: "alice",
@@ -1059,7 +1059,7 @@ func TestHandleTranAgreed_NotifiesPresenceTracker(t *testing.T) {
 
 	HandleTranAgreed(cc, &tr)
 	assert.Same(t, logger, cc.Logger, "the shared connection logger must remain immutable")
-	assert.Contains(t, logs.String(), `msg="Agreement accepted" conn_id=test-connection name=Alice`)
+	assert.Contains(t, logs.String(), `msg="Agreement accepted" remote_addr=192.168.1.1:12345 name=Alice`)
 	assert.NotContains(t, logs.String(), "Login successful")
 
 	assert.Equal(t, []presenceCall{

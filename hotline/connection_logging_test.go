@@ -101,8 +101,7 @@ func TestConnectionLoggingBeforeLogin(t *testing.T) {
 			assert.Equal(t, false, closed["authenticated"])
 			assert.Equal(t, float64(0), closed["requests_received"])
 			assert.Equal(t, float64(0), closed["requests_handled"])
-			assert.NotEmpty(t, closed["conn_id"])
-			assert.Equal(t, records[0]["conn_id"], closed["conn_id"])
+			assert.Equal(t, records[0]["remote_addr"], closed["remote_addr"])
 			assert.Equal(t, "172.184.219.214", closed["ip"])
 			assert.Equal(t, "172.184.219.214:52256", closed["remote_addr"])
 			if tc.buffered != 0 {
@@ -148,7 +147,7 @@ func TestConnectionLoggingSession(t *testing.T) {
 					outcomes[outcome]++
 					assert.NotNil(t, record["transaction_id"])
 				}
-				assert.Equal(t, records[0]["conn_id"], record["conn_id"])
+				assert.Equal(t, "192.0.2.1:1234", record["remote_addr"])
 			}
 			assert.Equal(t, 1, counts["Authentication succeeded"])
 			assert.Zero(t, counts["Login successful"])
@@ -216,9 +215,11 @@ func TestConnectionLoggingServe(t *testing.T) {
 		<-done
 		srv.connWG.Wait()
 	})
+	var remoteAddrs []string
 	for i := range 2 {
 		conn, err := net.Dial("tcp", ln.Addr().String())
 		require.NoError(t, err)
+		remoteAddrs = append(remoteAddrs, conn.LocalAddr().String())
 		t.Cleanup(func() { _ = conn.Close() })
 		require.NoError(t, conn.SetDeadline(time.Now().Add(2*time.Second)))
 		if i == 0 {
@@ -236,9 +237,10 @@ func TestConnectionLoggingServe(t *testing.T) {
 	}
 	records := logRecords(t, output)
 	require.Len(t, records, 4, "each connection has exactly one opening and closing event")
-	assert.Equal(t, records[0]["conn_id"], records[1]["conn_id"])
-	assert.Equal(t, records[2]["conn_id"], records[3]["conn_id"])
-	assert.NotEqual(t, records[0]["conn_id"], records[2]["conn_id"])
+	for i, remoteAddr := range remoteAddrs {
+		assert.Equal(t, remoteAddr, records[2*i]["remote_addr"])
+		assert.Equal(t, remoteAddr, records[2*i+1]["remote_addr"])
+	}
 	assert.Equal(t, "peer_closed", records[1]["reason"])
 	assert.Equal(t, "rate_limited", records[3]["reason"])
 }
@@ -251,7 +253,7 @@ func TestTransactionWriteFailureLogging(t *testing.T) {
 	for _, closing := range []bool{false, true} {
 		t.Run(map[bool]string{false: "draining", true: "closing"}[closing], func(t *testing.T) {
 			logger, output := capturedLogger()
-			cc := &ClientConn{Logger: logger.With("conn_id", "test-connection"), Connection: &failingWriteConn{&scriptedConn{}}}
+			cc := &ClientConn{Logger: logger.With("remote_addr", "192.0.2.1:1234"), Connection: &failingWriteConn{&scriptedConn{}}}
 			tr := NewTransaction(TranGetUserNameList, ClientID{})
 			tr.ID = [4]byte{0, 0, 0, 42}
 			tr.IsReply = 1
@@ -267,7 +269,7 @@ func TestTransactionWriteFailureLogging(t *testing.T) {
 			assert.Equal(t, "WARN", records[0]["level"], "a broken pipe is not a local closed-connection error")
 			assert.Equal(t, float64(42), records[0]["transaction_id"])
 			assert.Equal(t, true, records[0]["is_reply"])
-			assert.Equal(t, "test-connection", records[0]["conn_id"])
+			assert.Equal(t, "192.0.2.1:1234", records[0]["remote_addr"])
 		})
 	}
 }

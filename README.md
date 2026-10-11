@@ -241,14 +241,15 @@ To run as a systemd service, refer to this sample unit file: [mobius-hotline-ser
 
 ### Connection logs
 
-Hotline control connections have a unique `conn_id`, with `ip` and `remote_addr` on their
-connection, authentication, and request events. Each connection ends with a `Connection closed`
+Hotline control connections include `ip` and `remote_addr` on their connection, authentication,
+and request events. Use `remote_addr` (IP and source port) to correlate events for a connection.
+Each connection ends with a `Connection closed`
 summary containing its last `stage`, `handshake_ok`, `authenticated`, `requests_received`,
 `requests_handled`, `duration_ms`, and `reason`. For example, a client that completes the
 handshake and disconnects without sending a login produces an INFO summary like:
 
 ```text
-msg="Connection closed" conn_id=... ip=192.0.2.1 remote_addr=192.0.2.1:52256 stage=login handshake_ok=true authenticated=false requests_received=0 requests_handled=0 duration_ms=12 reason=peer_closed
+msg="Connection closed" ip=192.0.2.1 remote_addr=192.0.2.1:52256 stage=login handshake_ok=true authenticated=false requests_received=0 requests_handled=0 duration_ms=12 reason=peer_closed
 ```
 
 Truncated transactions are WARN events with `buffered_bytes` and `expected_bytes`.

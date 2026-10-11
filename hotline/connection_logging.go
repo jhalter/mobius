@@ -3,7 +3,6 @@ package hotline
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
 	"errors"
 	"io"
 	"log/slog"
@@ -32,7 +31,7 @@ var errTransactionRead = errors.New("transaction read failed")
 func newConnectionLog(logger *slog.Logger, remoteAddr string) *connectionLog {
 	ip, _, _ := net.SplitHostPort(remoteAddr)
 	return &connectionLog{
-		logger:  logger.With("conn_id", rand.Text(), "ip", ip, "remote_addr", remoteAddr),
+		logger:  logger.With("ip", ip, "remote_addr", remoteAddr),
 		started: time.Now(),
 		stage:   "handshake",
 	}
