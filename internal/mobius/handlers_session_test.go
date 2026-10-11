@@ -1,6 +1,8 @@
 package mobius
 
 import (
+	"bytes"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -1030,6 +1032,8 @@ func newPresenceTestServer(presence hotline.PresenceTracker) *hotline.Server {
 
 func TestHandleTranAgreed_NotifiesPresenceTracker(t *testing.T) {
 	presence := &fakePresenceTracker{}
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil)).With("conn_id", "test-connection")
 	cc := &hotline.ClientConn{
 		Account: &hotline.Account{
 			Login: "alice",
@@ -1042,7 +1046,7 @@ func TestHandleTranAgreed_NotifiesPresenceTracker(t *testing.T) {
 		ID:         [2]byte{0, 1},
 		Version:    []byte{0, 1},
 		RemoteAddr: "192.168.1.1:12345",
-		Logger:     NewTestLogger(),
+		Logger:     logger,
 		Server:     newPresenceTestServer(presence),
 	}
 
@@ -1054,6 +1058,9 @@ func TestHandleTranAgreed_NotifiesPresenceTracker(t *testing.T) {
 	)
 
 	HandleTranAgreed(cc, &tr)
+	assert.Same(t, logger, cc.Logger, "the shared connection logger must remain immutable")
+	assert.Contains(t, logs.String(), `msg="Agreement accepted" conn_id=test-connection name=Alice`)
+	assert.NotContains(t, logs.String(), "Login successful")
 
 	assert.Equal(t, []presenceCall{
 		{method: "UserRenamed", login: "alice", oldNickname: "", newNickname: "Alice", ip: "192.168.1.1"},

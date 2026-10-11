@@ -239,6 +239,39 @@ Usage of mobius-hotline-server:
 
 To run as a systemd service, refer to this sample unit file: [mobius-hotline-server.service](https://github.com/jhalter/mobius/blob/master/cmd/mobius-hotline-server/mobius-hotline-server.service)
 
+### Connection logs
+
+Hotline control connections have a unique `conn_id`, with `ip` and `remote_addr` on their
+connection, authentication, and request events. Each connection ends with a `Connection closed`
+summary containing its last `stage`, `handshake_ok`, `authenticated`, `requests_received`,
+`requests_handled`, `duration_ms`, and `reason`. For example, a client that completes the
+handshake and disconnects without sending a login produces an INFO summary like:
+
+```text
+msg="Connection closed" conn_id=... ip=192.0.2.1 remote_addr=192.0.2.1:52256 stage=login handshake_ok=true authenticated=false requests_received=0 requests_handled=0 duration_ms=12 reason=peer_closed
+```
+
+Truncated transactions are WARN events with `buffered_bytes` and `expected_bytes`.
+Oversized or malformed transactions have distinct reasons; resets and timeouts retain the
+underlying error. Payloads and passwords are not included in these diagnostics.
+
+`Authentication succeeded` is emitted once when credentials verify. Agreement acceptance is
+logged separately as `Agreement accepted`; authentication alone does not mean a client has
+completed session setup or issued any requests.
+
+After login, `Request received` and `Request handled` include `transaction_id`,
+`transaction_type`, and `operation`. A handler outcome of `returned` means it returned normally;
+`error_reply` means it generated a protocol error response. Panics and unsupported transactions
+are logged as `Request failed` and `Request rejected`. `requests_received` counts decoded
+post-login transactions, including keepalives and unsupported requests. `requests_handled`
+counts handlers that returned normally, including those generating error replies. Routine
+keepalive events are suppressed, but included in these counters.
+
+Neither a handled request nor `responses_generated` proves response delivery. The asynchronous
+writer logs `Transaction write failed` with the transaction ID if a socket write fails.
+Unexpected write failures are WARN events. Closed-connection errors caused by deliberate
+disconnects or server shutdown are DEBUG events.
+
 ## File Storage
 
 By default the file library is stored on the server's local disk. The `-file-store` flag selects an alternate backend:

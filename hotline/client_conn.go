@@ -2,13 +2,17 @@ package hotline
 
 import (
 	"cmp"
+	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
+	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/text/encoding"
@@ -56,6 +60,7 @@ type ClientConn struct {
 	sendInit   sync.Once
 	sendMu     sync.Mutex // guards sendClosed and close(sendCh)
 	sendClosed bool
+	closing    atomic.Bool // set before deliberately closing the underlying connection
 }
 
 func (cc *ClientConn) initSendQueue() {
@@ -85,7 +90,7 @@ func (cc *ClientConn) Send(t Transaction) {
 			cc.Logger.Warn("Send queue full; disconnecting slow client")
 		}
 		if cc.Connection != nil {
-			_ = cc.Connection.Close()
+			_ = cc.closeConnection()
 		}
 	}
 }
@@ -104,6 +109,26 @@ func (cc *ClientConn) closeSendQueue() {
 	}
 }
 
+func (cc *ClientConn) closeConnection() error {
+	cc.closing.Store(true)
+	return cc.Connection.Close()
+}
+
+// Closing the send queue alone allows queued writes to finish and does not
+// indicate an intentional socket closure. Server shutdown closes tracked sockets
+// directly, so consult its shutdown state as well as this client's close flag.
+func (cc *ClientConn) connectionClosing() bool {
+	if cc.closing.Load() {
+		return true
+	}
+	if cc.Server == nil {
+		return false
+	}
+	cc.Server.activeConnsMu.Lock()
+	defer cc.Server.activeConnsMu.Unlock()
+	return cc.Server.connsClosed
+}
+
 // writeLoop is the single writer to cc.Connection.  Serializing all writes through one goroutine
 // prevents concurrent sends from interleaving bytes within the connection's transaction framing.
 // It runs until the send queue is closed or a write fails.
@@ -113,7 +138,12 @@ func (cc *ClientConn) writeLoop() {
 	for t := range cc.sendCh {
 		if _, err := io.Copy(cc.Connection, &t); err != nil {
 			if cc.Logger != nil {
-				cc.Logger.Debug("error writing transaction to client", "err", err)
+				level := slog.LevelWarn
+				if (errors.Is(err, net.ErrClosed) || errors.Is(err, io.ErrClosedPipe)) && cc.connectionClosing() {
+					level = slog.LevelDebug
+				}
+				cc.Logger.Log(context.Background(), level, "Transaction write failed", "transaction_id", binary.BigEndian.Uint32(t.ID[:]),
+					"transaction_type", binary.BigEndian.Uint16(t.Type[:]), "is_reply", t.IsReply == 1, "err", err)
 			}
 			_ = cc.Connection.Close()
 			return
@@ -332,19 +362,40 @@ func (cc *ClientConn) SendAll(t [2]byte, fields ...Field) {
 	}
 }
 
-func (cc *ClientConn) handleTransaction(transaction Transaction) {
+// handleTransaction reports whether a registered handler returned normally. This
+// does not imply application success or delivery of its queued responses.
+func (cc *ClientConn) handleTransaction(transaction Transaction) (handled bool) {
+	logger := cc.Logger.With("transaction_id", binary.BigEndian.Uint32(transaction.ID[:]),
+		"transaction_type", binary.BigEndian.Uint16(transaction.Type[:]),
+		"operation", tranTypeNames[transaction.Type], "name", string(cc.GetUserName()))
 	// Contain panics to the individual transaction so a single malformed request
 	// cannot tear down the whole client connection.
-	defer dontPanic(cc.Logger)
+	defer func() {
+		if r := recover(); r != nil {
+			handled = false
+			logger.Error("Request failed", "outcome", "panic", "err", r, "trace", string(debug.Stack()))
+		}
+	}()
 
 	if handler, ok := cc.Server.handlers[transaction.Type]; ok {
 		if transaction.Type != TranKeepAlive {
-			cc.Logger.Info(tranTypeNames[transaction.Type])
+			logger.Info("Request received")
 		}
 
-		for _, t := range handler(cc, &transaction) {
+		responses := handler(cc, &transaction)
+		outcome := "returned"
+		for _, t := range responses {
+			if t.IsReply == 1 && t.ID == transaction.ID && t.ClientID == cc.ID && t.ErrorCode != [4]byte{} {
+				outcome = "error_reply"
+			}
 			cc.Server.Send(t)
 		}
+		handled = true
+		if transaction.Type != TranKeepAlive || outcome == "error_reply" {
+			logger.Info("Request handled", "outcome", outcome, "responses_generated", len(responses))
+		}
+	} else {
+		logger.Warn("Request rejected", "outcome", "unsupported_transaction")
 	}
 
 	if transaction.Type != TranKeepAlive {
@@ -360,6 +411,7 @@ func (cc *ClientConn) handleTransaction(transaction Transaction) {
 			)
 		}
 	}
+	return handled
 }
 
 func (cc *ClientConn) Authenticate(login string, password []byte) bool {
@@ -392,7 +444,7 @@ func (cc *ClientConn) Disconnect() {
 
 	cc.closeSendQueue()
 
-	if err := cc.Connection.Close(); err != nil {
+	if err := cc.closeConnection(); err != nil {
 		cc.Server.Logger.Debug("error closing client connection", "remoteAddr", cc.RemoteAddr)
 	}
 }

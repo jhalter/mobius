@@ -2,7 +2,9 @@ package hotline
 
 import (
 	"bytes"
+	"io"
 	"testing"
+	"testing/iotest"
 )
 
 func TestHandshakeWrite(t *testing.T) {
@@ -166,7 +168,7 @@ func TestPerformHandshake(t *testing.T) {
 				0x54, 0x52, 0x54, 0x50, // TRTP
 			},
 			expectedOutput: nil,
-			expectedError:  "read handshake: invalid handshake size",
+			expectedError:  "read handshake: unexpected EOF",
 		},
 		{
 			name: "Invalid Protocol",
@@ -225,5 +227,19 @@ func TestPerformHandshake(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPerformHandshakeFragmentedReads(t *testing.T) {
+	var output bytes.Buffer
+	rw := struct {
+		io.Reader
+		io.Writer
+	}{iotest.OneByteReader(bytes.NewReader(ClientHandshake)), &output}
+	if err := performHandshake(rw); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(output.Bytes(), ServerHandshake) {
+		t.Fatalf("unexpected handshake response: %x", output.Bytes())
 	}
 }

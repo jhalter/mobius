@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ var contextKeyReq = contextKey("req")
 
 type requestCtx struct {
 	remoteAddr string
+	connection *connectionLog
 }
 
 type Server struct {
@@ -458,11 +460,15 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 
 			ipAddr, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 
+			log := newConnectionLog(s.Logger, conn.RemoteAddr().String())
+			var serveErr error
+			defer func() { log.closed(ctx, serveErr) }()
 			connCtx := context.WithValue(ctx, contextKeyReq, requestCtx{
 				remoteAddr: conn.RemoteAddr().String(),
+				connection: log,
 			})
 
-			s.Logger.Info("Connection established", "ip", ipAddr)
+			log.logger.Info("Connection established")
 			defer func() { _ = conn.Close() }()
 
 			// Check if we have an existing rate limit for the IP and create one if we do not.
@@ -478,18 +484,12 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 
 			// Check if the rate limit is exceeded and close the connection if so.
 			if !rl.Allow() {
-				s.Logger.Info("Rate limit exceeded", "remoteAddr", conn.RemoteAddr())
+				log.reason = "rate_limited"
 				_ = conn.Close()
 				return
 			}
 
-			if err := s.handleNewConnection(connCtx, conn, conn.RemoteAddr().String()); err != nil {
-				if err == io.EOF {
-					s.Logger.Info("Client disconnected", "remoteAddr", conn.RemoteAddr())
-				} else {
-					s.Logger.Error("Error serving request", "remoteAddr", conn.RemoteAddr(), "err", err)
-				}
-			}
+			serveErr = s.handleNewConnection(connCtx, conn, conn.RemoteAddr().String())
 		}()
 	}
 }
@@ -636,18 +636,38 @@ func sendBanMessage(rwc io.Writer, message string) {
 }
 
 // handleNewConnection takes a new net.Conn and performs the initial login sequence
-func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser, remoteAddr string) error {
-	defer dontPanic(s.Logger)
+func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser, remoteAddr string) (err error) {
+	req, _ := ctx.Value(contextKeyReq).(requestCtx)
+	log := req.connection
+	if log == nil {
+		log = newConnectionLog(s.Logger, remoteAddr)
+		log.logger.Info("Connection established")
+		defer func() { log.closed(ctx, err) }()
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			log.logger.Error("PANIC", "err", r, "trace", string(debug.Stack()))
+			err = errors.New("panic handling connection")
+		}
+	}()
 
 	if err := performHandshake(rwc); err != nil {
 		return fmt.Errorf("perform handshake: %w", err)
 	}
+	log.handshakeOK = true
+	log.stage = "login"
 
 	// Create a new scanner for parsing incoming bytes into transaction tokens
-	scanner := bufio.NewScanner(rwc)
+	reader := &transactionReader{Reader: rwc}
+	scanner := bufio.NewScanner(reader)
 	scanner.Split(transactionScanner)
 
-	scanner.Scan()
+	if !scanner.Scan() {
+		if err := reader.scanError(scanner); err != nil {
+			return fmt.Errorf("read login: %w: %w", errTransactionRead, err)
+		}
+		return nil // Peer closed after the handshake without sending a login.
+	}
 
 	// Make a new []byte slice and copy the scanner bytes to it.  This is critical to avoid a data race as the
 	// scanner re-uses the buffer for subsequent scans.
@@ -656,22 +676,24 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 
 	var clientLogin Transaction
 	if _, err := clientLogin.Write(buf); err != nil {
-		return fmt.Errorf("error writing login transaction: %w", err)
+		return fmt.Errorf("decode login: %w: %w", errInvalidTransaction, err)
 	}
 
 	login := clientLogin.GetField(FieldUserLogin).DecodeObfuscatedString()
 	if login == "" {
 		login = GuestAccount
 	}
+	log.login = login
 
 	// Check if remoteAddr is present in the ban list, we do this after we have the login name
 	ipAddr, _, _ := net.SplitHostPort(remoteAddr)
 
 	// Check if user is banned
 	if s.BanList != nil && s.BanList.IsUsernameBanned(login) {
+		log.reason = "banned_username"
 		_ = s.BanList.Add(ipAddr, nil)
 		sendBanMessage(rwc, "You are banned on this server")
-		s.Logger.Debug("Disconnecting banned user", "login", login, "ip", ipAddr)
+		log.logger.Debug("Disconnecting banned user", "login", login)
 		return nil
 	}
 
@@ -680,20 +702,23 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		if isBanned, banUntil := s.BanList.IsBanned(ipAddr); isBanned {
 			// permaban
 			if banUntil == nil {
+				log.reason = "banned_ip"
 				sendBanMessage(rwc, "You are permanently banned on this server")
-				s.Logger.Debug("Disconnecting permanently banned IP", "remoteAddr", ipAddr)
+				log.logger.Debug("Disconnecting permanently banned IP")
 				return nil
 			}
 			// temporary ban
 			if time.Now().Before(*banUntil) {
+				log.reason = "banned_ip"
 				sendBanMessage(rwc, "You are temporarily banned on this server")
-				s.Logger.Debug("Disconnecting temporarily banned IP", "remoteAddr", ipAddr)
+				log.logger.Debug("Disconnecting temporarily banned IP")
 				return nil
 			}
 		}
 	}
 
 	c := s.NewClientConn(rwc, remoteAddr)
+	c.Logger = log.logger.With("login", login)
 
 	// Start the client's writer goroutine: the single writer to the connection, which preserves
 	// transaction ordering and prevents interleaved writes.  It exits when the send queue is
@@ -719,10 +744,10 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	encodedPassword := clientLogin.GetField(FieldUserPassword).Data
 	c.Version = clientLogin.GetField(FieldVersion).Data
 
-	c.Logger = s.Logger.With("ip", ipAddr, "login", login)
-
 	// If authentication fails, send error reply and close connection
 	if !c.Authenticate(login, encodedPassword) {
+		log.reason = "authentication_failed"
+		c.Logger.Info("Authentication failed")
 		t := c.NewErrReply(&clientLogin, "Incorrect login.")[0]
 
 		_, err := io.Copy(rwc, &t)
@@ -730,10 +755,10 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 			return err
 		}
 
-		c.Logger.Info("Incorrect login")
-
 		return nil
 	}
+	log.authenticated = true
+	c.Logger.Info("Authentication succeeded")
 
 	if clientLogin.GetField(FieldUserIconID).Data != nil {
 		c.SetIcon(clientLogin.GetField(FieldUserIconID).Data)
@@ -741,7 +766,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 
 	account := c.Server.AccountManager.Get(login)
 	if account == nil {
-		return nil
+		return errors.New("authenticated account no longer exists")
 	}
 	c.SetAccount(account)
 
@@ -755,6 +780,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 		// Legacy clients set their nickname here instead of in TranAgreed. Check the
 		// resolved name before publishing the client or sending a successful login reply.
 		if s.BanList != nil && s.BanList.IsNicknameBanned(string(c.GetUserName())) {
+			log.reason = "banned_nickname"
 			if err := s.BanList.Add(ipAddr, nil); err != nil {
 				c.Logger.Error("Failed to ban IP for banned nickname", "ip", ipAddr, "err", err)
 			}
@@ -808,10 +834,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	// If the client has provided a username as part of the login, we can infer that it is using the 1.2.3 login
 	// flow and not the 1.5+ flow.
 	if userName := c.GetUserName(); len(userName) != 0 {
-		// Add the client username to the logger.  For 1.5+ clients, we don't have this information yet as it comes as
-		// part of TranAgreed
-		c.Logger = c.Logger.With("name", string(userName))
-		c.Logger.Info("Login successful")
+		c.Logger.Info("Session ready", "name", string(userName))
 
 		if s.Presence != nil {
 			s.Presence.UserRenamed(login, "", string(userName), ipAddr)
@@ -838,6 +861,7 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 	c.Server.Stats.Max(StatConnectionPeak, len(s.ClientMgr.List()))
 
 	// Scan for new transactions and handle them as they come in.
+	log.stage = "session"
 	for scanner.Scan() {
 		// Copy the scanner bytes to a new slice to it to avoid a data race when the scanner re-uses the buffer.
 		tmpBuf := make([]byte, len(scanner.Bytes()))
@@ -845,10 +869,16 @@ func (s *Server) handleNewConnection(ctx context.Context, rwc io.ReadWriteCloser
 
 		var t Transaction
 		if _, err := t.Write(tmpBuf); err != nil {
-			return err
+			return fmt.Errorf("decode request: %w: %w", errInvalidTransaction, err)
 		}
 
-		c.handleTransaction(t)
+		log.requests++
+		if c.handleTransaction(t) {
+			log.handled++
+		}
+	}
+	if err := reader.scanError(scanner); err != nil {
+		return fmt.Errorf("read request: %w: %w", errTransactionRead, err)
 	}
 	return nil
 }

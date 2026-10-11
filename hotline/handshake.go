@@ -66,16 +66,23 @@ var (
 
 const handshakeSize = 12
 
+var errInvalidHandshake = errors.New("invalid protocol or sub-protocol in handshake")
+
 // performHandshake performs the handshake process.
 func performHandshake(rw io.ReadWriter) error {
 	var h handshake
 
-	// Copy exactly handshakeSize bytes from rw to handshake
-	if _, err := io.CopyN(&h, rw, handshakeSize); err != nil {
+	// Read the whole handshake before decoding it. TCP may split it across reads;
+	// ReadFull also distinguishes an empty disconnect from a truncated handshake.
+	var payload [handshakeSize]byte
+	if _, err := io.ReadFull(rw, payload[:]); err != nil {
 		return fmt.Errorf("read handshake: %w", err)
 	}
+	if _, err := h.Write(payload[:]); err != nil {
+		return err
+	}
 	if !h.Valid() {
-		return errors.New("invalid protocol or sub-protocol in handshake")
+		return errInvalidHandshake
 	}
 
 	if _, err := rw.Write(handshakeResponse[:]); err != nil {

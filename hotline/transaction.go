@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"slices"
 )
@@ -210,10 +211,31 @@ func (t *Transaction) Write(p []byte) (n int, err error) {
 
 const tranHeaderLen = 20 // fixed length of transaction fields before the variable length fields
 
+// transactionFramingError contains only lengths, never client payloads or credentials.
+type transactionFramingError struct {
+	reason   string
+	buffered int
+	expected int64
+}
+
+func (e *transactionFramingError) Error() string {
+	return fmt.Sprintf("%s: buffered %d bytes, expected %d", e.reason, e.buffered, e.expected)
+}
+
+func (e *transactionFramingError) Unwrap() error {
+	if e.reason == "truncated_transaction" {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+
 // transactionScanner implements bufio.SplitFunc for parsing incoming byte slices into complete tokens
-func transactionScanner(data []byte, _ bool) (advance int, token []byte, err error) {
+func transactionScanner(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	// The bytes that contain the size of a transaction are from 12:16, so we need at least 16 bytes
 	if len(data) < 16 {
+		if atEOF && len(data) != 0 {
+			return 0, nil, &transactionFramingError{"truncated_transaction", len(data), 22}
+		}
 		return 0, nil, nil
 	}
 
@@ -222,7 +244,13 @@ func transactionScanner(data []byte, _ bool) (advance int, token []byte, err err
 	// tranLen represents the length of bytes that are part of the transaction. Compute it in int64
 	// so a near-max totalSize can't overflow (uint32 addition would wrap and yield a short length).
 	tranLen := int64(tranHeaderLen) + int64(totalSize)
+	if tranLen < 22 {
+		return 0, nil, &transactionFramingError{"invalid_transaction_size", len(data), tranLen}
+	}
 	if tranLen > int64(len(data)) {
+		if atEOF {
+			return 0, nil, &transactionFramingError{"truncated_transaction", len(data), tranLen}
+		}
 		return 0, nil, nil
 	}
 

@@ -128,8 +128,7 @@ func HandleTranAgreed(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 
 	cc.SetIcon(t.GetField(hotline.FieldUserIconID).Data)
 
-	cc.Logger = cc.Logger.With("Name", string(cc.GetUserName()))
-	cc.Logger.Info("Login successful")
+	cc.Logger.Info("Agreement accepted", "name", string(cc.GetUserName()))
 
 	// the options field is only passed by the client versions > 1.2.3.
 	var opts uint16
