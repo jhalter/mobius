@@ -301,8 +301,8 @@ func TestTransactionWriteLoggingDuringClosure(t *testing.T) {
 			output := &scriptedConn{}
 			logger := slog.New(slog.NewJSONHandler(output, &slog.HandlerOptions{Level: slog.LevelDebug}))
 			conn, peer := net.Pipe()
-			defer conn.Close()
-			defer peer.Close()
+			defer func() { _ = conn.Close() }()
+			defer func() { _ = peer.Close() }()
 			srv := &Server{ClientMgr: NewMemClientMgr(), Logger: logger}
 			require.True(t, srv.trackConn(conn))
 			cc := &ClientConn{Connection: conn, Server: srv, Logger: logger}
@@ -336,8 +336,8 @@ func TestTransactionWriteLoggingWhenDisconnectInterruptsWrite(t *testing.T) {
 	output := &scriptedConn{}
 	logger := slog.New(slog.NewJSONHandler(output, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	conn, peer := net.Pipe()
-	defer conn.Close()
-	defer peer.Close()
+	defer func() { _ = conn.Close() }()
+	defer func() { _ = peer.Close() }()
 	writing := make(chan struct{})
 	cc := &ClientConn{
 		Connection: &signaledWriteConn{Conn: conn, writing: writing}, Logger: logger,
