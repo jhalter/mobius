@@ -365,35 +365,28 @@ func (cc *ClientConn) SendAll(t [2]byte, fields ...Field) {
 // handleTransaction reports whether a registered handler returned normally. This
 // does not imply application success or delivery of its queued responses.
 func (cc *ClientConn) handleTransaction(transaction Transaction) (handled bool) {
+	operation := tranTypeNames[transaction.Type]
 	logger := cc.Logger.With("transaction_id", binary.BigEndian.Uint32(transaction.ID[:]),
 		"transaction_type", binary.BigEndian.Uint16(transaction.Type[:]),
-		"operation", tranTypeNames[transaction.Type], "name", string(cc.GetUserName()))
+		"name", string(cc.GetUserName()))
 	// Contain panics to the individual transaction so a single malformed request
 	// cannot tear down the whole client connection.
 	defer func() {
 		if r := recover(); r != nil {
 			handled = false
-			logger.Error("Request failed", "outcome", "panic", "err", r, "trace", string(debug.Stack()))
+			logger.Error("Request failed", "operation", operation, "outcome", "panic", "err", r, "trace", string(debug.Stack()))
 		}
 	}()
 
 	if handler, ok := cc.Server.handlers[transaction.Type]; ok {
 		if transaction.Type != TranKeepAlive {
-			logger.Info("Request received")
+			logger.Info(operation)
 		}
 
-		responses := handler(cc, &transaction)
-		outcome := "returned"
-		for _, t := range responses {
-			if t.IsReply == 1 && t.ID == transaction.ID && t.ClientID == cc.ID && t.ErrorCode != [4]byte{} {
-				outcome = "error_reply"
-			}
+		for _, t := range handler(cc, &transaction) {
 			cc.Server.Send(t)
 		}
 		handled = true
-		if transaction.Type != TranKeepAlive || outcome == "error_reply" {
-			logger.Info("Request handled", "outcome", outcome, "responses_generated", len(responses))
-		}
 	} else {
 		logger.Warn("Request rejected", "outcome", "unsupported_transaction")
 	}

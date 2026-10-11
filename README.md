@@ -260,15 +260,15 @@ underlying error. Payloads and passwords are not included in these diagnostics.
 logged separately as `Agreement accepted`; authentication alone does not mean a client has
 completed session setup or issued any requests.
 
-After login, `Request received` and `Request handled` include `transaction_id`,
-`transaction_type`, and `operation`. A handler outcome of `returned` means it returned normally;
-`error_reply` means it generated a protocol error response. Panics and unsupported transactions
-are logged as `Request failed` and `Request rejected`. `requests_received` counts decoded
+After login, each request is logged with its operation as the message (for example,
+`msg="Get user list"`), plus `transaction_id` and `transaction_type`. This event records receipt
+before the handler runs. Panics and unsupported transactions are logged as `Request failed`
+and `Request rejected`. `requests_received` counts decoded
 post-login transactions, including keepalives and unsupported requests. `requests_handled`
 counts handlers that returned normally, including those generating error replies. Routine
 keepalive events are suppressed, but included in these counters.
 
-Neither a handled request nor `responses_generated` proves response delivery. The asynchronous
+Neither a request log nor the `requests_handled` count proves response delivery. The asynchronous
 writer logs `Transaction write failed` with the transaction ID if a socket write fails.
 Unexpected write failures are WARN events. Closed-connection errors caused by deliberate
 disconnects or server shutdown are DEBUG events.

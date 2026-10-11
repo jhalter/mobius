@@ -151,7 +151,12 @@ func TestConnectionLoggingSession(t *testing.T) {
 			}
 			assert.Equal(t, 1, counts["Authentication succeeded"])
 			assert.Zero(t, counts["Login successful"])
-			assert.Equal(t, map[string]int{"returned": 1, "error_reply": 1, "panic": 1, "unsupported_transaction": 1}, outcomes)
+			assert.Equal(t, 1, counts["Get user list"])
+			assert.Equal(t, 1, counts["Send chat"])
+			assert.Equal(t, 1, counts["Get messages"])
+			assert.Zero(t, counts["Request received"])
+			assert.Zero(t, counts["Request handled"])
+			assert.Equal(t, map[string]int{"panic": 1, "unsupported_transaction": 1}, outcomes)
 			closed := records[len(records)-1]
 			assert.Equal(t, "Connection closed", closed["msg"])
 			assert.Equal(t, "session", closed["stage"])
