@@ -1,7 +1,10 @@
 package mobius
 
 import (
+	"errors"
+	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -138,4 +141,172 @@ func newRenameTestClient(t *testing.T, root, encoding string) *hotline.ClientCon
 		cc.Account.Access.Set(access)
 	}
 	return cc
+}
+
+func TestHandleSetFileInfoRenameDestination(t *testing.T) {
+	const conflict = "Cannot rename to \"renamé\" because there is already a file/folder in the destination folder with the same name."
+	for _, tt := range []struct {
+		name        string
+		isDir       bool
+		destination string
+		entry       string
+		alias       bool
+		denied      bool
+		lookupErr   error
+		readLinkErr error
+		wantError   string
+	}{
+		{name: "file onto file", destination: "file", wantError: conflict},
+		{name: "file onto folder", destination: "folder", wantError: conflict},
+		{name: "folder onto file", isDir: true, destination: "file", wantError: conflict},
+		{name: "folder onto folder", isDir: true, destination: "folder", wantError: conflict},
+		{name: "folder onto empty folder", isDir: true, destination: "empty folder", wantError: conflict},
+		{name: "partial upload alone", entry: "%s.incomplete", wantError: conflict},
+		{name: "resource fork alone", entry: hotline.RsrcForkNameTemplate, wantError: conflict},
+		{name: "info fork alone", entry: hotline.InfoForkNameTemplate, wantError: conflict},
+		{name: "folder onto partial upload", isDir: true, entry: "%s.incomplete", wantError: conflict},
+		{name: "folder onto info fork", isDir: true, entry: hotline.InfoForkNameTemplate, wantError: conflict},
+		{name: "broken alias", entry: "%s", alias: true, wantError: conflict},
+		{name: "folder onto broken alias", isDir: true, entry: "%s", alias: true, wantError: conflict},
+		{name: "broken partial alias", entry: "%s.incomplete", alias: true, wantError: conflict},
+		{name: "broken resource alias", entry: hotline.RsrcForkNameTemplate, alias: true, wantError: conflict},
+		{name: "broken info alias", entry: hotline.InfoForkNameTemplate, alias: true, wantError: conflict},
+		{name: "destination permission error", lookupErr: fs.ErrPermission, wantError: ErrMsgRenameFile},
+		{name: "destination storage error", lookupErr: errors.New("storage unavailable"), wantError: ErrMsgRenameFile},
+		{name: "folder lookup error", isDir: true, lookupErr: fs.ErrPermission, wantError: ErrMsgRenameFolder},
+		{name: "fork lookup error", entry: hotline.InfoForkNameTemplate, lookupErr: fs.ErrPermission, wantError: ErrMsgRenameFile},
+		{name: "alias lookup error", readLinkErr: fs.ErrPermission, wantError: ErrMsgRenameFile},
+		{name: "file permission denied", destination: "file", denied: true, wantError: ErrMsgNotAllowedRenameFiles},
+		{name: "folder permission denied", isDir: true, destination: "folder", denied: true, wantError: ErrMsgNotAllowedRenameFolders},
+		{name: "backend without aliases", readLinkErr: &fs.PathError{Op: "readlink", Err: errors.ErrUnsupported}},
+	} {
+		for _, encoding := range []string{"macintosh", "utf8"} {
+			t.Run(encoding+"/"+tt.name, func(t *testing.T) {
+				root := t.TempDir()
+				const oldName, newName = "source", "renamé"
+				sourceFiles := writeMoveTestItem(t, root, oldName, tt.isDir, "source")
+				var destinationFiles map[string][]byte
+				destination := filepath.Join(root, newName)
+				switch tt.destination {
+				case "file", "folder":
+					destinationFiles = writeMoveTestItem(t, root, newName, tt.destination == "folder", "destination")
+				case "empty folder":
+					require.NoError(t, os.Mkdir(destination, 0755))
+				}
+				lookupPath := destination
+				var aliasPath string
+				if tt.entry != "" {
+					lookupPath = filepath.Join(root, fmt.Sprintf(tt.entry, newName))
+					if tt.lookupErr == nil {
+						if tt.alias {
+							aliasPath = lookupPath
+							require.NoError(t, os.Symlink("missing-target", aliasPath))
+						} else {
+							destinationFiles = map[string][]byte{lookupPath: []byte("destination")}
+							require.NoError(t, os.WriteFile(lookupPath, destinationFiles[lookupPath], 0644))
+						}
+					}
+				}
+				store := &moveDestinationTestStore{
+					FileStore: &hotline.OSFileStore{}, destination: destination,
+					lookupPath: lookupPath, lookupErr: tt.lookupErr, readLinkErr: tt.readLinkErr,
+				}
+				cc := newRenameTestClient(t, root, encoding)
+				cc.Server.FS = store
+				if tt.denied {
+					cc.Account.Access = hotline.AccessBitmap{}
+					cc.Account.Access.Set(hotline.AccessSetFileComment)
+					cc.Account.Access.Set(hotline.AccessSetFolderComment)
+				}
+				encodedName, err := cc.TextEncoder().String(newName)
+				require.NoError(t, err)
+				req := hotline.NewTransaction(hotline.TranSetFileInfo, cc.ID,
+					hotline.NewField(hotline.FieldFileName, []byte(oldName)),
+					hotline.NewField(hotline.FieldFileNewName, []byte(encodedName)),
+					hotline.NewField(hotline.FieldFileComment, []byte("updated comment")),
+				)
+				replies := HandleSetFileInfo(cc, &req)
+				require.Len(t, replies, 1)
+				if tt.wantError == "" {
+					require.Equal(t, [4]byte{}, replies[0].ErrorCode)
+					data, err := os.ReadFile(destination)
+					require.NoError(t, err)
+					assert.Equal(t, "source", string(data))
+					_, err = os.Stat(filepath.Join(root, oldName))
+					assert.ErrorIs(t, err, fs.ErrNotExist)
+					return
+				}
+				assert.Equal(t, [4]byte{0, 0, 0, 1}, replies[0].ErrorCode)
+				encodedError, err := cc.TextEncoder().String(tt.wantError)
+				require.NoError(t, err)
+				assert.Equal(t, encodedError, string(replies[0].GetField(hotline.FieldError).Data))
+				assert.Zero(t, store.renameCalls)
+				if tt.denied {
+					assert.Zero(t, store.destinationChecks)
+				}
+				for _, files := range []map[string][]byte{sourceFiles, destinationFiles} {
+					for name, want := range files {
+						got, err := os.ReadFile(name)
+						require.NoError(t, err)
+						assert.Equal(t, want, got, "preserve file and metadata: %s", name)
+					}
+				}
+				if tt.isDir {
+					_, err = os.Stat(filepath.Join(root, ".info_"+oldName))
+					assert.ErrorIs(t, err, fs.ErrNotExist, "failed rename must not save a comment")
+				}
+				if tt.destination == "empty folder" {
+					entries, err := os.ReadDir(destination)
+					require.NoError(t, err)
+					assert.Empty(t, entries)
+				}
+				if aliasPath != "" {
+					target, err := os.Readlink(aliasPath)
+					require.NoError(t, err)
+					assert.Equal(t, "missing-target", target)
+				}
+			})
+		}
+	}
+}
+
+func TestHandleSetFileInfoUnchangedName(t *testing.T) {
+	for _, backend := range []string{"os", "memory"} {
+		for _, isDir := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/folder=%t", backend, isDir), func(t *testing.T) {
+				root := t.TempDir()
+				var store hotline.FileStore = &hotline.OSFileStore{}
+				if backend == "memory" {
+					store = hotline.NewMemFileStore()
+				}
+				source := filepath.Join(root, "source")
+				if isDir {
+					require.NoError(t, store.Mkdir(source, 0755))
+				} else {
+					require.NoError(t, store.WriteFile(source, []byte("source content"), 0644))
+				}
+				cc := newRenameTestClient(t, root, "macintosh")
+				cc.Server.FS = store
+				req := hotline.NewTransaction(hotline.TranSetFileInfo, cc.ID,
+					hotline.NewField(hotline.FieldFileName, []byte("source")),
+					hotline.NewField(hotline.FieldFileNewName, []byte("source")),
+					hotline.NewField(hotline.FieldFileComment, []byte("updated comment")),
+				)
+				replies := HandleSetFileInfo(cc, &req)
+				require.Len(t, replies, 1)
+				require.Equal(t, [4]byte{}, replies[0].ErrorCode)
+				info, err := store.Stat(source)
+				require.NoError(t, err)
+				assert.Equal(t, isDir, info.IsDir())
+				if !isDir {
+					data, err := store.ReadFile(source)
+					require.NoError(t, err)
+					assert.Equal(t, "source content", string(data))
+				}
+				file, err := hotline.NewFile(store, source, 0)
+				require.NoError(t, err)
+				assert.Equal(t, "updated comment", string(file.Ffo.FlatFileInformationFork.Comment))
+			})
+		}
+	}
 }

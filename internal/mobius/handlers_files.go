@@ -100,7 +100,7 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		return cc.NewErrReply(t, ErrMsgFileNotFound)
 	}
 
-	var decodedNewName string
+	var decodedNewName, fullNewFilePath string
 	if fileNewName != nil {
 		decodedNewName, err = cc.TextDecoder().String(string(fileNewName))
 		if err != nil {
@@ -111,6 +111,35 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		// component, rejecting both Unix and Windows separators before any mutations.
 		if decodedNewName == "" || decodedNewName == "." || decodedNewName == ".." || strings.ContainsAny(decodedNewName, "/\\\x00") {
 			return cc.NewErrReply(t, ErrMsgRenameFile)
+		}
+		fullNewFilePath, err = hotline.ReadPath(cc.FileRoot(), filePath, fileNewName, cc.TextDecoder())
+		if err != nil {
+			cc.Logger.Error("set file info: read new name path", "err", err)
+			return cc.NewErrReply(t, ErrMsgRenameFile)
+		}
+		switch mode := fi.Mode(); {
+		case mode.IsDir():
+			if !cc.Authorize(hotline.AccessRenameFolder) {
+				return cc.NewErrReply(t, ErrMsgNotAllowedRenameFolders)
+			}
+		case mode.IsRegular():
+			if !cc.Authorize(hotline.AccessRenameFile) {
+				return cc.NewErrReply(t, ErrMsgNotAllowedRenameFiles)
+			}
+		}
+		// Reject conflicts before saving a comment or renaming any forks. An
+		// unchanged name is a no-op, including when accompanying a comment edit.
+		if fullNewFilePath != fullFilePath {
+			if err := checkFileDestination(cc.Server.FS, path.Dir(fullNewFilePath), decodedNewName); err != nil {
+				if errors.Is(err, os.ErrExist) {
+					return cc.NewErrReply(t, fmt.Sprintf(ErrMsgRenameConflictTemplate, string(fileNewName)))
+				}
+				cc.Logger.Error("set file info: check destination", "err", err)
+				if fi.IsDir() {
+					return cc.NewErrReply(t, ErrMsgRenameFolder)
+				}
+				return cc.NewErrReply(t, ErrMsgRenameFile)
+			}
 		}
 	}
 
@@ -148,18 +177,9 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 		}
 	}
 
-	fullNewFilePath, err := hotline.ReadPath(cc.FileRoot(), filePath, fileNewName, cc.TextDecoder())
-	if err != nil {
-		cc.Logger.Error("set file info: read new name path", "err", err)
-		return cc.NewErrReply(t, ErrMsgRenameFile)
-	}
-
-	if fileNewName != nil {
+	if fileNewName != nil && fullNewFilePath != fullFilePath {
 		switch mode := fi.Mode(); {
 		case mode.IsDir():
-			if !cc.Authorize(hotline.AccessRenameFolder) {
-				return cc.NewErrReply(t, ErrMsgNotAllowedRenameFolders)
-			}
 			err = cc.Server.FS.Rename(fullFilePath, fullNewFilePath)
 			if os.IsNotExist(err) {
 				return cc.NewErrReply(t, fmt.Sprintf(ErrMsgCannotRenameFolderNotFound, string(fileName)))
@@ -169,9 +189,6 @@ func HandleSetFileInfo(cc *hotline.ClientConn, t *hotline.Transaction) (res []ho
 				return cc.NewErrReply(t, ErrMsgRenameFolder)
 			}
 		case mode.IsRegular():
-			if !cc.Authorize(hotline.AccessRenameFile) {
-				return cc.NewErrReply(t, ErrMsgNotAllowedRenameFiles)
-			}
 			fileDir, err := hotline.ReadPath(cc.FileRoot(), filePath, []byte{}, cc.TextDecoder())
 			if err != nil {
 				cc.Logger.Error("set file info: read file dir", "err", err)
@@ -289,30 +306,12 @@ func HandleMoveFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 			return cc.NewErrReply(t, ErrMsgNotAllowedMoveFiles)
 		}
 	}
-	// Check every destination before moving anything, including partial uploads and forks
-	// that may exist without a completed data file.
-	for _, name := range []string{
-		hlFile.Name,
-		hlFile.Name + hotline.IncompleteFileSuffix,
-		fmt.Sprintf(hotline.RsrcForkNameTemplate, hlFile.Name),
-		fmt.Sprintf(hotline.InfoForkNameTemplate, hlFile.Name),
-	} {
-		destination := path.Join(fileNewPath, name)
-		_, err := cc.Server.FS.Stat(destination)
-		if errors.Is(err, os.ErrNotExist) {
-			// Stat follows aliases; a dangling alias still occupies this destination.
-			_, err = cc.Server.FS.ReadLink(destination)
-			if errors.Is(err, errors.ErrUnsupported) {
-				continue // Object stores do not support aliases.
-			}
-		}
-		if err == nil {
+	if err := checkFileDestination(cc.Server.FS, fileNewPath, hlFile.Name); err != nil {
+		if errors.Is(err, os.ErrExist) {
 			return cc.NewErrReply(t, fmt.Sprintf(ErrMsgMoveConflictTemplate, fileName))
 		}
-		if !errors.Is(err, os.ErrNotExist) {
-			cc.Logger.Error("move file: check destination", "path", destination, "err", err)
-			return cc.NewErrReply(t, ErrMsgMoveFile)
-		}
+		cc.Logger.Error("move file: check destination", "err", err)
+		return cc.NewErrReply(t, ErrMsgMoveFile)
 	}
 
 	if err := hlFile.Move(fileNewPath); err != nil {
@@ -323,6 +322,34 @@ func HandleMoveFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hotli
 
 	res = append(res, cc.NewReply(t))
 	return res
+}
+
+// checkFileDestination checks every destination before any mutations, including
+// partial uploads and forks that may exist without a completed data file.
+func checkFileDestination(store hotline.FileStore, directory, name string) error {
+	for _, entry := range []string{
+		name,
+		name + hotline.IncompleteFileSuffix,
+		fmt.Sprintf(hotline.RsrcForkNameTemplate, name),
+		fmt.Sprintf(hotline.InfoForkNameTemplate, name),
+	} {
+		destination := path.Join(directory, entry)
+		_, err := store.Stat(destination)
+		if errors.Is(err, os.ErrNotExist) {
+			// Stat follows aliases; a dangling alias still occupies this destination.
+			_, err = store.ReadLink(destination)
+			if errors.Is(err, errors.ErrUnsupported) {
+				continue // Object stores do not support aliases.
+			}
+		}
+		if err == nil {
+			return &os.PathError{Op: "check destination", Path: destination, Err: os.ErrExist}
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("check destination %q: %w", destination, err)
+		}
+	}
+	return nil
 }
 
 // HandleNewFolder creates a new folder on the server.
