@@ -346,15 +346,24 @@ func TestFeedNewsManager_EncodingIsAppliedOnceAtImport(t *testing.T) {
 	assert.Equal(t, "UTF-8 ☃", reloaded.GetArticle([]string{"Releases"}, 2).Title)
 }
 
-func TestFeedNewsManager_ArticleListLimitPersistsFittingPrefixAndRetries(t *testing.T) {
+func importedArticleID(t *testing.T, base *ThreadedNewsYAML, guid string) uint32 {
+	t.Helper()
+	id, ok := feedState(t, base, "Releases").Imported[feedIdentityHash(testFeedURL, "id:"+guid)]
+	require.True(t, ok, guid)
+	return id
+}
+
+func TestFeedNewsManager_ArticleListLimitKeepsNewestItems(t *testing.T) {
 	base := newTestThreadedNews(t)
 	addTestNewsCategory(t, base, nil, "Releases")
 	fixture := rssBatchFixture("large", 300, 255)
-	var requests atomic.Int32
+	var conditional atomic.Int32
 	manager := newTestFeedNewsManager(t, base, testNewsFeedConfig(testFeedURL, "Releases"), roundTripFunc(func(request *http.Request) (*http.Response, error) {
-		requests.Add(1)
-		assert.Empty(t, request.Header.Get("If-None-Match"), "validators must not advance while unseen entries remain")
-		return testFeedResponse(http.StatusOK, fixture, map[string]string{"ETag": `"too-large"`}), nil
+		if request.Header.Get("If-None-Match") == `"large"` {
+			conditional.Add(1)
+			return testFeedResponse(http.StatusNotModified, "", nil), nil
+		}
+		return testFeedResponse(http.StatusOK, fixture, map[string]string{"ETag": `"large"`}), nil
 	}), "utf8")
 
 	list, err := manager.ListArticles([]string{"Releases"})
@@ -364,14 +373,71 @@ func TestFeedNewsManager_ArticleListLimitPersistsFittingPrefixAndRetries(t *test
 	encoded, err := io.ReadAll(&list)
 	require.NoError(t, err)
 	assert.LessOrEqual(t, len(encoded), 65535)
+
+	// A feed lists its newest item first, so large-0 is imported last and must be kept.
 	state := feedState(t, base, "Releases")
-	assert.Empty(t, state.ETag)
-	assert.Len(t, state.Imported, list.Count)
+	newest := base.GetArticle([]string{"Releases"}, importedArticleID(t, base, "large-0"))
+	require.NotNil(t, newest)
+	assert.Nil(t, base.GetArticle([]string{"Releases"}, importedArticleID(t, base, "large-299")))
+	assert.Len(t, state.Imported, 300, "pruned items stay seen so they are not imported again")
+	assert.Equal(t, `"large"`, state.ETag)
 
 	second, err := manager.ListArticles([]string{"Releases"})
 	require.NoError(t, err)
 	assert.Equal(t, list.Count, second.Count)
-	assert.Equal(t, int32(2), requests.Load(), "the first unseen item must be retried on the next load")
+	assert.Equal(t, int32(1), conditional.Load())
+}
+
+func TestFeedNewsManager_ArticleListLimitNeverPrunesLocalOrRepliedArticles(t *testing.T) {
+	base := newTestThreadedNews(t)
+	addTestNewsCategory(t, base, nil, "Releases")
+	path := []string{"Releases"}
+	first := rssBatchFixture("first", 1, 10)
+	full := rssBatchFixture("more", 300, 255)
+	fixture := first
+	manager := newTestFeedNewsManager(t, base, testNewsFeedConfig(testFeedURL, "Releases"), roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return testFeedResponse(http.StatusOK, fixture, nil), nil
+	}), "utf8")
+
+	_, err := manager.ListArticles(path)
+	require.NoError(t, err)
+	repliedID := importedArticleID(t, base, "first-0")
+	require.NoError(t, base.PostArticle(path, repliedID, hotline.NewsArtData{Title: "Re: first", Poster: "local", DataFlav: []byte("text/plain")}))
+	require.NoError(t, base.PostArticle(path, 0, hotline.NewsArtData{Title: "Local post", Poster: "local", DataFlav: []byte("text/plain")}))
+	local := map[uint32]string{}
+	for id, article := range base.NewsItem(path).Articles {
+		if article.Poster == "local" {
+			local[id] = article.Title
+		}
+	}
+	require.Len(t, local, 2)
+
+	fixture = full
+	_, err = manager.ListArticles(path)
+	require.NoError(t, err)
+	articles := base.NewsItem(path).Articles
+	assert.Contains(t, articles, importedArticleID(t, base, "more-0"), "the newest item made room for itself")
+	assert.Contains(t, articles, repliedID)
+	for id, title := range local {
+		require.Contains(t, articles, id)
+		assert.Equal(t, title, articles[id].Title)
+	}
+}
+
+func TestFeedNewsManager_LocalPostDoesNotReuseImportedID(t *testing.T) {
+	base := newTestThreadedNews(t)
+	addTestNewsCategory(t, base, nil, "Releases")
+	path := []string{"Releases"}
+	manager := newTestFeedNewsManager(t, base, testNewsFeedConfig(testFeedURL, "Releases"), roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return testFeedResponse(http.StatusOK, rssBatchFixture("item", 2, 10), nil), nil
+	}), "utf8")
+	_, err := manager.ListArticles(path)
+	require.NoError(t, err)
+
+	newestID := importedArticleID(t, base, "item-0")
+	require.NoError(t, base.DeleteArticle(path, newestID, false))
+	require.NoError(t, base.PostArticle(path, 0, hotline.NewsArtData{Title: "Local post", Poster: "local", DataFlav: []byte("text/plain")}))
+	assert.NotContains(t, base.NewsItem(path).Articles, newestID)
 }
 
 func TestFeedNewsManager_ValidatesExistingOrdinaryTarget(t *testing.T) {
