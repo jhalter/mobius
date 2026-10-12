@@ -295,7 +295,11 @@ func HandleSetClientUserInfo(cc *hotline.ClientConn, t *hotline.Transaction) (re
 	// the options field is only passed by the client versions > 1.2.3.
 	options := t.GetField(hotline.FieldOptions).Data
 	if options != nil {
-		optBitmap := big.NewInt(int64(binary.BigEndian.Uint16(options)))
+		var opts uint16
+		if len(options) >= 2 {
+			opts = binary.BigEndian.Uint16(options)
+		}
+		optBitmap := big.NewInt(int64(opts))
 
 		cc.SetFlag(hotline.UserFlagRefusePM, optBitmap.Bit(hotline.UserOptRefusePM))
 		cc.SetFlag(hotline.UserFlagRefusePChat, optBitmap.Bit(hotline.UserOptRefuseChat))

@@ -110,15 +110,21 @@ func FieldScanner(data []byte, _ bool) (advance int, token []byte, err error) {
 	return neededSize, data[0:neededSize], nil
 }
 
-// DecodeInt decodes the field bytes to an int.
-// The official Hotline clients will send uint32s as 2 bytes if possible, but
-// some third party clients such as Frogblast and Heildrun will always send 4 bytes
+// DecodeInt decodes the field bytes to a native-width int.
 func (f *Field) DecodeInt() (int, error) {
+	value, err := f.DecodeUint32()
+	return int(value), err
+}
+
+// DecodeUint32 decodes an unsigned protocol integer without native-int overflow.
+// Official Hotline clients send 2 bytes when possible; some third-party clients
+// always send 4 bytes.
+func (f *Field) DecodeUint32() (uint32, error) {
 	switch len(f.Data) {
 	case 2:
-		return int(binary.BigEndian.Uint16(f.Data)), nil
+		return uint32(binary.BigEndian.Uint16(f.Data)), nil
 	case 4:
-		return int(binary.BigEndian.Uint32(f.Data)), nil
+		return binary.BigEndian.Uint32(f.Data), nil
 	}
 
 	return 0, errors.New("unknown byte length")

@@ -26,12 +26,21 @@ type FilePathItem struct {
 const fileItemMinLen = 3
 
 // fileItemScanner implements bufio.SplitFunc for parsing incoming byte slices into complete tokens
-func fileItemScanner(data []byte, _ bool) (advance int, token []byte, err error) {
+func fileItemScanner(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if len(data) < fileItemMinLen {
+		if atEOF && len(data) > 0 {
+			return 0, nil, io.ErrUnexpectedEOF
+		}
 		return 0, nil, nil
 	}
 
 	advance = fileItemMinLen + int(data[2])
+	if len(data) < advance {
+		if atEOF {
+			return 0, nil, io.ErrUnexpectedEOF
+		}
+		return 0, nil, nil
+	}
 	return advance, data[0:advance], nil
 }
 
@@ -40,8 +49,12 @@ func (fpi *FilePathItem) Write(b []byte) (n int, err error) {
 	if len(b) < 3 {
 		return n, errors.New("buflen too small")
 	}
+	end := fileItemMinLen + int(b[2])
+	if len(b) < end {
+		return 0, io.ErrUnexpectedEOF
+	}
 	fpi.Len = b[2]
-	fpi.Name = b[fileItemMinLen : fpi.Len+fileItemMinLen]
+	fpi.Name = b[fileItemMinLen:end]
 
 	return int(fpi.Len) + fileItemMinLen, nil
 }
@@ -67,7 +80,12 @@ func (fp *FilePath) Write(b []byte) (n int, err error) {
 
 	for i := 0; i < int(binary.BigEndian.Uint16(fp.ItemCount[:])); i++ {
 		var fpi FilePathItem
-		scanner.Scan()
+		if !scanner.Scan() {
+			if err := scanner.Err(); err != nil {
+				return n, err
+			}
+			return n, io.ErrUnexpectedEOF
+		}
 
 		// Make a new []byte slice and copy the scanner bytes to it.  This is critical to avoid a data race as the
 		// scanner re-uses the buffer for subsequent scans.

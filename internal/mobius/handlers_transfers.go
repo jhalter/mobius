@@ -179,14 +179,21 @@ func HandleUploadFolder(cc *hotline.ClientConn, t *hotline.Transaction) (res []h
 		}
 	}
 
-	fileTransfer := cc.NewFileTransfer(hotline.FolderUpload,
+	itemCount, err := t.GetField(hotline.FieldFolderItemCount).DecodeInt()
+	if err != nil {
+		return cc.NewErrReply(t, ErrMsgUploadFolder)
+	}
+	if _, err := t.GetField(hotline.FieldTransferSize).DecodeUint32(); err != nil {
+		return cc.NewErrReply(t, ErrMsgUploadFolder)
+	}
+
+	fileTransfer := cc.NewFolderUploadTransfer(
 		cc.FileRoot(),
 		t.GetField(hotline.FieldFileName).Data,
 		t.GetField(hotline.FieldFilePath).Data,
 		t.GetField(hotline.FieldTransferSize).Data,
+		itemCount,
 	)
-
-	fileTransfer.FolderItemCount = t.GetField(hotline.FieldFolderItemCount).Data
 
 	return append(res, cc.NewReply(t, hotline.NewField(hotline.FieldRefNum, fileTransfer.RefNum[:])))
 }
@@ -212,7 +219,13 @@ func HandleUploadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 	fileName := t.GetField(hotline.FieldFileName).Data
 	filePath := t.GetField(hotline.FieldFilePath).Data
 	transferOptions := t.GetField(hotline.FieldFileTransferOptions).Data
-	transferSize := t.GetField(hotline.FieldTransferSize).Data // not sent for resume
+	// Resume requests may omit the total size; the resume offset is not a substitute.
+	transferSize := t.GetField(hotline.FieldTransferSize).Data
+	if transferSize != nil {
+		if _, err := t.GetField(hotline.FieldTransferSize).DecodeUint32(); err != nil {
+			return cc.NewErrReply(t, ErrMsgUploadFile)
+		}
+	}
 
 	var fp hotline.FilePath
 	if filePath != nil {
@@ -257,8 +270,6 @@ func HandleUploadFile(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 			})
 
 			b, _ := fileResumeData.BinaryMarshal()
-
-			ft.TransferSize = offset
 
 			replyT.Fields = append(replyT.Fields, hotline.NewField(hotline.FieldFileResumeData, b))
 		}

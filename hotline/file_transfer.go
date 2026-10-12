@@ -95,7 +95,7 @@ type FileTransfer struct {
 	RefNum           [4]byte
 	Type             FileTransferType
 	TransferSize     []byte
-	FolderItemCount  []byte
+	FolderItemCount  int
 	FileResumeData   *FileResumeData
 	Options          []byte
 	bytesSentCounter *WriteCounter
@@ -121,12 +121,28 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 }
 
 func (cc *ClientConn) NewFileTransfer(transferType FileTransferType, fileroot string, fileName, filePath, size []byte) *FileTransfer {
+	return cc.newFileTransfer(transferType, fileroot, fileName, filePath, size, 0)
+}
+
+// NewFolderUploadTransfer registers a folder upload with its validated item count.
+func (cc *ClientConn) NewFolderUploadTransfer(fileroot string, fileName, filePath, size []byte, itemCount int) *FileTransfer {
+	return cc.newFileTransfer(FolderUpload, fileroot, fileName, filePath, size, itemCount)
+}
+
+func (cc *ClientConn) newFileTransfer(transferType FileTransferType, fileroot string, fileName, filePath, size []byte, itemCount int) *FileTransfer {
+	// Keep known sizes in canonical 32-bit form; nil means the size is unknown.
+	var transferSize []byte
+	if value, err := (&Field{Data: size}).DecodeUint32(); err == nil {
+		transferSize = make([]byte, 4)
+		binary.BigEndian.PutUint32(transferSize, value)
+	}
 	ft := &FileTransfer{
 		FileName:         fileName,
 		FileRoot:         fileroot,
 		FilePath:         filePath,
 		Type:             transferType,
-		TransferSize:     size,
+		TransferSize:     transferSize,
+		FolderItemCount:  itemCount,
 		ClientConn:       cc,
 		bytesSentCounter: &WriteCounter{},
 	}
@@ -150,16 +166,24 @@ func (ft *FileTransfer) String() string {
 }
 
 func (ft *FileTransfer) percentComplete() string {
+	size, err := (&Field{Data: ft.TransferSize}).DecodeUint32()
+	if err != nil || size == 0 {
+		return "?"
+	}
 	ft.bytesSentCounter.mux.Lock()
 	defer ft.bytesSentCounter.mux.Unlock()
 	return fmt.Sprintf(
 		"%v",
-		math.RoundToEven(float64(ft.bytesSentCounter.Total)/float64(binary.BigEndian.Uint32(ft.TransferSize))*100),
+		math.RoundToEven(float64(ft.bytesSentCounter.Total)/float64(size)*100),
 	)
 }
 
 func (ft *FileTransfer) formattedTransferSize() string {
-	sizeInKB := float32(binary.BigEndian.Uint32(ft.TransferSize)) / 1024
+	size, err := (&Field{Data: ft.TransferSize}).DecodeUint32()
+	if err != nil {
+		return "?"
+	}
+	sizeInKB := float32(size) / 1024
 	if sizeInKB >= 1024 {
 		return fmt.Sprintf("%.1fM", sizeInKB/1024)
 	} else {
@@ -168,7 +192,7 @@ func (ft *FileTransfer) formattedTransferSize() string {
 }
 
 func (ft *FileTransfer) ItemCount() int {
-	return int(binary.BigEndian.Uint16(ft.FolderItemCount))
+	return ft.FolderItemCount
 }
 
 type folderUpload struct {

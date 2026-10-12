@@ -533,7 +533,7 @@ func TestUploadFolderHandler(t *testing.T) {
 
 		ft := &FileTransfer{
 			bytesSentCounter: &WriteCounter{},
-			FolderItemCount:  []byte{0, byte(len(items))},
+			FolderItemCount:  len(items),
 		}
 
 		serverConn, clientConn := net.Pipe()
@@ -578,7 +578,7 @@ func TestUploadFolderHandler(t *testing.T) {
 
 		ft := &FileTransfer{
 			bytesSentCounter: &WriteCounter{},
-			FolderItemCount:  []byte{0, byte(len(items))},
+			FolderItemCount:  len(items),
 		}
 
 		serverConn, clientConn := net.Pipe()
@@ -609,7 +609,7 @@ func TestUploadFolderHandler(t *testing.T) {
 
 		ft := &FileTransfer{
 			bytesSentCounter: &WriteCounter{},
-			FolderItemCount:  []byte{0, 1},
+			FolderItemCount:  1,
 		}
 
 		serverConn, clientConn := net.Pipe()
@@ -666,7 +666,7 @@ func TestUploadFolderHandler(t *testing.T) {
 }
 
 func TestFileTransfer_ItemCount(t *testing.T) {
-	ft := &FileTransfer{FolderItemCount: []byte{0x01, 0x00}}
+	ft := &FileTransfer{FolderItemCount: 256}
 	assert.Equal(t, 256, ft.ItemCount())
 }
 

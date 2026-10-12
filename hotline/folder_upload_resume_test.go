@@ -23,7 +23,7 @@ func resumeFolderUpload(t *testing.T, store FileStore, root string, payload []by
 	transferSize := u32b(len(payload))
 	wire = append(wire, transferSize[:]...)
 	wire = append(wire, payload...)
-	transfer := &FileTransfer{FolderItemCount: []byte{0, 1}, bytesSentCounter: &WriteCounter{}}
+	transfer := &FileTransfer{FolderItemCount: 1, bytesSentCounter: &WriteCounter{}}
 	return UploadFolderHandler(readWriter{r: bytes.NewReader(wire)}, root, transfer, store,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), false)
 }

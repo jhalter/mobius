@@ -197,13 +197,17 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 			subFields = append(subFields, field)
 		}
 
-		// If there's only one subfield, that indicates this is a delete operation for the login in FieldData
-		if len(subFields) == 1 {
+		// A single FieldData subfield identifies a delete operation.
+		deleteLogin := hotline.GetField(hotline.FieldData, &subFields)
+		if len(subFields) == 1 && deleteLogin != nil {
+			if len(deleteLogin.Data) == 0 {
+				return cc.NewErrReply(t, ErrMsgUpdateAccount)
+			}
 			if !cc.Authorize(hotline.AccessDeleteUser) {
 				return cc.NewErrReply(t, ErrMsgNotAllowedDeleteAccounts)
 			}
 
-			login := string(hotline.EncodeString(hotline.GetField(hotline.FieldData, &subFields).Data))
+			login := deleteLogin.DecodeObfuscatedString()
 
 			cc.Logger.Info("DeleteUser", "login", login)
 
@@ -233,6 +237,18 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 			continue
 		}
 
+		// Validate required and fixed-width subfields before changing an account.
+		loginField := hotline.GetField(hotline.FieldUserLogin, &subFields)
+		if loginField == nil || len(loginField.Data) == 0 {
+			return cc.NewErrReply(t, ErrMsgUpdateAccount)
+		}
+		nameField := hotline.GetField(hotline.FieldUserName, &subFields)
+		passwordField := hotline.GetField(hotline.FieldUserPassword, &subFields)
+		accessField := hotline.GetField(hotline.FieldUserAccess, &subFields)
+		if accessField != nil && len(accessField.Data) != len(hotline.AccessBitmap{}) {
+			return cc.NewErrReply(t, ErrMsgUpdateAccount)
+		}
+
 		// login of the account to update
 		var accountToUpdate, loginToRename string
 
@@ -241,7 +257,7 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 		if hotline.GetField(hotline.FieldData, &subFields) != nil {
 			loginToRename = string(hotline.EncodeString(hotline.GetField(hotline.FieldData, &subFields).Data))
 		}
-		userLogin := string(hotline.EncodeString(hotline.GetField(hotline.FieldUserLogin, &subFields).Data))
+		userLogin := loginField.DecodeObfuscatedString()
 		if loginToRename != "" {
 			accountToUpdate = loginToRename
 		} else {
@@ -268,8 +284,8 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 			//    In this case, FieldUserPassword is not sent.
 			// 3) The transaction updates the users access bits, but not the password.
 			//    In this case, FieldUserPassword is sent with zero as the only byte.
-			if hotline.GetField(hotline.FieldUserPassword, &subFields) != nil {
-				newPass := hotline.GetField(hotline.FieldUserPassword, &subFields).Data
+			if passwordField != nil {
+				newPass := passwordField.Data
 				if !bytes.Equal([]byte{0}, newPass) {
 					acc.Password = hotline.HashAndSalt(newPass)
 				}
@@ -277,11 +293,13 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 				acc.Password = hotline.HashAndSalt([]byte(""))
 			}
 
-			if hotline.GetField(hotline.FieldUserAccess, &subFields) != nil {
-				copy(acc.Access[:], hotline.GetField(hotline.FieldUserAccess, &subFields).Data)
+			if accessField != nil {
+				copy(acc.Access[:], accessField.Data)
 			}
 
-			acc.Name = string(hotline.GetField(hotline.FieldUserName, &subFields).Data)
+			if nameField != nil {
+				acc.Name = string(nameField.Data)
+			}
 
 			err := cc.Server.AccountManager.Update(*acc, userLogin)
 
@@ -299,7 +317,9 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 			cc.Logger.Info("CreateUser", "login", userLogin)
 
 			var newAccess hotline.AccessBitmap
-			copy(newAccess[:], hotline.GetField(hotline.FieldUserAccess, &subFields).Data)
+			if accessField != nil {
+				copy(newAccess[:], accessField.Data)
+			}
 
 			// Prevent account from creating new account with greater permission
 			for i := 0; i < 64; i++ {
@@ -310,10 +330,17 @@ func HandleUpdateUser(cc *hotline.ClientConn, t *hotline.Transaction) (res []hot
 				}
 			}
 
+			var name, password string
+			if nameField != nil {
+				name = string(nameField.Data)
+			}
+			if passwordField != nil {
+				password = string(passwordField.Data)
+			}
 			account := hotline.NewAccount(
 				userLogin,
-				string(hotline.GetField(hotline.FieldUserName, &subFields).Data),
-				string(hotline.GetField(hotline.FieldUserPassword, &subFields).Data),
+				name,
+				password,
 				newAccess,
 			)
 
