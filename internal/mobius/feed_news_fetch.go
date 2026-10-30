@@ -137,7 +137,7 @@ func (f *feedFetcher) fetch(ctx context.Context, sourceURL string, validators fe
 func (f *feedFetcher) parseFeedResponse(body []byte, fetchedAt time.Time) ([]normalizedFeedItem, int, error) {
 	detected := gofeed.DetectFeedType(bytes.NewReader(body))
 	if detected != gofeed.FeedTypeRSS && detected != gofeed.FeedTypeAtom {
-		return nil, 0, fmt.Errorf("unsupported feed format %q; expected RSS or Atom", detected)
+		return nil, 0, fmt.Errorf("unsupported feed format %v; expected RSS or Atom", detected)
 	}
 	feed, err := f.parser.Parse(bytes.NewReader(body))
 	if err != nil {
