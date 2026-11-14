@@ -287,7 +287,11 @@ func main() {
 	mobius.RegisterHandlers(srv)
 
 	if srv.Config.EnableBonjour {
-		s, err := bonjour.Register(srv.Config.Name, "_hotline._tcp", "", *basePort, []string{"txtv=1", "app=hotline"}, nil)
+		txtRecords := []string{"txtv=1", "app=hotline"}
+		if srv.TLSConfig != nil {
+			txtRecords = append(txtRecords, fmt.Sprintf("tlsport=%d", srv.TLSPort))
+		}
+		s, err := bonjour.Register(srv.Config.Name, "_hotline._tcp", "", *basePort, txtRecords, nil)
 		if err != nil {
 			slogger.Error("Error registering Hotline server with Bonjour", "err", err)
 		}
