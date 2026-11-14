@@ -18,6 +18,9 @@ builds:
       - linux
       - windows
       - darwin
+    ignore:
+      - goos: windows
+        goarch: arm
 #  - id: "mobius-hotline-client"
 #    main: ./cmd/mobius-hotline-client
 #    binary: mobius-hotline-client
