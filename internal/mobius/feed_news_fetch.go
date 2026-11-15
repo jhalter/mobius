@@ -7,11 +7,15 @@ import (
 	"fmt"
 	stdhtml "html"
 	"io"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"slices"
 	"sort"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -27,7 +31,71 @@ const (
 	maxNewsBodyBytes   = 65535
 )
 
-var errFeedResponseTooLarge = errors.New("feed response exceeds 2 MiB")
+var (
+	errFeedResponseTooLarge = errors.New("feed response exceeds 2 MiB")
+	errFeedAddressNotPublic = errors.New("feed address is not public")
+)
+
+// sharedAddressSpace is carrier-grade NAT space (RFC 6598), which netip does not count as private.
+var sharedAddressSpace = netip.MustParsePrefix("100.64.0.0/10")
+
+func isPublicAddr(ip netip.Addr) bool {
+	ip = ip.Unmap()
+	return ip.IsGlobalUnicast() && !ip.IsPrivate() && !sharedAddressSpace.Contains(ip)
+}
+
+// privateFeed marks a fetch whose configured URL is itself on a non-public address. The operator
+// chose that, so nothing it connects to is refused. For a host name, addrs are the answers that
+// decided it, and connections to that host go to them: a second lookup could answer otherwise, and
+// a name server answering loopback to the check and a public address to the connection would have
+// its redirects followed unchecked.
+type privateFeed struct {
+	host  string
+	addrs []netip.Addr
+}
+
+type privateFeedKey struct{}
+
+// privateFeedFor reports whether the configured URL names a non-public address, or a host whose
+// every address is one. Behind a proxy, which resolves names where this cannot see, only an address
+// makes a feed private, and a host that does not resolve here counts as public.
+func (f *feedFetcher) privateFeedFor(ctx context.Context, u *url.URL, proxied bool) *privateFeed {
+	if ip, err := netip.ParseAddr(u.Hostname()); err == nil {
+		if isPublicAddr(ip) {
+			return nil
+		}
+		return &privateFeed{}
+	}
+	if proxied {
+		return nil
+	}
+	addrs, err := f.lookup(ctx, u.Hostname())
+	if err != nil || len(addrs) == 0 || slices.ContainsFunc(addrs, isPublicAddr) {
+		return nil
+	}
+	return &privateFeed{host: u.Hostname(), addrs: addrs}
+}
+
+// refuseNonPublicDial is checked against the resolved address of every direct connection a public
+// feed's fetch makes, so a redirect it serves cannot point the server at loopback, the local
+// network, or a cloud metadata endpoint.
+func refuseNonPublicDial(ctx context.Context, _, address string, _ syscall.RawConn) error {
+	if ctx.Value(privateFeedKey{}) != nil {
+		return nil
+	}
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return err
+	}
+	ip, err := netip.ParseAddr(host)
+	if err != nil {
+		return err
+	}
+	if !isPublicAddr(ip) {
+		return fmt.Errorf("%w: %s", errFeedAddressNotPublic, ip)
+	}
+	return nil
+}
 
 type normalizedFeedItem struct {
 	identity    string
@@ -54,20 +122,61 @@ type feedFetcher struct {
 	parser    *gofeed.Parser
 	now       func() time.Time
 	userAgent string
+	proxy     func(*http.Request) (*url.URL, error)
+	lookup    func(ctx context.Context, host string) ([]netip.Addr, error)
 }
 
 func newFeedFetcher(userAgent string) *feedFetcher {
+	return newFeedFetcherVia(userAgent, http.ProxyFromEnvironment)
+}
+
+// newFeedFetcherVia fetches through the proxies proxy chooses. A proxy is the operator's choice,
+// and is commonly on the local network, so connections to it are not checked; through it the
+// server cannot see what a host name resolves to, so for a public feed only an address written
+// into a URL is.
+func newFeedFetcherVia(userAgent string, proxy func(*http.Request) (*url.URL, error)) *feedFetcher {
 	if userAgent == "" {
 		userAgent = "mobius-hotline-server"
 	}
+	var proxies sync.Map
+	direct := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+	guarded := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second, ControlContext: refuseNonPublicDial}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = func(req *http.Request) (*url.URL, error) {
+		proxyURL, err := proxy(req)
+		if err != nil || proxyURL == nil {
+			return proxyURL, err
+		}
+		ip, err := netip.ParseAddr(req.URL.Hostname())
+		if err == nil && !isPublicAddr(ip) && req.Context().Value(privateFeedKey{}) == nil {
+			return nil, fmt.Errorf("%w: %s", errFeedAddressNotPublic, ip)
+		}
+		proxies.Store(proxyAddr(proxyURL), struct{}{})
+		return proxyURL, nil
+	}
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		if _, ok := proxies.Load(address); ok {
+			return direct.DialContext(ctx, network, address)
+		}
+		if pin, _ := ctx.Value(privateFeedKey{}).(*privateFeed); pin != nil && pin.addrs != nil {
+			if host, port, err := net.SplitHostPort(address); err == nil && host == pin.host {
+				return dialFirst(ctx, direct, network, pin.addrs, port)
+			}
+		}
+		return guarded.DialContext(ctx, network, address)
+	}
 	return &feedFetcher{
 		client: &http.Client{
+			Transport: transport,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if len(via) >= 10 {
 					return errors.New("stopped after 10 redirects")
 				}
 				if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
 					return fmt.Errorf("redirected to unsupported URL scheme %q", req.URL.Scheme)
+				}
+				if via[len(via)-1].URL.Scheme == "https" && req.URL.Scheme == "http" {
+					return errors.New("redirected from https to http")
 				}
 				if req.URL.User != nil {
 					return errors.New("redirected to a URL containing credentials")
@@ -78,7 +187,32 @@ func newFeedFetcher(userAgent string) *feedFetcher {
 		parser:    gofeed.NewParser(),
 		now:       time.Now,
 		userAgent: userAgent,
+		proxy:     proxy,
+		lookup: func(ctx context.Context, host string) ([]netip.Addr, error) {
+			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+		},
 	}
+}
+
+// dialFirst connects to the first of addrs that answers.
+func dialFirst(ctx context.Context, d *net.Dialer, network string, addrs []netip.Addr, port string) (net.Conn, error) {
+	var err error
+	for _, addr := range addrs {
+		var conn net.Conn
+		if conn, err = d.DialContext(ctx, network, net.JoinHostPort(addr.Unmap().String(), port)); err == nil {
+			return conn, nil
+		}
+	}
+	return nil, err
+}
+
+// proxyAddr is the address the transport dials for proxyURL.
+func proxyAddr(proxyURL *url.URL) string {
+	if port := proxyURL.Port(); port != "" {
+		return net.JoinHostPort(proxyURL.Hostname(), port)
+	}
+	port := map[string]string{"http": "80", "https": "443", "socks5": "1080", "socks5h": "1080"}[proxyURL.Scheme]
+	return net.JoinHostPort(proxyURL.Hostname(), port)
 }
 
 func (f *feedFetcher) fetch(ctx context.Context, sourceURL string, validators feedHTTPValidators) (feedFetchResult, error) {
@@ -88,6 +222,10 @@ func (f *feedFetcher) fetch(ctx context.Context, sourceURL string, validators fe
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sourceURL, nil)
 	if err != nil {
 		return feedFetchResult{}, errors.New("create request from configured feed URL")
+	}
+	proxyURL, _ := f.proxy(req)
+	if pin := f.privateFeedFor(ctx, req.URL, proxyURL != nil); pin != nil {
+		req = req.WithContext(context.WithValue(ctx, privateFeedKey{}, pin))
 	}
 	req.Header.Set("Accept", "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.8")
 	req.Header.Set("User-Agent", f.userAgent)
