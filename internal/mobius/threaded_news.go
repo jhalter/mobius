@@ -166,7 +166,7 @@ func (n *ThreadedNewsYAML) PostArticle(newsPath []string, parentArticleID uint32
 		keys = append(keys, int(k))
 	}
 
-	nextID := uint32(1)
+	nextID := maxImportedArticleID(cat.FeedState) + 1
 	var prevID uint32
 	var oldNextArt [4]byte
 	hasPrev := false
@@ -175,7 +175,7 @@ func (n *ThreadedNewsYAML) PostArticle(newsPath []string, parentArticleID uint32
 	if len(keys) > 0 {
 		sort.Ints(keys)
 		prevID = uint32(keys[len(keys)-1])
-		nextID = prevID + 1
+		nextID = max(nextID, prevID+1)
 		hasPrev = true
 
 		binary.BigEndian.PutUint32(article.PrevArt[:], prevID)
